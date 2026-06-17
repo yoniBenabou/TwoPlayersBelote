@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile main.py belote/cards.py belote/engine.py belote/player.py belote/cli.py)",
+      "Bash(python)"
+    ]
+  }
+}
