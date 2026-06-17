@@ -68,7 +68,7 @@ class BeloteEnv(gym.Env):
         self._trick_cards = []
 
         observation = self._observe(self.current_idx)
-        info = {"legal_actions": self._legal_action_mask()}
+        info = {"legal_actions": self._legal_action_mask(), "current_player": self.current_idx, "led_card": None}
         return observation, info
 
     def _legal_action_mask(self):
@@ -151,9 +151,14 @@ class BeloteEnv(gym.Env):
 
         if self.done:
             observation = self._observe(self.current_idx)
-            info = {"legal_actions": None, "current_player": None}
+            info = {"legal_actions": None, "current_player": None, "led_card": None}
         else:
             observation = self._observe(self.current_idx)
-            info = {"legal_actions": self._legal_action_mask(), "current_player": self.current_idx}
+            led_card_idx = CARD_INDEX[self.led_card] if self.led_card is not None else None
+            info = {
+                "legal_actions": self._legal_action_mask(),
+                "current_player": self.current_idx,
+                "led_card": led_card_idx,
+            }
 
         return observation, {"0": rewards[0], "1": rewards[1]}, self.done, info

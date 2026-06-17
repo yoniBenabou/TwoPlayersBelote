@@ -7,7 +7,8 @@
       "Bash(python -m py_compile belote/env.py test_env.py)",
       "Bash(python test_env.py)",
       "Bash(python -c ' *)",
-      "Bash(python random_agent_demo.py --episodes 100)"
+      "Bash(python random_agent_demo.py --episodes 100)",
+      "Bash(python -m py_compile belote/env.py belote/agents.py benchmark.py)"
     ]
   }
 }
