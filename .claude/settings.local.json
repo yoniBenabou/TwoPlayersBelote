@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(python -m py_compile main.py belote/cards.py belote/engine.py belote/player.py belote/cli.py)",
-      "Bash(python)"
+      "Bash(python)",
+      "Bash(python -c \"import gymnasium, numpy; print\\('gymnasium==' + gymnasium.__version__\\); print\\('numpy==' + numpy.__version__\\)\")",
+      "Bash(python -m py_compile belote/env.py test_env.py)",
+      "Bash(python test_env.py)",
+      "Bash(python -c ' *)",
+      "Bash(python random_agent_demo.py --episodes 100)"
     ]
   }
 }
