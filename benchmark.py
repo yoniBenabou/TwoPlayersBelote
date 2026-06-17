@@ -1,7 +1,7 @@
 import sys
 import time
 
-from belote.agents import HeuristicAgent, RandomAgent
+from belote.agents import HeuristicAgent, RandomAgent, TrumpCountAgent, VoidExploitAgent
 from belote.env import BeloteEnv, MAX_SCORE
 
 
@@ -57,4 +57,7 @@ if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     run_match(HeuristicAgent(), RandomAgent(), 10000, "HeuristicAgent", "RandomAgent")
+    run_match(VoidExploitAgent(), RandomAgent(), 10000, "VoidExploitAgent", "RandomAgent")
+    run_match(TrumpCountAgent(), RandomAgent(), 10000, "TrumpCountAgent", "RandomAgent")
     run_match(RandomAgent(), RandomAgent(), 10000, "RandomAgent_A", "RandomAgent_B")
+
