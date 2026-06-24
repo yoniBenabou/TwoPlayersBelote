@@ -2,6 +2,7 @@ import random
 import sys
 import time
 
+from belote.engine import has_belote
 from belote.env import BeloteEnv, MAX_SCORE
 
 
@@ -12,6 +13,10 @@ def total_dealt_points(env):
         for player in env.players
         for card in player.dealt_hand
     )
+
+
+def belote_rebelote_bonus(env):
+    return sum(20 for player in env.players if has_belote(player.dealt_hand, env.trump_suit))
 
 
 def check_illegal_action_is_rejected():
@@ -53,7 +58,7 @@ def main(n_episodes=2000):
         p1 = cumulative["1"] * MAX_SCORE
 
         dealt_points = total_dealt_points(env)
-        expected_total = dealt_points + 10  # dix de der
+        expected_total = dealt_points + 10 + belote_rebelote_bonus(env)  # dix de der + belote-rebelote
         assert abs((p0 + p1) - expected_total) < 1e-6, (p0, p1, dealt_points, expected_total)
 
         total_points[0] += p0

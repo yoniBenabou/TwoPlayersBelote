@@ -5,7 +5,7 @@ import gymnasium as gym
 from gymnasium import spaces
 
 from .cards import build_deck, shuffled_deck, Suit
-from .engine import deal_round, random_trump, legal_moves, trick_winner
+from .engine import deal_round, random_trump, legal_moves, trick_winner, has_belote
 from .player import Player
 
 _CANONICAL_DECK = build_deck()
@@ -16,7 +16,7 @@ NUM_CARDS = len(_CANONICAL_DECK)  # 32
 SUITS = list(Suit)
 SUIT_INDEX = {suit: i for i, suit in enumerate(SUITS)}
 
-MAX_SCORE = 162  # 152 points de cartes + 10 (dix de der), pour normaliser
+MAX_SCORE = 182  # 152 points de cartes + 10 (dix de der) + 20 (belote-rebelote), pour normaliser
 OBS_SIZE = NUM_CARDS * 2 + len(SUITS) + 2 + 8
 
 
@@ -143,6 +143,9 @@ class BeloteEnv(gym.Env):
 
             if self.trick_no == 8:
                 self.done = True
+                for i in (0, 1):
+                    if has_belote(self.players[i].dealt_hand, self.trump_suit):
+                        rewards[i] += 20 / MAX_SCORE
             else:
                 self.trick_no += 1
                 self.led_card = None
