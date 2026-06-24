@@ -27,7 +27,9 @@ class BeloteEnv(gym.Env):
     toujours du point de vue du joueur actif (information imparfaite :
     la main de l'adversaire n'est jamais exposée).
 
-    reset() -> (observation, {"legal_actions": mask})
+    reset(options={"starting_player": 0 ou 1}) -> (observation, {"legal_actions": mask})
+        starting_player choisit qui mène le premier pli (0 par défaut) ;
+        l'alternance d'une manche à l'autre est à la charge de l'appelant.
     step(action) -> (observation, {"0": r0, "1": r1}, done, info)
     """
 
@@ -61,7 +63,7 @@ class BeloteEnv(gym.Env):
         self.trump_suit = random_trump()
         self.played_public = [False] * NUM_CARDS
         self.led_card = None
-        self.current_idx = 0
+        self.current_idx = (options or {}).get("starting_player", 0)
         self.trick_no = 1
         self.trick_winners = [-1] * 8
         self.done = False

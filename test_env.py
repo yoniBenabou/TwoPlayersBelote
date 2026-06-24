@@ -52,6 +52,22 @@ def check_trick_winners_are_relative_to_viewer(n_episodes=200):
                 assert encoded == expected, (i, winner, viewer, encoded, expected)
 
 
+def check_starting_player_option():
+    env = BeloteEnv()
+
+    obs, info = env.reset()
+    assert env.current_idx == 0, "comportement par défaut inchangé : le joueur 0 commence"
+    assert info["current_player"] == 0
+
+    obs, info = env.reset(options={"starting_player": 1})
+    assert env.current_idx == 1
+    assert info["current_player"] == 1
+
+    obs, info = env.reset(options={"starting_player": 0})
+    assert env.current_idx == 0
+    assert info["current_player"] == 0
+
+
 def run_episode(env):
     obs, info = env.reset()
     cumulative = {"0": 0.0, "1": 0.0}
@@ -71,6 +87,9 @@ def main(n_episodes=2000):
 
     check_trick_winners_are_relative_to_viewer()
     print("Encodage relatif de trick_winners (moi/adversaire) : OK")
+
+    check_starting_player_option()
+    print("Option reset(options={'starting_player': ...}) : OK")
 
     env = BeloteEnv()
     wins = [0, 0, 0]  # joueur 0, joueur 1, égalité
