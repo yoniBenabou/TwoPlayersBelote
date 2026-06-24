@@ -3,7 +3,9 @@ import sys
 import time
 
 from belote.engine import has_belote
-from belote.env import BeloteEnv, MAX_SCORE
+from belote.env import BeloteEnv, MAX_SCORE, NUM_CARDS, SUITS
+
+TRICK_WINNERS_OFFSET = NUM_CARDS * 2 + len(SUITS) + 2
 
 
 def total_dealt_points(env):
@@ -30,6 +32,26 @@ def check_illegal_action_is_rejected():
     raise AssertionError("Une action illégale aurait dû lever une ValueError.")
 
 
+def check_trick_winners_are_relative_to_viewer(n_episodes=200):
+    """trick_winners dans l'observation doit être encodé du point de vue du
+    joueur actif (1.0 = moi, -1.0 = adversaire, 0.0 = pas encore joué), et
+    non par siège absolu."""
+    env = BeloteEnv()
+    for _ in range(n_episodes):
+        obs, info = env.reset()
+        while True:
+            legal = [i for i, ok in enumerate(info["legal_actions"]) if ok]
+            action = random.choice(legal)
+            obs, _, done, info = env.step(action)
+            if done:
+                break
+            viewer = env.current_idx
+            for i, winner in enumerate(env.trick_winners):
+                expected = 0.0 if winner == -1 else (1.0 if winner == viewer else -1.0)
+                encoded = obs[TRICK_WINNERS_OFFSET + i]
+                assert encoded == expected, (i, winner, viewer, encoded, expected)
+
+
 def run_episode(env):
     obs, info = env.reset()
     cumulative = {"0": 0.0, "1": 0.0}
@@ -46,6 +68,9 @@ def run_episode(env):
 def main(n_episodes=2000):
     check_illegal_action_is_rejected()
     print("Rejet des actions illégales : OK")
+
+    check_trick_winners_are_relative_to_viewer()
+    print("Encodage relatif de trick_winners (moi/adversaire) : OK")
 
     env = BeloteEnv()
     wins = [0, 0, 0]  # joueur 0, joueur 1, égalité

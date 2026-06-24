@@ -101,7 +101,12 @@ class BeloteEnv(gym.Env):
         offset += 2
 
         for i, winner in enumerate(self.trick_winners):
-            obs[offset + i] = float(winner)
+            if winner == -1:
+                obs[offset + i] = 0.0  # pli pas encore joué
+            elif winner == player_idx:
+                obs[offset + i] = 1.0  # moi
+            else:
+                obs[offset + i] = -1.0  # adversaire
         offset += 8
 
         return obs
