@@ -3,7 +3,8 @@ import random
 import sys
 
 from belote.cards import SUIT_SYMBOLS, sort_hand
-from belote.env import BeloteEnv, INDEX_CARD, MAX_SCORE
+from belote.engine import has_belote
+from belote.env import BeloteEnv, INDEX_CARD
 
 
 def format_hand(hand, trump_suit):
@@ -19,7 +20,6 @@ def play_and_show(env):
 
     trick_no = 1
     trick_cards = []
-    cumulative = {"0": 0.0, "1": 0.0}
 
     while True:
         player_idx = env.current_idx
@@ -28,8 +28,6 @@ def play_and_show(env):
         card = INDEX_CARD[action]
 
         obs, rewards, done, info = env.step(action)
-        cumulative["0"] += rewards["0"]
-        cumulative["1"] += rewards["1"]
         trick_cards.append((player_idx, card))
 
         if len(trick_cards) == 2:
@@ -46,9 +44,21 @@ def play_and_show(env):
             trick_no += 1
 
         if done:
-            p0 = cumulative["0"] * MAX_SCORE
-            p1 = cumulative["1"] * MAX_SCORE
-            print(f"Score final : Joueur 0 = {p0:.0f} | Joueur 1 = {p1:.0f}")
+            real_points = {i: env.players[i].manche_points(trump_suit) for i in (0, 1)}
+            real_points[env.trick_winners[7]] += 10  # dix de der
+            for i in (0, 1):
+                if has_belote(env.players[i].dealt_hand, trump_suit):
+                    real_points[i] += 20
+
+            if real_points[0] > real_points[1]:
+                bonus_text = "Joueur 0 (+1.0) | Joueur 1 (-1.0)"
+            elif real_points[1] > real_points[0]:
+                bonus_text = "Joueur 0 (-1.0) | Joueur 1 (+1.0)"
+            else:
+                bonus_text = "égalité (0.0 / 0.0)"
+
+            print(f"Score réel (Belote) : Joueur 0 = {real_points[0]} | Joueur 1 = {real_points[1]}")
+            print(f"Bonus terminal RL    : {bonus_text}")
             return
 
 
