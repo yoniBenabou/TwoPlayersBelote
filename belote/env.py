@@ -143,9 +143,20 @@ class BeloteEnv(gym.Env):
 
             if self.trick_no == 8:
                 self.done = True
+
+                final_points = {i: self.players[i].manche_points(self.trump_suit) for i in (0, 1)}
+                final_points[winner_idx] += 10  # dix de der
                 for i in (0, 1):
                     if has_belote(self.players[i].dealt_hand, self.trump_suit):
+                        final_points[i] += 20
                         rewards[i] += 20 / MAX_SCORE
+
+                if final_points[0] > final_points[1]:
+                    rewards[0] += 1.0
+                    rewards[1] -= 1.0
+                elif final_points[1] > final_points[0]:
+                    rewards[1] += 1.0
+                    rewards[0] -= 1.0
             else:
                 self.trick_no += 1
                 self.led_card = None
