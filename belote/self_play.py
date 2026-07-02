@@ -4,6 +4,7 @@ import numpy as np
 import torch
 
 from .env import BeloteEnv
+from .gae import compute_gae
 from .ppo_agent import PPOAgent
 
 
@@ -15,6 +16,8 @@ class Transition:
     log_prob: float
     value: float
     reward: float = 0.0
+    advantage: float = 0.0
+    return_: float = 0.0
 
 
 def collect_episode(env: BeloteEnv, agent: PPOAgent, starting_player: int = 0) -> list[Transition]:
@@ -69,8 +72,15 @@ DEFAULT_ROLLOUT_EPISODES = 128
 def collect_rollout(env: BeloteEnv, agent: PPOAgent, n_episodes: int = DEFAULT_ROLLOUT_EPISODES) -> list[Transition]:
     """Enchaîne n_episodes manches en self-play, en alternant qui mène le
     premier pli d'une manche à l'autre (même principe que benchmark.run_match
-    pour ne pas biaiser les données par l'avantage structurel du meneur)."""
+    pour ne pas biaiser les données par l'avantage structurel du meneur).
+
+    GAE (advantage/return_) est calculé manche par manche, avant l'ajout au
+    buffer agrégé : chaque manche se termine proprement (16 transitions),
+    donc le bootstrap ne doit jamais franchir la frontière entre deux
+    manches empilées dans le même rollout."""
     buffer: list[Transition] = []
     for i in range(n_episodes):
-        buffer.extend(collect_episode(env, agent, starting_player=i % 2))
+        episode = collect_episode(env, agent, starting_player=i % 2)
+        compute_gae(episode)
+        buffer.extend(episode)
     return buffer
