@@ -40,3 +40,17 @@ class PPOAgent:
         dist = Categorical(logits=masked_logits)
         action = dist.sample()
         return int(action.item()), dist.log_prob(action), value, dist.entropy()
+
+    def evaluate_actions(self, obs, legal_mask, actions):
+        """Évalue des (obs, legal_mask, action) déjà connus sous les paramètres
+        actuels du réseau, pour la mise à jour PPO : contrairement à
+        act_and_evaluate, n'échantillonne pas de nouvelle action, réutilise
+        celle choisie pendant la collecte du rollout. Même masquage que
+        act/act_and_evaluate (via _masked_logits_and_value), indispensable
+        pour que le ratio π_new/π_old compare deux distributions au même
+        support. Pas de torch.no_grad() ici : le contexte de gradient reste
+        au choix de l'appelant (avec grad pendant l'update PPO)."""
+        masked_logits, value = self._masked_logits_and_value(obs, legal_mask)
+        dist = Categorical(logits=masked_logits)
+        actions_tensor = torch.as_tensor(np.asarray(actions), dtype=torch.long)
+        return dist.log_prob(actions_tensor), value, dist.entropy()

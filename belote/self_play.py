@@ -84,3 +84,17 @@ def collect_rollout(env: BeloteEnv, agent: PPOAgent, n_episodes: int = DEFAULT_R
         compute_gae(episode)
         buffer.extend(episode)
     return buffer
+
+
+def stack_transitions(transitions: list[Transition]) -> dict[str, np.ndarray]:
+    """Empile un minibatch de Transition en tableaux numpy, avec des clés
+    qui correspondent aux paramètres de ppo_loss.compute_ppo_loss (donc
+    utilisable via compute_ppo_loss(agent, **stack_transitions(minibatch)))."""
+    return {
+        "obs": np.stack([t.obs for t in transitions]),
+        "legal_mask": np.stack([t.legal_mask for t in transitions]),
+        "actions": np.array([t.action for t in transitions]),
+        "old_log_probs": np.array([t.log_prob for t in transitions], dtype=np.float32),
+        "advantages": np.array([t.advantage for t in transitions], dtype=np.float32),
+        "returns": np.array([t.return_ for t in transitions], dtype=np.float32),
+    }
