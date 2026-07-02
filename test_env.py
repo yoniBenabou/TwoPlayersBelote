@@ -2,10 +2,14 @@ import random
 import sys
 import time
 
+import numpy as np
+
 from belote.engine import has_belote
-from belote.env import BeloteEnv, MAX_SCORE, NUM_CARDS, SUITS
+from belote.env import CARD_INDEX, BeloteEnv, MAX_SCORE, NUM_CARDS, NUM_TRICKS, SUITS
 
 TRICK_WINNERS_OFFSET = NUM_CARDS * 2 + len(SUITS) + 2
+TRICK_HISTORY_OFFSET = TRICK_WINNERS_OFFSET + NUM_TRICKS
+TRICK_HISTORY_STRIDE = NUM_CARDS * 2 + 1
 
 
 def total_dealt_points(env):
@@ -52,6 +56,52 @@ def check_trick_winners_are_relative_to_viewer(n_episodes=200):
                 assert encoded == expected, (i, winner, viewer, encoded, expected)
 
 
+def check_trick_history_matches_actual_play(n_episodes=200):
+    """Le bloc d'historique des plis dans l'observation (ma carte / carte
+    adverse / qui a mené, par pli) doit correspondre exactement à ce qui a
+    été réellement joué, y compris pour le pli en cours (cas du suiveur qui
+    doit voir la carte que le meneur vient de jouer avant même la fin du
+    pli)."""
+    env = BeloteEnv()
+    for _ in range(n_episodes):
+        obs, info = env.reset()
+        while True:
+            legal = [i for i, ok in enumerate(info["legal_actions"]) if ok]
+            action = random.choice(legal)
+            obs, _, done, info = env.step(action)
+            viewer = env.current_idx
+
+            for i in range(NUM_TRICKS):
+                base = TRICK_HISTORY_OFFSET + i * TRICK_HISTORY_STRIDE
+                my_block = obs[base: base + NUM_CARDS]
+                opp_block = obs[base + NUM_CARDS: base + 2 * NUM_CARDS]
+                leader_flag = obs[base + 2 * NUM_CARDS]
+
+                leader = env._trick_leader_card[i]
+                follower = env._trick_follower_card[i]
+
+                expected_my = np.zeros(NUM_CARDS, dtype=np.float32)
+                expected_opp = np.zeros(NUM_CARDS, dtype=np.float32)
+                for played in (leader, follower):
+                    if played is None:
+                        continue
+                    played_idx, played_card = played
+                    target = expected_my if played_idx == viewer else expected_opp
+                    target[CARD_INDEX[played_card]] = 1.0
+
+                assert (my_block == expected_my).all(), (i, "my_block", my_block, expected_my)
+                assert (opp_block == expected_opp).all(), (i, "opp_block", opp_block, expected_opp)
+
+                if leader is None:
+                    expected_leader_flag = 0.0
+                else:
+                    expected_leader_flag = 1.0 if leader[0] == viewer else -1.0
+                assert leader_flag == expected_leader_flag, (i, leader_flag, expected_leader_flag)
+
+            if done:
+                break
+
+
 def check_starting_player_option():
     env = BeloteEnv()
 
@@ -87,6 +137,9 @@ def main(n_episodes=2000):
 
     check_trick_winners_are_relative_to_viewer()
     print("Encodage relatif de trick_winners (moi/adversaire) : OK")
+
+    check_trick_history_matches_actual_play()
+    print("Historique des plis dans l'observation (ma carte/carte adverse/meneur) : OK")
 
     check_starting_player_option()
     print("Option reset(options={'starting_player': ...}) : OK")

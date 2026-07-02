@@ -17,7 +17,10 @@ SUITS = list(Suit)
 SUIT_INDEX = {suit: i for i, suit in enumerate(SUITS)}
 
 MAX_SCORE = 182  # 152 points de cartes + 10 (dix de der) + 20 (belote-rebelote), pour normaliser
-OBS_SIZE = NUM_CARDS * 2 + len(SUITS) + 2 + 8
+NUM_TRICKS = 8
+# main (32) + played_public (32) + atout (4) + scores (2) + trick_winners (8)
+#   + par pli (ma carte 32 + carte adverse 32 + qui a mené 1) x 8 plis
+OBS_SIZE = NUM_CARDS * 2 + len(SUITS) + 2 + NUM_TRICKS + NUM_TRICKS * (NUM_CARDS * 2 + 1)
 
 
 class BeloteEnv(gym.Env):
@@ -49,6 +52,8 @@ class BeloteEnv(gym.Env):
         self.trick_winners = None
         self.done = False
         self._trick_cards = []
+        self._trick_leader_card = [None] * NUM_TRICKS
+        self._trick_follower_card = [None] * NUM_TRICKS
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -68,6 +73,8 @@ class BeloteEnv(gym.Env):
         self.trick_winners = [-1] * 8
         self.done = False
         self._trick_cards = []
+        self._trick_leader_card = [None] * NUM_TRICKS
+        self._trick_follower_card = [None] * NUM_TRICKS
 
         observation = self._observe(self.current_idx)
         info = {"legal_actions": self._legal_action_mask(), "current_player": self.current_idx, "led_card": None}
@@ -109,7 +116,33 @@ class BeloteEnv(gym.Env):
                 obs[offset + i] = 1.0  # moi
             else:
                 obs[offset + i] = -1.0  # adversaire
-        offset += 8
+        offset += NUM_TRICKS
+
+        for i in range(NUM_TRICKS):
+            leader = self._trick_leader_card[i]
+            follower = self._trick_follower_card[i]
+
+            my_card, opp_card = None, None
+            for played in (leader, follower):
+                if played is None:
+                    continue
+                played_idx, played_card = played
+                if played_idx == player_idx:
+                    my_card = played_card
+                else:
+                    opp_card = played_card
+
+            if my_card is not None:
+                obs[offset + CARD_INDEX[my_card]] = 1.0
+            offset += NUM_CARDS
+
+            if opp_card is not None:
+                obs[offset + CARD_INDEX[opp_card]] = 1.0
+            offset += NUM_CARDS
+
+            if leader is not None:
+                obs[offset] = 1.0 if leader[0] == player_idx else -1.0
+            offset += 1
 
         return obs
 
@@ -133,10 +166,12 @@ class BeloteEnv(gym.Env):
 
         if self.led_card is None:
             self.led_card = card
+            self._trick_leader_card[self.trick_no - 1] = (player_idx, card)
             self.current_idx = 1 - player_idx
         else:
             leader_idx, leader_card = self._trick_cards[0]
             follower_idx, follower_card = self._trick_cards[1]
+            self._trick_follower_card[self.trick_no - 1] = (follower_idx, follower_card)
             result = trick_winner(leader_card, follower_card, self.trump_suit)
             winner_idx = leader_idx if result == "leader" else follower_idx
 
