@@ -7,12 +7,13 @@ from belote.rl.ppo_agent import PPOAgent
 from belote.rl.self_play import Transition, collect_rollout
 
 
-def make_transition(reward, value):
-    return Transition(obs=None, legal_mask=None, action=0, log_prob=0.0, value=value, reward=reward)
+def make_transition(reward, value, player=0):
+    return Transition(obs=None, legal_mask=None, action=0, log_prob=0.0, value=value, reward=reward, player=player)
 
 
-def make_episode(rewards, values):
-    return [make_transition(r, v) for r, v in zip(rewards, values)]
+def make_episode(rewards, values, players=None):
+    players = players if players is not None else [0] * len(rewards)
+    return [make_transition(r, v, p) for r, v, p in zip(rewards, values, players)]
 
 
 def check_monte_carlo_case():
@@ -70,6 +71,23 @@ def check_no_leak_between_episodes():
         assert episode_b_alone[t].return_ == episode_b_after_a[t].return_, t
 
 
+def check_seats_are_separated():
+    """Coups des deux sièges entrelacés (cas réel du self-play) : le return
+    d'un coup ne doit sommer que les rewards de SON joueur, et le bootstrap
+    ne doit jamais utiliser la value d'un coup adverse."""
+    players = [0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0]
+    rewards = [0.0, 0.2, 0.0, 0.1, 0.0, 0.3, 0.0, 0.05, 0.0, 0.15, 0.0, 0.1, 0.0, 0.2, -1.0, 1.0]
+    values = [0.5, -0.4, 0.1, 0.2, 0.3, -0.2, 0.0, 0.6, 0.1, 0.2, 0.3, -0.1, 0.4, 0.2, -0.5, 0.7]
+
+    episode = make_episode(rewards, values, players)
+    compute_gae(episode)
+
+    for t in range(len(episode)):
+        own_remaining = sum(r for r, p in zip(rewards[t:], players[t:]) if p == players[t])
+        assert abs(episode[t].return_ - own_remaining) < 1e-9, (t, episode[t].return_, own_remaining)
+        assert abs(episode[t].advantage - (own_remaining - values[t])) < 1e-9, t
+
+
 def check_integration_with_real_rollout(n_episodes=20):
     """Sur un vrai rollout self-play, vérifie l'identité de base
     return_ == advantage + value (valable quels que soient gamma/lambda) et
@@ -89,6 +107,16 @@ def check_integration_with_real_rollout(n_episodes=20):
 
     assert any_nonzero_advantage, "toutes les advantages sont à 0.0, GAE n'a probablement pas été appliqué"
 
+    # Le return du premier coup de chaque siège = total des rewards de ce
+    # siège sur la manche (gamma=lambda=1), jamais ceux de l'adversaire.
+    for start in range(0, len(buffer), 16):
+        episode = buffer[start:start + 16]
+        for player in (0, 1):
+            own = [t for t in episode if t.player == player]
+            assert len(own) == 8, (player, len(own))
+            own_total = sum(t.reward for t in own)
+            assert abs(own[0].return_ - own_total) < 1e-5, (player, own[0].return_, own_total)
+
 
 def main():
     check_monte_carlo_case()
@@ -99,6 +127,9 @@ def main():
 
     check_no_leak_between_episodes()
     print("Pas de fuite de bootstrap entre deux manches distinctes : OK")
+
+    check_seats_are_separated()
+    print("Coups des deux sièges entrelacés : GAE calculé par siège, sans mélange : OK")
 
     check_integration_with_real_rollout()
     print("Intégration avec collect_rollout (identité return_ == advantage + value) : OK")

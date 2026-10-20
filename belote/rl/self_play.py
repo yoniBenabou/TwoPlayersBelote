@@ -16,6 +16,7 @@ class Transition:
     log_prob: float
     value: float
     reward: float = 0.0
+    player: int = 0  # siège physique qui a joué ce coup (pour le GAE par siège)
     advantage: float = 0.0
     return_: float = 0.0
 
@@ -23,7 +24,8 @@ class Transition:
 def collect_episode(env: BeloteEnv, agent: PPOAgent, starting_player: int = 0) -> list[Transition]:
     """Joue une manche complète en self-play : le même agent (réseau partagé)
     choisit l'action à chaque pas, quel que soit le siège actif. Retourne la
-    liste chronologique des transitions, sans distinction de siège.
+    liste chronologique des transitions des deux sièges entrelacés, chacune
+    marquée par le siège qui l'a jouée (transition.player).
 
     Le reward d'un pli n'est connu qu'au coup du second joueur (le suiveur) ;
     s'il revient au meneur, il doit être crédité rétroactivement à l'action
@@ -49,6 +51,7 @@ def collect_episode(env: BeloteEnv, agent: PPOAgent, starting_player: int = 0) -
             action=action,
             log_prob=log_prob.item(),
             value=value.item(),
+            player=player_idx,
         ))
         last_transition_idx[player_idx] = len(buffer) - 1
 
