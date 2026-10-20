@@ -1,5 +1,6 @@
 import sys
 
+from belote.rl.agents import HeuristicAgent, TrumpCountAgent
 from belote.rl.env import BeloteEnv, MAX_SCORE
 from belote.rl.networks import ActorCriticNetwork
 from belote.rl.ppo_agent import PPOAgent
@@ -41,6 +42,35 @@ def check_collect_rollout_size_and_legality(n_episodes=50):
         assert t.legal_mask[t.action], "action illégale dans le rollout agrégé"
 
 
+def check_episode_against_opponent(n_episodes=200):
+    """Contre un adversaire heuristique : seules les 8 transitions du siège
+    de l'agent sont enregistrées, et sans bonus de victoire, la somme de ses
+    rewards == ses points réels de la manche."""
+    env = BeloteEnv(win_bonus=False)
+    agent = PPOAgent(ActorCriticNetwork())
+
+    for i in range(n_episodes):
+        learner_seat = (i // 2) % 2
+        transitions = collect_episode(
+            env, agent, starting_player=i % 2, opponent=HeuristicAgent(), learner_seat=learner_seat,
+        )
+        assert len(transitions) == 8, len(transitions)
+        for t in transitions:
+            assert t.player == learner_seat
+            assert t.legal_mask[t.action], "action illégale dans le buffer contre adversaire"
+
+        total_reward = sum(t.reward for t in transitions) * MAX_SCORE
+        assert abs(total_reward - env.final_points[learner_seat]) < 1e-4, (total_reward, env.final_points)
+
+
+def check_rollout_against_opponents(n_episodes=40):
+    env = BeloteEnv()
+    agent = PPOAgent(ActorCriticNetwork())
+    buffer = collect_rollout(env, agent, n_episodes=n_episodes, opponents=[HeuristicAgent(), TrumpCountAgent()])
+    assert len(buffer) == n_episodes * 8, len(buffer)
+    assert {t.player for t in buffer} == {0, 1}, "l'agent doit alterner de siège"
+
+
 def main():
     check_episode_shape_and_legality()
     print("collect_episode : 16 transitions légales par manche : OK")
@@ -50,6 +80,12 @@ def main():
 
     check_collect_rollout_size_and_legality()
     print("collect_rollout : taille du buffer agrégé + légalité : OK")
+
+    check_episode_against_opponent()
+    print("Contre un adversaire heuristique : 8 transitions du bon siège, rewards == points réels : OK")
+
+    check_rollout_against_opponents()
+    print("collect_rollout contre adversaires : taille + alternance de siège : OK")
 
 
 if __name__ == "__main__":

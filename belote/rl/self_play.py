@@ -1,3 +1,4 @@
+import random
 from dataclasses import dataclass
 
 import numpy as np
@@ -21,11 +22,21 @@ class Transition:
     return_: float = 0.0
 
 
-def collect_episode(env: BeloteEnv, agent: PPOAgent, starting_player: int = 0) -> list[Transition]:
+def collect_episode(
+    env: BeloteEnv,
+    agent: PPOAgent,
+    starting_player: int = 0,
+    opponent=None,
+    learner_seat: int = 0,
+) -> list[Transition]:
     """Joue une manche complète en self-play : le même agent (réseau partagé)
     choisit l'action à chaque pas, quel que soit le siège actif. Retourne la
     liste chronologique des transitions des deux sièges entrelacés, chacune
     marquée par le siège qui l'a jouée (transition.player).
+
+    Si opponent est fourni (agent de agents.py, ex. HeuristicAgent), il joue
+    le siège 1 - learner_seat et seules les transitions de learner_seat sont
+    enregistrées (8 par manche au lieu de 16).
 
     Le reward d'un pli n'est connu qu'au coup du second joueur (le suiveur) ;
     s'il revient au meneur, il doit être crédité rétroactivement à l'action
@@ -42,6 +53,11 @@ def collect_episode(env: BeloteEnv, agent: PPOAgent, starting_player: int = 0) -
         legal_mask = info["legal_actions"]
         player_idx = env.current_idx
 
+        if opponent is not None and player_idx != learner_seat:
+            obs, rewards, done, info = env.step(opponent.act(obs, legal_mask, info))
+            _credit_rewards(buffer, last_transition_idx, rewards)
+            continue
+
         with torch.no_grad():
             action, log_prob, value, _entropy = agent.act_and_evaluate(obs, legal_mask)
 
@@ -56,13 +72,18 @@ def collect_episode(env: BeloteEnv, agent: PPOAgent, starting_player: int = 0) -
         last_transition_idx[player_idx] = len(buffer) - 1
 
         obs, rewards, done, info = env.step(action)
-
-        for i in (0, 1):
-            idx = last_transition_idx[i]
-            if idx is not None:
-                buffer[idx].reward += rewards[str(i)]
+        _credit_rewards(buffer, last_transition_idx, rewards)
 
     return buffer
+
+
+def _credit_rewards(buffer, last_transition_idx, rewards):
+    """Crédite le reward de chaque siège à sa dernière transition enregistrée
+    (aucune pour le siège d'un adversaire non entraîné)."""
+    for i in (0, 1):
+        idx = last_transition_idx[i]
+        if idx is not None:
+            buffer[idx].reward += rewards[str(i)]
 
 
 # Une manche fait toujours 16 transitions (8 plis x 2 joueurs). 128 manches
@@ -72,7 +93,12 @@ def collect_episode(env: BeloteEnv, agent: PPOAgent, starting_player: int = 0) -
 DEFAULT_ROLLOUT_EPISODES = 128
 
 
-def collect_rollout(env: BeloteEnv, agent: PPOAgent, n_episodes: int = DEFAULT_ROLLOUT_EPISODES) -> list[Transition]:
+def collect_rollout(
+    env: BeloteEnv,
+    agent: PPOAgent,
+    n_episodes: int = DEFAULT_ROLLOUT_EPISODES,
+    opponents=None,
+) -> list[Transition]:
     """Enchaîne n_episodes manches en self-play, en alternant qui mène le
     premier pli d'une manche à l'autre (même principe que benchmark.run_match
     pour ne pas biaiser les données par l'avantage structurel du meneur).
@@ -80,10 +106,20 @@ def collect_rollout(env: BeloteEnv, agent: PPOAgent, n_episodes: int = DEFAULT_R
     GAE (advantage/return_) est calculé manche par manche, avant l'ajout au
     buffer agrégé : chaque manche se termine proprement (16 transitions),
     donc le bootstrap ne doit jamais franchir la frontière entre deux
-    manches empilées dans le même rollout."""
+    manches empilées dans le même rollout.
+
+    opponents (liste d'agents de agents.py) : au lieu du self-play, chaque
+    manche oppose l'agent à un adversaire tiré au hasard dans la liste ;
+    l'agent alterne aussi de siège (meneur ou non au premier pli)."""
     buffer: list[Transition] = []
     for i in range(n_episodes):
-        episode = collect_episode(env, agent, starting_player=i % 2)
+        if opponents:
+            episode = collect_episode(
+                env, agent, starting_player=i % 2,
+                opponent=random.choice(opponents), learner_seat=(i // 2) % 2,
+            )
+        else:
+            episode = collect_episode(env, agent, starting_player=i % 2)
         compute_gae(episode)
         buffer.extend(episode)
     return buffer

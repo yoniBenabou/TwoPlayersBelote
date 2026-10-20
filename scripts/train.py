@@ -1,9 +1,12 @@
+import argparse
+import json
 import os
 import sys
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+from belote.rl.agents import HeuristicAgent, TrumpCountAgent, VoidExploitAgent
 from belote.rl.env import BeloteEnv
 from belote.rl.evaluation import run_evaluation_suite
 from belote.rl.networks import ActorCriticNetwork
@@ -39,21 +42,38 @@ def train(
     total_games: int = TOTAL_GAMES,
     rollout_episodes: int = ROLLOUT_EPISODES,
     eval_every_n_games: int = EVAL_EVERY_N_GAMES,
+    lr: float = 1e-3,
+    entropy_coef: float = 0.01,
+    win_bonus: bool = True,
+    vs_heuristics: bool = False,
 ):
+    """vs_heuristics : au lieu du self-play, chaque manche d'entraînement
+    oppose l'agent à un adversaire tiré au hasard parmi les heuristiques
+    (étape 1 du curriculum). win_bonus=False : reward sans le +1/-1 final."""
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
     os.makedirs(LOG_DIR, exist_ok=True)
 
-    env = BeloteEnv()
+    config = {
+        "total_games": total_games, "rollout_episodes": rollout_episodes,
+        "eval_every_n_games": eval_every_n_games, "lr": lr, "entropy_coef": entropy_coef,
+        "win_bonus": win_bonus, "vs_heuristics": vs_heuristics,
+    }
+    with open("config.json", "w") as f:
+        json.dump(config, f, indent=2)
+
+    env = BeloteEnv(win_bonus=win_bonus)
+    opponents = [HeuristicAgent(), VoidExploitAgent(), TrumpCountAgent()] if vs_heuristics else None
     network = ActorCriticNetwork()
     agent = PPOAgent(network)
     eval_agent = PPOAgent(network, deterministic=True)
-    optimizer = torch.optim.Adam(network.parameters(), lr=1e-3)
+    optimizer = torch.optim.Adam(network.parameters(), lr=lr)
     writer = SummaryWriter(LOG_DIR)
 
     games_trained = 0
     next_eval_at = 0
 
     print(f"=== Entraînement PPO : {total_games} parties, éval toutes les {eval_every_n_games} parties ===")
+    print(f"Config : {config}")
 
     while True:
         if games_trained >= next_eval_at:
@@ -66,8 +86,8 @@ def train(
         if games_trained >= total_games:
             break
 
-        buffer = collect_rollout(env, agent, n_episodes=rollout_episodes)
-        metrics = ppo_update(agent, optimizer, buffer)
+        buffer = collect_rollout(env, agent, n_episodes=rollout_episodes, opponents=opponents)
+        metrics = ppo_update(agent, optimizer, buffer, entropy_coef=entropy_coef)
         games_trained += rollout_episodes
         log_optimization_metrics(writer, metrics, games_trained)
 
@@ -77,4 +97,24 @@ def train(
 
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    train()
+
+    parser = argparse.ArgumentParser(description="Entraînement PPO belote 2 joueurs.")
+    parser.add_argument("--total-games", type=int, default=TOTAL_GAMES)
+    parser.add_argument("--eval-every", type=int, default=EVAL_EVERY_N_GAMES)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--entropy-coef", type=float, default=0.01)
+    parser.add_argument("--no-win-bonus", action="store_true", help="reward sans le +1/-1 de victoire")
+    parser.add_argument("--vs-heuristics", action="store_true", help="adversaires heuristiques au lieu du self-play")
+    parser.add_argument("--out-dir", default=".", help="dossier où écrire checkpoints/, runs/ et config.json")
+    args = parser.parse_args()
+
+    os.makedirs(args.out_dir, exist_ok=True)
+    os.chdir(args.out_dir)
+    train(
+        total_games=args.total_games,
+        eval_every_n_games=args.eval_every,
+        lr=args.lr,
+        entropy_coef=args.entropy_coef,
+        win_bonus=not args.no_win_bonus,
+        vs_heuristics=args.vs_heuristics,
+    )

@@ -40,19 +40,25 @@ class BeloteEnv(gym.Env):
     step(action) -> (observation, {"0": r0, "1": r1}, done, info)
         En fin de manche, info["final_points"] = (points joueur 0, points
         joueur 1) : points réels (cartes + dix de der + belote-rebelote),
-        sans le bonus de victoire ±1 contenu dans les rewards.
+        sans le bonus de victoire ±1 contenu dans les rewards (aussi
+        disponible dans self.final_points jusqu'au prochain reset).
     """
 
     metadata = {"render_modes": []}
 
-    def __init__(self):
+    def __init__(self, win_bonus: bool = True):
+        """win_bonus : ajoute +1/-1 au reward final selon qui a le plus de
+        points. False = reward uniquement fait des points gagnés (plis, dix
+        de der, belote-rebelote), sans ce bonus qui dépend surtout de la donne."""
         super().__init__()
+        self.win_bonus = win_bonus
         self.action_space = spaces.Discrete(NUM_CARDS)
         self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(OBS_SIZE,), dtype=np.float32)
 
         self.players = [Player("Joueur 0"), Player("Joueur 1")]
         self.trump_suit = None
         self.deal = None
+        self.final_points = None
         self.played_public = None
         self.led_card = None
         self.current_idx = None
@@ -78,6 +84,7 @@ class BeloteEnv(gym.Env):
         self.players[1].reset_for_manche(hand2)
 
         self.trump_suit = trump
+        self.final_points = None
         self.played_public = [False] * NUM_CARDS
         self.led_card = None
         self.current_idx = (options or {}).get("starting_player", 0)
@@ -205,12 +212,15 @@ class BeloteEnv(gym.Env):
                         final_points[i] += 20
                         rewards[i] += 20 / MAX_SCORE
 
-                if final_points[0] > final_points[1]:
-                    rewards[0] += 1.0
-                    rewards[1] -= 1.0
-                elif final_points[1] > final_points[0]:
-                    rewards[1] += 1.0
-                    rewards[0] -= 1.0
+                self.final_points = (final_points[0], final_points[1])
+
+                if self.win_bonus:
+                    if final_points[0] > final_points[1]:
+                        rewards[0] += 1.0
+                        rewards[1] -= 1.0
+                    elif final_points[1] > final_points[0]:
+                        rewards[1] += 1.0
+                        rewards[0] -= 1.0
             else:
                 self.trick_no += 1
                 self.led_card = None
@@ -223,7 +233,7 @@ class BeloteEnv(gym.Env):
                 "legal_actions": None,
                 "current_player": None,
                 "led_card": None,
-                "final_points": (final_points[0], final_points[1]),
+                "final_points": self.final_points,
             }
         else:
             observation = self._observe(self.current_idx)
