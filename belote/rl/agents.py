@@ -2,7 +2,7 @@ from collections import Counter
 
 import numpy as np
 
-from .cards import Rank
+from ..core.cards import Rank
 from .env import CARD_INDEX, INDEX_CARD, NUM_CARDS, SUITS
 
 

@@ -4,12 +4,12 @@ import sys
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from belote.env import BeloteEnv
-from belote.evaluation import run_evaluation_suite
-from belote.networks import ActorCriticNetwork
-from belote.ppo_agent import PPOAgent
-from belote.ppo_update import ppo_update
-from belote.self_play import DEFAULT_ROLLOUT_EPISODES, collect_rollout
+from belote.rl.env import BeloteEnv
+from belote.rl.evaluation import run_evaluation_suite
+from belote.rl.networks import ActorCriticNetwork
+from belote.rl.ppo_agent import PPOAgent
+from belote.rl.ppo_update import ppo_update
+from belote.rl.self_play import DEFAULT_ROLLOUT_EPISODES, collect_rollout
 
 TOTAL_GAMES = 200_000
 ROLLOUT_EPISODES = DEFAULT_ROLLOUT_EPISODES

@@ -1,11 +1,11 @@
 import argparse
 import sys
 
-from belote.cards import SUIT_SYMBOLS, sort_hand
-from belote.engine import has_belote
-from belote.env import BeloteEnv, INDEX_CARD
-from belote.networks import ActorCriticNetwork
-from belote.ppo_agent import PPOAgent
+from belote.core.cards import SUIT_SYMBOLS, sort_hand
+from belote.core.engine import has_belote
+from belote.rl.env import BeloteEnv, INDEX_CARD
+from belote.rl.networks import ActorCriticNetwork
+from belote.rl.ppo_agent import PPOAgent
 
 
 def format_hand(hand, trump_suit):

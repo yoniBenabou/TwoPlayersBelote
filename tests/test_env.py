@@ -4,8 +4,8 @@ import time
 
 import numpy as np
 
-from belote.engine import has_belote
-from belote.env import CARD_INDEX, BeloteEnv, MAX_SCORE, NUM_CARDS, NUM_TRICKS, SUITS
+from belote.core.engine import has_belote
+from belote.rl.env import CARD_INDEX, BeloteEnv, MAX_SCORE, NUM_CARDS, NUM_TRICKS, SUITS
 
 TRICK_WINNERS_OFFSET = NUM_CARDS * 2 + len(SUITS) + 2
 TRICK_HISTORY_OFFSET = TRICK_WINNERS_OFFSET + NUM_TRICKS

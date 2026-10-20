@@ -1,6 +1,6 @@
 import sys
 
-from belote.cli import run
+from belote.core.cli import run
 
 if __name__ == "__main__":
     # La console Windows utilise parfois un encodage (cp1252) qui ne

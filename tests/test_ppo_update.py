@@ -3,11 +3,11 @@ import sys
 
 import torch
 
-from belote.env import BeloteEnv
-from belote.networks import ActorCriticNetwork
-from belote.ppo_agent import PPOAgent
-from belote.ppo_update import ppo_update
-from belote.self_play import collect_rollout
+from belote.rl.env import BeloteEnv
+from belote.rl.networks import ActorCriticNetwork
+from belote.rl.ppo_agent import PPOAgent
+from belote.rl.ppo_update import ppo_update
+from belote.rl.self_play import collect_rollout
 
 EXPECTED_METRIC_KEYS = {"loss", "policy_loss", "value_loss", "entropy", "approx_kl", "clip_fraction"}
 

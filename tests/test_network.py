@@ -3,8 +3,8 @@ import sys
 import numpy as np
 import torch
 
-from belote.env import BeloteEnv, NUM_CARDS
-from belote.networks import ActorCriticNetwork
+from belote.rl.env import BeloteEnv, NUM_CARDS
+from belote.rl.networks import ActorCriticNetwork
 
 
 def main():

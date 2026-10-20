@@ -1,10 +1,10 @@
 import sys
 
-from belote.agents import RandomAgent
-from belote.env import BeloteEnv
-from belote.networks import ActorCriticNetwork
-from belote.ppo_agent import PPOAgent
-from benchmark import play_episode
+from belote.rl.agents import RandomAgent
+from belote.rl.env import BeloteEnv
+from belote.rl.networks import ActorCriticNetwork
+from belote.rl.ppo_agent import PPOAgent
+from scripts.benchmark import play_episode
 
 
 def check_act_respects_legal_mask(n_episodes=50):

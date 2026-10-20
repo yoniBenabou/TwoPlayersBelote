@@ -2,9 +2,9 @@ import argparse
 import random
 import sys
 
-from belote.cards import SUIT_SYMBOLS, sort_hand
-from belote.engine import has_belote
-from belote.env import BeloteEnv, INDEX_CARD
+from belote.core.cards import SUIT_SYMBOLS, sort_hand
+from belote.core.engine import has_belote
+from belote.rl.env import BeloteEnv, INDEX_CARD
 
 
 def format_hand(hand, trump_suit):

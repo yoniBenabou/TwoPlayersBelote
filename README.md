@@ -24,7 +24,17 @@ Le jeu demande le nom des deux joueurs, puis le score cible pour gagner la parti
 ## Structure du projet
 
 - [main.py](main.py) — point d'entrée, lance la CLI.
-- [belote/cards.py](belote/cards.py) — cartes, couleurs, valeurs, tri de la main.
-- [belote/engine.py](belote/engine.py) — règles du jeu (distribution, coups légaux, vainqueur d'un pli, Belote-Rebelote).
-- [belote/player.py](belote/player.py) — état d'un joueur (main, pli gagné, score).
-- [belote/cli.py](belote/cli.py) — boucle de jeu et affichage en console.
+- [belote/core/](belote/core/) — moteur du jeu : cartes ([cards.py](belote/core/cards.py)), règles ([engine.py](belote/core/engine.py)), joueur ([player.py](belote/core/player.py)), CLI ([cli.py](belote/core/cli.py)).
+- [belote/rl/](belote/rl/) — apprentissage par renforcement : environnement Gym ([env.py](belote/rl/env.py)), agents de référence ([agents.py](belote/rl/agents.py)), réseau et PPO (`networks.py`, `ppo_agent.py`, `self_play.py`, `gae.py`, `ppo_loss.py`, `ppo_update.py`), évaluation ([evaluation.py](belote/rl/evaluation.py)).
+- [scripts/](scripts/) — entraînement, benchmark, smoke test, visualisation de parties.
+- [tests/](tests/) — tests de l'environnement et de chaque brique PPO.
+
+## Lancer les scripts et les tests
+
+Toujours depuis la racine du projet, en mode module (`-m`) :
+
+```bash
+python -m scripts.train
+python -m scripts.benchmark
+python -m tests.test_env
+```

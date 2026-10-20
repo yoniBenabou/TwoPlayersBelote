@@ -1,10 +1,10 @@
 import sys
 
-from belote.env import BeloteEnv, MAX_SCORE
-from belote.networks import ActorCriticNetwork
-from belote.ppo_agent import PPOAgent
-from belote.self_play import collect_episode, collect_rollout
-from test_env import belote_rebelote_bonus, total_dealt_points
+from belote.rl.env import BeloteEnv, MAX_SCORE
+from belote.rl.networks import ActorCriticNetwork
+from belote.rl.ppo_agent import PPOAgent
+from belote.rl.self_play import collect_episode, collect_rollout
+from tests.test_env import belote_rebelote_bonus, total_dealt_points
 
 
 def check_episode_shape_and_legality(n_episodes=200):

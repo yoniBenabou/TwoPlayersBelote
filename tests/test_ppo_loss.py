@@ -3,11 +3,11 @@ import sys
 import numpy as np
 import torch
 
-from belote.env import BeloteEnv
-from belote.networks import ActorCriticNetwork
-from belote.ppo_agent import PPOAgent
-from belote.ppo_loss import compute_ppo_loss
-from belote.self_play import collect_rollout, stack_transitions
+from belote.rl.env import BeloteEnv
+from belote.rl.networks import ActorCriticNetwork
+from belote.rl.ppo_agent import PPOAgent
+from belote.rl.ppo_loss import compute_ppo_loss
+from belote.rl.self_play import collect_rollout, stack_transitions
 
 
 def check_evaluate_actions_matches_act_and_evaluate():

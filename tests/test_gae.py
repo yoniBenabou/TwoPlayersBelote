@@ -1,10 +1,10 @@
 import sys
 
-from belote.env import BeloteEnv
-from belote.gae import compute_gae
-from belote.networks import ActorCriticNetwork
-from belote.ppo_agent import PPOAgent
-from belote.self_play import Transition, collect_rollout
+from belote.rl.env import BeloteEnv
+from belote.rl.gae import compute_gae
+from belote.rl.networks import ActorCriticNetwork
+from belote.rl.ppo_agent import PPOAgent
+from belote.rl.self_play import Transition, collect_rollout
 
 
 def make_transition(reward, value):

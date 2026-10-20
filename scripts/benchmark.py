@@ -1,8 +1,8 @@
 import sys
 import time
 
-from belote.agents import HeuristicAgent, RandomAgent, TrumpCountAgent, VoidExploitAgent
-from belote.evaluation import evaluate_against, play_episode  # noqa: F401 (play_episode réexporté)
+from belote.rl.agents import HeuristicAgent, RandomAgent, TrumpCountAgent, VoidExploitAgent
+from belote.rl.evaluation import evaluate_against, play_episode  # noqa: F401 (play_episode réexporté)
 
 
 def run_match(agent_a, agent_b, n_episodes, label_a, label_b):

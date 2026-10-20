@@ -4,9 +4,9 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 
-from .cards import build_deck, shuffled_deck, Suit
-from .engine import deal_round, random_trump, legal_moves, trick_winner, has_belote
-from .player import Player
+from ..core.cards import build_deck, shuffled_deck, Suit
+from ..core.engine import deal_round, random_trump, legal_moves, trick_winner, has_belote
+from ..core.player import Player
 
 _CANONICAL_DECK = build_deck()
 CARD_INDEX = {card: i for i, card in enumerate(_CANONICAL_DECK)}
