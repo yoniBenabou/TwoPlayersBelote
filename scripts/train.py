@@ -25,7 +25,7 @@ def log_optimization_metrics(writer, metrics, games_trained):
 
 def log_eval_results(writer, results, games_trained):
     for opponent_name, result in results.items():
-        for key in ("win_rate", "win_rate_ci95", "avg_score_agent", "avg_score_opponent"):
+        for key in ("win_rate", "win_rate_ci95", "avg_point_diff", "avg_point_diff_ci95"):
             writer.add_scalar(f"eval/{opponent_name}/{key}", result[key], games_trained)
 
 

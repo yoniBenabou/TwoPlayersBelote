@@ -14,7 +14,7 @@ from scripts.benchmark import run_match
 N_ITERATIONS = 50
 ROLLOUT_EPISODES = 64
 EVAL_EVERY = 10
-EVAL_EPISODES = 200
+EVAL_DEALS = 100  # donnes dupliquées, soit 200 parties
 PRINT_EVERY = 5
 
 
@@ -36,7 +36,7 @@ def check_legal_mask_respected(env, agent, n_episodes=20):
 
 def evaluate(eval_agent, label):
     print(f"\n--- Éval {label} ---")
-    run_match(eval_agent, RandomAgent(), EVAL_EPISODES, "PPO", "Random")
+    run_match(eval_agent, RandomAgent(), EVAL_DEALS, "PPO", "Random")
 
 
 def main():

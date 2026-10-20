@@ -30,10 +30,17 @@ class BeloteEnv(gym.Env):
     toujours du point de vue du joueur actif (information imparfaite :
     la main de l'adversaire n'est jamais exposée).
 
-    reset(options={"starting_player": 0 ou 1}) -> (observation, {"legal_actions": mask})
+    reset(options={"starting_player": 0 ou 1, "deal": (main0, main1, atout)})
+        -> (observation, {"legal_actions": mask})
         starting_player choisit qui mène le premier pli (0 par défaut) ;
         l'alternance d'une manche à l'autre est à la charge de l'appelant.
+        deal impose la donne au lieu de la tirer au hasard (pour rejouer la
+        même donne en échangeant les mains, cf. évaluation dupliquée) ; la
+        donne effectivement jouée est toujours disponible dans self.deal.
     step(action) -> (observation, {"0": r0, "1": r1}, done, info)
+        En fin de manche, info["final_points"] = (points joueur 0, points
+        joueur 1) : points réels (cartes + dix de der + belote-rebelote),
+        sans le bonus de victoire ±1 contenu dans les rewards.
     """
 
     metadata = {"render_modes": []}
@@ -45,6 +52,7 @@ class BeloteEnv(gym.Env):
 
         self.players = [Player("Joueur 0"), Player("Joueur 1")]
         self.trump_suit = None
+        self.deal = None
         self.played_public = None
         self.led_card = None
         self.current_idx = None
@@ -60,12 +68,16 @@ class BeloteEnv(gym.Env):
         if seed is not None:
             random.seed(seed)
 
-        deck = shuffled_deck()
-        hand1, hand2 = deal_round(deck)
+        deal = (options or {}).get("deal")
+        if deal is None:
+            hand1, hand2 = deal_round(shuffled_deck())
+            deal = (hand1, hand2, random_trump())
+        hand1, hand2, trump = deal
+        self.deal = (list(hand1), list(hand2), trump)
         self.players[0].reset_for_manche(hand1)
         self.players[1].reset_for_manche(hand2)
 
-        self.trump_suit = random_trump()
+        self.trump_suit = trump
         self.played_public = [False] * NUM_CARDS
         self.led_card = None
         self.current_idx = (options or {}).get("starting_player", 0)
@@ -207,7 +219,12 @@ class BeloteEnv(gym.Env):
 
         if self.done:
             observation = self._observe(self.current_idx)
-            info = {"legal_actions": None, "current_player": None, "led_card": None}
+            info = {
+                "legal_actions": None,
+                "current_player": None,
+                "led_card": None,
+                "final_points": (final_points[0], final_points[1]),
+            }
         else:
             observation = self._observe(self.current_idx)
             led_card_idx = CARD_INDEX[self.led_card] if self.led_card is not None else None

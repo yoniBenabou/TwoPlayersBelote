@@ -118,6 +118,34 @@ def check_starting_player_option():
     assert info["current_player"] == 0
 
 
+def check_deal_replay_and_final_points():
+    """reset(options={"deal": ...}) rejoue exactement la donne demandée (mains
+    et atout), env.deal mémorise la donne jouée, et info["final_points"] en
+    fin de manche = points réels (sans le bonus de victoire des rewards)."""
+    env = BeloteEnv()
+    env.reset()
+    hand0, hand1, trump = env.deal
+
+    env.reset(options={"deal": (hand1, hand0, trump)})
+    assert env.players[0].hand == hand1 and env.players[1].hand == hand0
+    assert env.trump_suit == trump
+    assert env.deal == (hand1, hand0, trump)
+
+    obs, info = env.reset(options={"deal": (hand0, hand1, trump)})
+    cumulative = {"0": 0.0, "1": 0.0}
+    done = False
+    while not done:
+        legal = [i for i, ok in enumerate(info["legal_actions"]) if ok]
+        obs, rewards, done, info = env.step(random.choice(legal))
+        cumulative["0"] += rewards["0"]
+        cumulative["1"] += rewards["1"]
+
+    p0, p1 = info["final_points"]
+    assert p0 + p1 == total_dealt_points(env) + 10 + belote_rebelote_bonus(env)
+    win_bonus = 1.0 if p0 > p1 else (-1.0 if p1 > p0 else 0.0)
+    assert abs(cumulative["0"] * MAX_SCORE - (p0 + win_bonus * MAX_SCORE)) < 1e-6
+
+
 def run_episode(env):
     obs, info = env.reset()
     cumulative = {"0": 0.0, "1": 0.0}
@@ -143,6 +171,9 @@ def main(n_episodes=2000):
 
     check_starting_player_option()
     print("Option reset(options={'starting_player': ...}) : OK")
+
+    check_deal_replay_and_final_points()
+    print("Rejouer une donne (options={'deal': ...}) + info['final_points'] : OK")
 
     env = BeloteEnv()
     wins = [0, 0, 0]  # joueur 0, joueur 1, égalité
