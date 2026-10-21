@@ -12,6 +12,11 @@ class ActorCriticNetwork(nn.Module):
     réseau peut jouer indifféremment les deux mains : il ne voit jamais le
     siège physique, seulement sa propre main / les cartes jouées / les
     scores, déjà depuis sa perspective.
+
+    Activation ReLU et initialisation par défaut de PyTorch (le plan initial
+    prévoyait Tanh + initialisation orthogonale) : cette version converge
+    bien, et tous les checkpoints entraînés en dépendent ; changer
+    l'activation les rendrait inutilisables au rechargement.
     """
 
     def __init__(self, obs_size: int = OBS_SIZE, num_actions: int = NUM_CARDS, hidden_size: int = 128):

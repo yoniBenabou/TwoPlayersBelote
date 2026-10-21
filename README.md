@@ -26,15 +26,48 @@ Le jeu demande le nom des deux joueurs, puis le score cible pour gagner la parti
 - [main.py](main.py) — point d'entrée, lance la CLI.
 - [belote/core/](belote/core/) — moteur du jeu : cartes ([cards.py](belote/core/cards.py)), règles ([engine.py](belote/core/engine.py)), joueur ([player.py](belote/core/player.py)), CLI ([cli.py](belote/core/cli.py)).
 - [belote/rl/](belote/rl/) — apprentissage par renforcement : environnement Gym ([env.py](belote/rl/env.py)), agents de référence ([agents.py](belote/rl/agents.py)), réseau et PPO (`networks.py`, `ppo_agent.py`, `self_play.py`, `gae.py`, `ppo_loss.py`, `ppo_update.py`), évaluation ([evaluation.py](belote/rl/evaluation.py)).
-- [scripts/](scripts/) — entraînement, benchmark, smoke test, visualisation de parties.
+- [scripts/](scripts/) — entraînement, évaluation, visualisation de parties et courbes.
 - [tests/](tests/) — tests de l'environnement et de chaque brique PPO.
+- [figures/](figures/) — courbes d'apprentissage de l'entraînement long (3 millions de parties).
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
 
 ## Lancer les scripts et les tests
 
-Toujours depuis la racine du projet, en mode module (`-m`) :
+Toujours depuis la racine du projet, en mode module (`-m`).
+
+**Entraînement** ([scripts/train.py](scripts/train.py)). Sans option, utilise la meilleure configuration trouvée : self-play, reward sans bonus de victoire, learning rate 3e-4, 2 millions de parties, évaluation toutes les 50 000 parties.
 
 ```bash
-python -m scripts.train
+python -m scripts.train --out-dir experiments/mon_run --seed 1
+```
+
+Options : `--total-games`, `--eval-every`, `--lr`, `--entropy-coef`, `--win-bonus` (ajoute le ±1 de victoire au reward), `--vs-heuristics` (adversaires heuristiques au lieu du self-play), `--seed`, `--out-dir` (où écrire `checkpoints/`, `runs/` TensorBoard, `config.json`). Le log d'évaluation s'affiche sur la sortie standard : le rediriger vers un `train.log` pour tracer les courbes.
+
+**Évaluation et analyse :**
+
+```bash
 python -m scripts.benchmark
+python -m scripts.plot_training experiments/mon_run/train.log --out-dir figures --prefix mon_run_
+python -m scripts.compare_checkpoints experiments/mon_run/checkpoints
+python -m scripts.watch_self_play_game --checkpoint experiments/mon_run/checkpoints/ppo_2000000.pt --opponent trumpcount --duplicate --seed 138
+```
+
+- `benchmark` : agents de référence les uns contre les autres.
+- `plot_training` : courbes d'écart de points et de taux de victoire contre les 4 adversaires.
+- `compare_checkpoints` : agent final contre ses versions précédentes.
+- `watch_self_play_game` : parties détaillées pli par pli (`--opponent self|random|heuristic|voidexploit|trumpcount`, `--duplicate` rejoue la donne en échangeant les mains).
+
+Toutes les évaluations utilisent des **donnes dupliquées** : chaque donne est jouée deux fois en échangeant les mains, ce qui annule la chance de la donne.
+
+**Tests :**
+
+```bash
 python -m tests.test_env
 ```
+
+(de même pour `test_network`, `test_ppo_agent`, `test_self_play`, `test_gae`, `test_ppo_loss`, `test_ppo_update`)
