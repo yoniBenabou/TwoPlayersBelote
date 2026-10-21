@@ -21,6 +21,26 @@ TEXT_SECONDARY = "#52514e"
 GRID = "#e4e3df"
 SURFACE = "#fcfcfb"
 
+# Textes des figures (fr par défaut, en pour les slides en anglais).
+STRINGS = {
+    "fr": {
+        "xlabel": "Parties d'entraînement (millions)",
+        "footnote": "Évaluation par donnes dupliquées. Bande = intervalle de confiance à 95 %. Ligne pointillée = jeu égal ({ref}).",
+        "points_title": "Écart moyen de points par partie de l'agent PPO contre chaque adversaire",
+        "points_ylabel": "Points agent − points adversaire",
+        "win_title": "Taux de victoire de l'agent PPO contre chaque adversaire",
+        "win_ylabel": "Taux de victoire (%)",
+    },
+    "en": {
+        "xlabel": "Training games (millions)",
+        "footnote": "Duplicate-deal evaluation. Band = 95% confidence interval. Dashed line = break-even ({ref}).",
+        "points_title": "Average point margin per game of the PPO agent against each opponent",
+        "points_ylabel": "Agent points − opponent points",
+        "win_title": "Win rate of the PPO agent against each opponent",
+        "win_ylabel": "Win rate (%)",
+    },
+}
+
 EVAL_RE = re.compile(r"Évaluation à (\d+)")
 RESULT_RE = re.compile(
     r"(\w+Agent)\s+win_rate=\s*([\d.]+)% \(±([\d.]+)pp\) \| écart points\s+([+-][\d.]+) \(±([\d.]+)\)"
@@ -47,10 +67,10 @@ def parse_log(path):
     return results
 
 
-def _style_axes(ax, title, ylabel):
+def _style_axes(ax, title, ylabel, xlabel):
     ax.set_facecolor(SURFACE)
     ax.set_title(title, loc="left", fontsize=14, color=TEXT_PRIMARY, pad=14)
-    ax.set_xlabel("Parties d'entraînement (millions)", color=TEXT_SECONDARY)
+    ax.set_xlabel(xlabel, color=TEXT_SECONDARY)
     ax.set_ylabel(ylabel, color=TEXT_SECONDARY)
     ax.grid(axis="y", color=GRID, linewidth=0.8)
     ax.tick_params(colors=TEXT_SECONDARY, length=0)
@@ -59,10 +79,11 @@ def _style_axes(ax, title, ylabel):
     ax.spines["bottom"].set_color(GRID)
 
 
-def plot_metric(results, value_idx, ci_idx, reference, title, ylabel, unit, out_path):
+def plot_metric(results, value_idx, ci_idx, reference, title, ylabel, unit, out_path, lang="fr"):
+    texts = STRINGS[lang]
     fig, ax = plt.subplots(figsize=(10, 5.6), dpi=150)
     fig.patch.set_facecolor(SURFACE)
-    _style_axes(ax, title, ylabel)
+    _style_axes(ax, title, ylabel, texts["xlabel"])
 
     ax.axhline(reference, color=TEXT_SECONDARY, linewidth=1, linestyle="--", zorder=1)
 
@@ -79,7 +100,7 @@ def plot_metric(results, value_idx, ci_idx, reference, title, ylabel, unit, out_
         ax.plot(x, y, color=color, linewidth=2, label=label, zorder=3)
         ax.plot(x[-1], y[-1], "o", color=color, markersize=7,
                 markeredgecolor=SURFACE, markeredgewidth=2, zorder=4)
-        label_positions.append([y[-1], f"{label}  {y[-1]:+.1f}{unit}" if unit != "%" else f"{label}  {y[-1]:.1f} %"])
+        label_positions.append([y[-1], f"{label}  {y[-1]:+.1f}{unit}" if unit != "%" else f"{label}  {y[-1]:.1f}{' %' if lang == 'fr' else '%'}"])
 
     # Étiquettes directes en bout de courbe, écartées pour ne pas se chevaucher.
     label_positions.sort()
@@ -97,10 +118,8 @@ def plot_metric(results, value_idx, ci_idx, reference, title, ylabel, unit, out_
     ax.margins(x=0)
     ax.legend(loc="upper left", bbox_to_anchor=(0, 1.0), ncol=4, frameon=False,
               fontsize=10, labelcolor=TEXT_SECONDARY, handlelength=1.6)
-    fig.text(0.01, 0.01,
-             "Évaluation par donnes dupliquées. Bande = intervalle de confiance à 95 %. "
-             f"Ligne pointillée = jeu égal ({reference:g}{'' if unit != '%' else ' %'}).",
-             fontsize=8.5, color=TEXT_SECONDARY)
+    ref_text = f"{reference:g}" if unit != "%" else (f"{reference:g} %" if lang == "fr" else f"{reference:g}%")
+    fig.text(0.01, 0.01, texts["footnote"].format(ref=ref_text), fontsize=8.5, color=TEXT_SECONDARY)
     fig.subplots_adjust(left=0.08, right=0.80, top=0.86, bottom=0.14)
     fig.savefig(out_path, facecolor=SURFACE)
     plt.close(fig)
@@ -112,6 +131,7 @@ def main():
     parser.add_argument("log", help="chemin du train.log produit par scripts.train")
     parser.add_argument("--out-dir", default="figures")
     parser.add_argument("--prefix", default="", help="préfixe des noms de fichiers PNG")
+    parser.add_argument("--lang", default="fr", choices=sorted(STRINGS), help="langue des textes des figures")
     args = parser.parse_args()
 
     results = parse_log(args.log)
@@ -121,14 +141,12 @@ def main():
 
     plot_metric(
         results, value_idx=3, ci_idx=4, reference=0,
-        title="Écart moyen de points par partie de l'agent PPO contre chaque adversaire",
-        ylabel="Points agent − points adversaire", unit=" pts",
+        title=STRINGS[args.lang]["points_title"], ylabel=STRINGS[args.lang]["points_ylabel"], unit=" pts", lang=args.lang,
         out_path=os.path.join(args.out_dir, f"{args.prefix}ecart_points.png"),
     )
     plot_metric(
         results, value_idx=1, ci_idx=2, reference=50,
-        title="Taux de victoire de l'agent PPO contre chaque adversaire",
-        ylabel="Taux de victoire (%)", unit="%",
+        title=STRINGS[args.lang]["win_title"], ylabel=STRINGS[args.lang]["win_ylabel"], unit="%", lang=args.lang,
         out_path=os.path.join(args.out_dir, f"{args.prefix}win_rate.png"),
     )
 
