@@ -73,9 +73,7 @@ def play_and_show(env, agents, labels, deal=None):
 
 
 def load_ppo(checkpoint):
-    network = ActorCriticNetwork()
-    if checkpoint:
-        network.load_state_dict(torch.load(checkpoint, map_location="cpu"))
+    network = ActorCriticNetwork.from_checkpoint(checkpoint) if checkpoint else ActorCriticNetwork()
     network.eval()
     return PPOAgent(network, deterministic=True)
 
@@ -83,8 +81,8 @@ def load_ppo(checkpoint):
 def main(args):
     if args.seed is not None:
         random.seed(args.seed)
-    env = BeloteEnv()
     ppo = load_ppo(args.checkpoint)
+    env = BeloteEnv(belief=ppo.uses_belief)
     if not args.checkpoint:
         print("Réseau à poids aléatoires (pas encore entraîné).")
     opponent = ppo if args.opponent == "self" else OPPONENTS[args.opponent]()

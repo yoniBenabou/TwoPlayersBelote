@@ -45,7 +45,7 @@ def card_json(card, trump=None):
 class GameSession:
     def __init__(self, checkpoint, target=DEFAULT_TARGET_SCORE, seed=None):
         self.agent = load_agent(checkpoint)
-        self.env = BeloteEnv()
+        self.env = BeloteEnv(belief=self.agent.uses_belief)
         self.rng = random.Random(seed)
         self.target = target
         self.new_game()

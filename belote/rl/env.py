@@ -21,6 +21,44 @@ NUM_TRICKS = 8
 # main (32) + played_public (32) + atout (4) + scores (2) + trick_winners (8)
 #   + par pli (ma carte 32 + carte adverse 32 + qui a mené 1) x 8 plis
 OBS_SIZE = NUM_CARDS * 2 + len(SUITS) + 2 + NUM_TRICKS + NUM_TRICKS * (NUM_CARDS * 2 + 1)
+# Tableau des cartes possibles chez l'adversaire (option belief=True), ajouté
+# à la fin de l'observation : carte possible (32) + couleur où l'adversaire
+# est démuni (4) + cartes restantes de l'adversaire (1) + nb de cartes possibles (1)
+BELIEF_SIZE = NUM_CARDS + len(SUITS) + 2
+
+
+def opponent_possible_cards(my_hand, played, trump_suit, opponent_follows):
+    """Cartes que l'adversaire peut encore avoir, déduites des règles.
+
+    my_hand : cartes du joueur ; played : cartes déjà jouées (les deux
+    joueurs) ; opponent_follows : liste de (carte menée, carte de
+    l'adversaire) pour chaque pli où l'adversaire a joué en second. Une
+    carte inconnue peut aussi être parmi les 16 non distribuées : "possible"
+    ne veut pas dire "chez l'adversaire".
+
+    Déductions (toujours vraies, cf. engine.legal_moves) :
+      - il n'a pas fourni à la couleur menée -> plus aucune carte de cette couleur ;
+      - il n'a ni fourni ni coupé -> plus aucun atout non plus ;
+      - atout mené et il a mis un atout plus faible -> aucun atout plus fort
+        que la carte menée (sinon il aurait dû monter).
+    Retourne (cartes possibles, couleurs où il est démuni)."""
+    known = set(my_hand) | set(played)
+    possible = {card for card in INDEX_CARD.values() if card not in known}
+    void_suits = set()
+    for led, follow in opponent_follows:
+        if follow.suit != led.suit:
+            void_suits.add(led.suit)
+            if follow.suit != trump_suit:
+                void_suits.add(trump_suit)
+        elif led.suit == trump_suit and follow.strength(trump_suit) < led.strength(trump_suit):
+            possible = {c for c in possible
+                        if not (c.suit == trump_suit and c.strength(trump_suit) > led.strength(trump_suit))}
+    possible = {c for c in possible if c.suit not in void_suits}
+    return possible, void_suits
+
+
+def obs_size(belief=False):
+    return OBS_SIZE + (BELIEF_SIZE if belief else 0)
 
 
 class BeloteEnv(gym.Env):
@@ -46,14 +84,19 @@ class BeloteEnv(gym.Env):
 
     metadata = {"render_modes": []}
 
-    def __init__(self, win_bonus: bool = True):
+    def __init__(self, win_bonus: bool = True, belief: bool = False):
         """win_bonus : ajoute +1/-1 au reward final selon qui a le plus de
         points. False = reward uniquement fait des points gagnés (plis, dix
-        de der, belote-rebelote), sans ce bonus qui dépend surtout de la donne."""
+        de der, belote-rebelote), sans ce bonus qui dépend surtout de la donne.
+        belief : ajoute à la fin de l'observation le tableau des cartes
+        possibles chez l'adversaire (BELIEF_SIZE valeurs, cf.
+        opponent_possible_cards) ; le début de l'observation est inchangé."""
         super().__init__()
         self.win_bonus = win_bonus
+        self.belief = belief
+        self.obs_size = obs_size(belief)
         self.action_space = spaces.Discrete(NUM_CARDS)
-        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(OBS_SIZE,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(self.obs_size,), dtype=np.float32)
 
         self.players = [Player("Joueur 0"), Player("Joueur 1")]
         self.trump_suit = None
@@ -107,7 +150,7 @@ class BeloteEnv(gym.Env):
         return mask
 
     def _observe(self, player_idx):
-        obs = np.zeros(OBS_SIZE, dtype=np.float32)
+        obs = np.zeros(self.obs_size, dtype=np.float32)
         offset = 0
 
         player = self.players[player_idx]
@@ -163,7 +206,30 @@ class BeloteEnv(gym.Env):
                 obs[offset] = 1.0 if leader[0] == player_idx else -1.0
             offset += 1
 
+        if self.belief:
+            self._observe_belief(obs, offset, player_idx)
         return obs
+
+    def _observe_belief(self, obs, offset, player_idx):
+        """Tableau des cartes possibles chez l'adversaire, uniquement à partir
+        d'informations publiques (ma main, cartes jouées, plis passés)."""
+        played = [INDEX_CARD[i] for i, p in enumerate(self.played_public) if p]
+        opponent_follows = [
+            (self._trick_leader_card[i][1], self._trick_follower_card[i][1])
+            for i in range(NUM_TRICKS)
+            if self._trick_follower_card[i] is not None and self._trick_follower_card[i][0] != player_idx
+        ]
+        possible, void_suits = opponent_possible_cards(
+            self.players[player_idx].hand, played, self.trump_suit, opponent_follows)
+
+        for card in possible:
+            obs[offset + CARD_INDEX[card]] = 1.0
+        offset += NUM_CARDS
+        for suit in void_suits:
+            obs[offset + SUIT_INDEX[suit]] = 1.0
+        offset += len(SUITS)
+        obs[offset] = len(self.players[1 - player_idx].hand) / NUM_TRICKS  # cartes restantes, information publique
+        obs[offset + 1] = len(possible) / (NUM_CARDS - NUM_TRICKS)  # 24 cartes inconnues au départ
 
     def step(self, action):
         if self.done:

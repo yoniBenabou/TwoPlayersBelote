@@ -4,8 +4,12 @@ import time
 
 import numpy as np
 
+from belote.core.cards import Card, Rank, Suit
 from belote.core.engine import has_belote
-from belote.rl.env import CARD_INDEX, BeloteEnv, MAX_SCORE, NUM_CARDS, NUM_TRICKS, SUITS
+from belote.rl.env import (
+    BELIEF_SIZE, CARD_INDEX, INDEX_CARD, OBS_SIZE, BeloteEnv, MAX_SCORE, NUM_CARDS, NUM_TRICKS, SUIT_INDEX, SUITS,
+    opponent_possible_cards,
+)
 
 TRICK_WINNERS_OFFSET = NUM_CARDS * 2 + len(SUITS) + 2
 TRICK_HISTORY_OFFSET = TRICK_WINNERS_OFFSET + NUM_TRICKS
@@ -146,6 +150,74 @@ def check_deal_replay_and_final_points():
     assert abs(cumulative["0"] * MAX_SCORE - (p0 + win_bonus * MAX_SCORE)) < 1e-6
 
 
+def check_belief_deductions():
+    """Les trois déductions du tableau des cartes possibles, sur des cas construits."""
+    trump = Suit.CARREAU
+    # Coeur mené, l'adversaire met un pique : plus de coeur, et plus d'atout (il aurait dû couper).
+    possible, voids = opponent_possible_cards([], [], trump, [(Card(Suit.COEUR, Rank.ACE), Card(Suit.PIQUE, Rank.SEVEN))])
+    assert voids == {Suit.COEUR, Suit.CARREAU}, voids
+    assert not any(c.suit in (Suit.COEUR, Suit.CARREAU) for c in possible)
+    # Coeur mené, l'adversaire coupe : plus de coeur, mais il peut encore avoir des atouts.
+    possible, voids = opponent_possible_cards([], [], trump, [(Card(Suit.COEUR, Rank.ACE), Card(Suit.CARREAU, Rank.SEVEN))])
+    assert voids == {Suit.COEUR} and Card(Suit.CARREAU, Rank.JACK) in possible
+    # 10 d'atout mené, l'adversaire met le 8 d'atout : aucun atout plus fort que le 10 (As, 9, Valet).
+    possible, voids = opponent_possible_cards([], [], trump, [(Card(trump, Rank.TEN), Card(trump, Rank.EIGHT))])
+    assert not voids
+    for rank in (Rank.ACE, Rank.NINE, Rank.JACK):
+        assert Card(trump, rank) not in possible, rank
+    for rank in (Rank.SEVEN, Rank.QUEEN, Rank.KING):
+        assert Card(trump, rank) in possible, rank
+    # Ma main et les cartes jouées ne sont jamais "possibles".
+    mine, played = Card(Suit.TREFLE, Rank.ACE), Card(Suit.PIQUE, Rank.KING)
+    possible, _ = opponent_possible_cards([mine], [played], trump, [])
+    assert mine not in possible and played not in possible and len(possible) == NUM_CARDS - 2
+
+
+def check_belief_prefix_unchanged(n_episodes=50):
+    """Avec belief=True, le début de l'observation est identique (les agents
+    heuristiques et les anciens modèles lisent cette partie) et seul le
+    tableau est ajouté à la fin."""
+    plain, belief = BeloteEnv(), BeloteEnv(belief=True)
+    for _ in range(n_episodes):
+        obs_a, info = plain.reset()
+        obs_b, _ = belief.reset(options={"deal": plain.deal})
+        assert obs_b.shape == (OBS_SIZE + BELIEF_SIZE,) and obs_a.shape == (OBS_SIZE,)
+        done = False
+        while not done:
+            assert np.array_equal(obs_a, obs_b[:OBS_SIZE])
+            action = random.choice([i for i, ok in enumerate(info["legal_actions"]) if ok])
+            obs_a, _, done, info = plain.step(action)
+            obs_b, _, _, _ = belief.step(action)
+
+
+def check_belief_is_sound(n_episodes=2000):
+    """Sur des parties aléatoires : le tableau ne se trompe jamais (toute carte
+    réellement chez l'adversaire est marquée possible, une couleur n'est
+    marquée absente que s'il n'en a vraiment plus) et il apporte de
+    l'information (des déductions ont bien lieu)."""
+    env = BeloteEnv(belief=True)
+    deductions = 0
+    for _ in range(n_episodes):
+        obs, info = env.reset(options={"starting_player": random.randint(0, 1)})
+        done = False
+        while not done:
+            me = env.current_idx
+            opponent_hand = env.players[1 - me].hand
+            block = obs[OBS_SIZE:]
+            possible = {INDEX_CARD[i] for i in range(NUM_CARDS) if block[i] > 0.5}
+            voids = {suit for suit in SUITS if block[NUM_CARDS + SUIT_INDEX[suit]] > 0.5}
+            for card in opponent_hand:
+                assert card in possible, f"{card} est chez l'adversaire mais marquée impossible"
+            for suit in voids:
+                assert all(c.suit != suit for c in opponent_hand), f"adversaire marqué démuni à {suit}"
+            assert not possible & set(env.players[me].hand)
+            unknown = NUM_CARDS - len(env.players[me].hand) - int(np.sum(obs[NUM_CARDS:2 * NUM_CARDS]))
+            deductions += unknown - len(possible)
+            action = random.choice([i for i, ok in enumerate(info["legal_actions"]) if ok])
+            obs, _, done, info = env.step(action)
+    assert deductions > 0, "aucune déduction : le tableau n'apporte rien"
+
+
 def run_episode(env):
     obs, info = env.reset()
     cumulative = {"0": 0.0, "1": 0.0}
@@ -174,6 +246,15 @@ def main(n_episodes=2000):
 
     check_deal_replay_and_final_points()
     print("Rejouer une donne (options={'deal': ...}) + info['final_points'] : OK")
+
+    check_belief_deductions()
+    print("Tableau des cartes possibles : déductions sur cas construits : OK")
+
+    check_belief_prefix_unchanged()
+    print("Tableau des cartes possibles : début de l'observation inchangé : OK")
+
+    check_belief_is_sound()
+    print("Tableau des cartes possibles : jamais faux sur 2000 parties aléatoires : OK")
 
     env = BeloteEnv()
     wins = [0, 0, 0]  # joueur 0, joueur 1, égalité

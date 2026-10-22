@@ -4,16 +4,13 @@ import os
 import re
 import sys
 
-import torch
-
 from belote.rl.evaluation import evaluate_against
 from belote.rl.networks import ActorCriticNetwork
 from belote.rl.ppo_agent import PPOAgent
 
 
 def load_agent(path):
-    network = ActorCriticNetwork()
-    network.load_state_dict(torch.load(path, map_location="cpu"))
+    network = ActorCriticNetwork.from_checkpoint(path)
     network.eval()
     return PPOAgent(network, deterministic=True)
 

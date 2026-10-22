@@ -22,6 +22,11 @@ class PPOAgent:
         self.network = network
         self.deterministic = deterministic
 
+    @property
+    def uses_belief(self) -> bool:
+        """L'environnement doit être créé avec BeloteEnv(belief=agent.uses_belief)."""
+        return self.network.uses_belief
+
     def _masked_logits_and_value(self, obs, legal_mask):
         obs_tensor = torch.as_tensor(np.asarray(obs), dtype=torch.float32)
         mask_tensor = torch.as_tensor(np.asarray(legal_mask), dtype=torch.bool)

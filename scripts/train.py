@@ -55,12 +55,15 @@ def train(
     win_bonus: bool = WIN_BONUS,
     vs_heuristics: bool = False,
     seed: int | None = None,
+    belief: bool = False,
 ):
     """vs_heuristics : au lieu du self-play, chaque manche d'entraînement
     oppose l'agent à un adversaire tiré au hasard parmi les heuristiques
     (étape 1 du curriculum). win_bonus=True : ajoute le +1/-1 final au reward.
     seed : graine aléatoire (donnes, initialisation du réseau, échantillonnage)
-    pour pouvoir refaire un entraînement avec une autre graine."""
+    pour pouvoir refaire un entraînement avec une autre graine.
+    belief : ajoute à l'observation le tableau des cartes possibles chez
+    l'adversaire (BeloteEnv(belief=True))."""
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
@@ -71,14 +74,14 @@ def train(
     config = {
         "total_games": total_games, "rollout_episodes": rollout_episodes,
         "eval_every_n_games": eval_every_n_games, "lr": lr, "entropy_coef": entropy_coef,
-        "win_bonus": win_bonus, "vs_heuristics": vs_heuristics, "seed": seed,
+        "win_bonus": win_bonus, "vs_heuristics": vs_heuristics, "seed": seed, "belief": belief,
     }
     with open("config.json", "w") as f:
         json.dump(config, f, indent=2)
 
-    env = BeloteEnv(win_bonus=win_bonus)
+    env = BeloteEnv(win_bonus=win_bonus, belief=belief)
     opponents = [HeuristicAgent(), VoidExploitAgent(), TrumpCountAgent()] if vs_heuristics else None
-    network = ActorCriticNetwork()
+    network = ActorCriticNetwork(obs_size=env.obs_size)
     agent = PPOAgent(network)
     eval_agent = PPOAgent(network, deterministic=True)
     optimizer = torch.optim.Adam(network.parameters(), lr=lr)
@@ -122,6 +125,7 @@ if __name__ == "__main__":
                         help="ajoute le +1/-1 de victoire au reward (désactivé par défaut)")
     parser.add_argument("--vs-heuristics", action="store_true", help="adversaires heuristiques au lieu du self-play")
     parser.add_argument("--seed", type=int, help="graine aléatoire (reproductibilité)")
+    parser.add_argument("--belief", action="store_true", help="ajoute le tableau des cartes possibles chez l'adversaire")
     parser.add_argument("--out-dir", default=".", help="dossier où écrire checkpoints/, runs/ et config.json")
     args = parser.parse_args()
 
@@ -135,4 +139,5 @@ if __name__ == "__main__":
         win_bonus=args.win_bonus,
         vs_heuristics=args.vs_heuristics,
         seed=args.seed,
+        belief=args.belief,
     )

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from .env import NUM_CARDS, OBS_SIZE
+from .env import BELIEF_SIZE, NUM_CARDS, OBS_SIZE
 
 
 class ActorCriticNetwork(nn.Module):
@@ -21,6 +21,7 @@ class ActorCriticNetwork(nn.Module):
 
     def __init__(self, obs_size: int = OBS_SIZE, num_actions: int = NUM_CARDS, hidden_size: int = 128):
         super().__init__()
+        self.obs_size = obs_size
         self.trunk = nn.Sequential(
             nn.Linear(obs_size, hidden_size),
             nn.ReLU(),
@@ -29,6 +30,22 @@ class ActorCriticNetwork(nn.Module):
         )
         self.policy_head = nn.Linear(hidden_size, num_actions)
         self.value_head = nn.Linear(hidden_size, 1)
+
+    @property
+    def uses_belief(self) -> bool:
+        """True si le réseau attend l'observation avec le tableau des cartes
+        possibles chez l'adversaire (BeloteEnv(belief=True))."""
+        return self.obs_size == OBS_SIZE + BELIEF_SIZE
+
+    @classmethod
+    def from_checkpoint(cls, path):
+        """Recharge des poids sauvegardés, en déduisant la taille d'entrée
+        (avec ou sans tableau des cartes possibles) et la taille cachée."""
+        state = torch.load(path, map_location="cpu")
+        hidden_size, obs_size = state["trunk.0.weight"].shape
+        network = cls(obs_size=obs_size, hidden_size=hidden_size)
+        network.load_state_dict(state)
+        return network
 
     def forward(self, obs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """obs: (..., obs_size) -> logits: (..., num_actions), value: (...)"""
