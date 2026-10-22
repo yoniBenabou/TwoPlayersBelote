@@ -77,6 +77,8 @@ python -m scripts.watch_self_play_game --checkpoint experiments/mon_run/checkpoi
 - `benchmark` : agents de référence les uns contre les autres.
 - `plot_training` : courbes d'écart de points et de taux de victoire contre les 4 adversaires.
 - `compare_checkpoints` : agent final contre ses versions précédentes.
+- `evaluate_full_games` : taux de victoire en parties complètes (premier à 501 points), parties dupliquées.
+- `oracle` : plafond théorique, un joueur qui voit la main adverse contre Random (`--mode round` ou `--mode game`).
 - `watch_self_play_game` : parties détaillées pli par pli (`--opponent self|random|heuristic|voidexploit|trumpcount`, `--duplicate` rejoue la donne en échangeant les mains).
 
 Toutes les évaluations utilisent des **donnes dupliquées** : chaque donne est jouée deux fois en échangeant les mains, ce qui annule la chance de la donne.
