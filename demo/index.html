@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Belote vs PPO Agent</title>
+<style>
+  :root {
+    --bg: #0a0e13; --panel: #121922; --line: #243140; --text: #e6ebf0; --muted: #8c99a8;
+    --accent: #2de2a6; --red-suit: #c8282e; --black-suit: #11161c;
+    --felt: #0f2a22; --felt-edge: #0b1f19;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: Arial, Helvetica, sans-serif; min-height: 100vh; }
+  .mono { font-family: "Courier New", monospace; letter-spacing: .08em; }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 20px; margin: 0; }
+  header .kicker { color: var(--accent); font-size: 12px; font-weight: bold; }
+  header .spacer { flex: 1; }
+  .badge { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 6px 12px; font-size: 14px; }
+  .badge b { font-size: 18px; }
+  button { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px;
+           font-size: 14px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #062b1f; border-color: var(--accent); font-weight: bold; }
+  button:disabled { opacity: .4; cursor: default; }
+
+  main { display: grid; grid-template-columns: 1fr 320px; gap: 20px; padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+
+  /* table de jeu */
+  .table { position: relative; background: radial-gradient(ellipse at center, #154536 0%, var(--felt) 55%, var(--felt-edge) 100%);
+           border: 1px solid var(--line); border-radius: 22px; padding: 20px; min-height: 640px;
+           display: grid; grid-template-rows: auto 1fr auto; gap: 12px; }
+  .seat-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; display: flex; gap: 10px; align-items: center; }
+  .seat-label .pts { color: var(--text); }
+  .hand { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; min-height: 128px; }
+  .center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+  .trick { display: flex; gap: 40px; align-items: center; min-height: 180px; }
+  .slot { width: 104px; height: 146px; border: 1px dashed rgba(230,235,240,.18); border-radius: 12px; display: flex;
+          align-items: center; justify-content: center; position: relative; }
+  .slot .who { position: absolute; top: -20px; font-size: 11px; color: var(--muted); }
+  .slot .conf { position: absolute; bottom: -24px; font-size: 11px; color: var(--accent); white-space: nowrap; }
+  .banner { min-height: 28px; font-size: 16px; text-align: center; padding: 6px 16px; border-radius: 999px;
+            background: rgba(10,14,19,.55); border: 1px solid rgba(45,226,166,.25); }
+  .turn { font-size: 13px; color: var(--accent); min-height: 18px; }
+
+  /* cartes */
+  .card { width: 92px; height: 130px; border-radius: 10px; background: linear-gradient(160deg, #ffffff 0%, #f1f3f5 100%);
+          box-shadow: 0 4px 10px rgba(0,0,0,.45); position: relative; user-select: none; flex: none;
+          transition: transform .15s ease, box-shadow .15s ease, opacity .15s; }
+  .card.red { color: var(--red-suit); } .card.black { color: var(--black-suit); }
+  .card .corner { position: absolute; font-weight: bold; line-height: 1; text-align: center; font-size: 17px; }
+  .card .corner span { display: block; font-size: 16px; }
+  .card .tl { top: 7px; left: 8px; } .card .br { bottom: 7px; right: 8px; transform: rotate(180deg); }
+  .card .pip { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 46px; }
+  .card .face { position: absolute; inset: 22px 18px; border: 1.5px solid currentColor; border-radius: 6px; opacity: .9;
+                display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; }
+  .card .face .big { font-size: 34px; } .card .face .s { font-size: 22px; }
+  .card.trump::after { content: "TRUMP"; position: absolute; bottom: -18px; left: 0; right: 0; text-align: center;
+                       font: bold 10px "Courier New", monospace; color: var(--accent); letter-spacing: .1em; }
+  .card.playable { cursor: pointer; box-shadow: 0 0 0 2px var(--accent), 0 6px 14px rgba(0,0,0,.5); }
+  .card.playable:hover { transform: translateY(-14px); }
+  .card.illegal { opacity: .38; }
+  .card.back { background: repeating-linear-gradient(45deg, #1d3b6b 0 6px, #24497f 6px 12px); border: 4px solid #f1f3f5; }
+  .card.small { width: 62px; height: 88px; } .card.small .corner { font-size: 13px; } .card.small .corner span { font-size: 12px; }
+  .card.small .pip { font-size: 30px; } .card.small .face { inset: 16px 12px; } .card.small .face .big { font-size: 22px; }
+  .card.small .face .s { font-size: 14px; }
+  .card.pop { animation: pop .35s ease; }
+  @keyframes pop { from { transform: scale(.6) translateY(20px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  /* panneau latéral */
+  aside { display: flex; flex-direction: column; gap: 14px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .panel h2 { margin: 0 0 12px; font-size: 12px; color: var(--accent); }
+  .score-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .score-row b { font-size: 26px; font-family: "Courier New", monospace; }
+  .bar { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; margin-bottom: 12px; }
+  .bar div { height: 100%; background: var(--muted); transition: width .4s; } .bar.you div { background: var(--accent); }
+  .log { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto; font-size: 13px; }
+  .log li { padding: 6px 0; border-bottom: 1px solid var(--line); color: var(--muted); }
+  .log li.strong { color: var(--text); }
+  .last-trick { display: flex; gap: 10px; align-items: center; min-height: 92px; }
+  .last-trick .info { font-size: 12px; color: var(--muted); }
+  table.hist { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.hist td, table.hist th { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: right; }
+  table.hist th { color: var(--muted); font-weight: normal; } table.hist td:first-child, table.hist th:first-child { text-align: left; }
+
+  .overlay { position: absolute; inset: 0; background: rgba(10,14,19,.72); border-radius: 22px; display: none;
+             align-items: center; justify-content: center; }
+  .overlay.show { display: flex; }
+  .overlay .box { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 28px 34px; text-align: center; min-width: 320px; }
+  .overlay h3 { margin: 0 0 6px; font-size: 24px; } .overlay p { color: var(--muted); margin: 6px 0 18px; }
+  .overlay .big-score { font: bold 38px "Courier New", monospace; margin: 8px 0; }
+  .error { color: #f2545b; font-size: 13px; min-height: 16px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="kicker mono">REINFORCEMENT LEARNING DEMO</div>
+    <h1>Two-player Belote vs PPO agent</h1>
+  </div>
+  <div class="spacer"></div>
+  <div class="badge">Round <b id="round">–</b></div>
+  <div class="badge">Trump <b id="trump">–</b> <span id="trump-name" class="mono" style="font-size:12px;color:var(--muted)"></span></div>
+  <button id="reveal">Show agent's hand</button>
+  <button id="new-game">New game</button>
+</header>
+
+<main>
+  <section class="table" id="table">
+    <div>
+      <div class="seat-label"><span class="mono">PPO AGENT</span><span class="pts">round points: <b id="agent-round">0</b></span></div>
+      <div class="hand" id="agent-hand"></div>
+    </div>
+    <div class="center">
+      <div class="trick">
+        <div class="slot" id="slot-agent"><span class="who mono">AGENT</span></div>
+        <div class="slot" id="slot-you"><span class="who mono">YOU</span></div>
+      </div>
+      <div class="banner" id="banner">Loading…</div>
+      <div class="turn mono" id="turn"></div>
+      <div class="error" id="error"></div>
+    </div>
+    <div>
+      <div class="seat-label"><span class="mono">YOUR HAND</span><span class="pts">round points: <b id="you-round">0</b></span></div>
+      <div class="hand" id="your-hand"></div>
+    </div>
+    <div class="overlay" id="overlay"><div class="box" id="overlay-box"></div></div>
+  </section>
+
+  <aside>
+    <div class="panel">
+      <h2 class="mono">SCORE · FIRST TO <span id="target">501</span></h2>
+      <div class="score-row"><span>You</span><b id="total-you">0</b></div>
+      <div class="bar you"><div id="bar-you" style="width:0"></div></div>
+      <div class="score-row"><span>PPO agent</span><b id="total-agent">0</b></div>
+      <div class="bar"><div id="bar-agent" style="width:0"></div></div>
+    </div>
+    <div class="panel">
+      <h2 class="mono">LAST TRICK</h2>
+      <div class="last-trick" id="last-trick"><span class="info">No trick played yet.</span></div>
+    </div>
+    <div class="panel">
+      <h2 class="mono">GAME LOG</h2>
+      <ul class="log" id="log"></ul>
+    </div>
+    <div class="panel">
+      <h2 class="mono">ROUNDS</h2>
+      <table class="hist" id="hist"><tr><th>Round</th><th>Trump</th><th>You</th><th>Agent</th></tr></table>
+    </div>
+  </aside>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let view = null, busy = false, reveal = false;
+
+function cardEl(c, { small = false, classes = [] } = {}) {
+  const el = document.createElement("div");
+  el.className = ["card", c.color, small ? "small" : "", ...classes].join(" ");
+  const face = ["J", "Q", "K"].includes(c.rank);
+  el.innerHTML = `
+    <div class="corner tl">${c.rank}<span>${c.suit}</span></div>
+    ${face ? `<div class="face"><span class="big">${c.rank}</span><span class="s">${c.suit}</span></div>`
+           : `<div class="pip">${c.suit}</div>`}
+    <div class="corner br">${c.rank}<span>${c.suit}</span></div>`;
+  el.title = `${c.label}${c.points !== undefined ? ` · ${c.points} pts` : ""}`;
+  return el;
+}
+function backEl() { const el = document.createElement("div"); el.className = "card back"; return el; }
+
+function log(text, strong = false) {
+  const li = document.createElement("li");
+  li.textContent = text; if (strong) li.className = "strong";
+  $("log").prepend(li);
+}
+function banner(text) { $("banner").textContent = text; }
+
+function renderTable(table) {
+  for (const seat of ["agent", "you"]) {
+    const slot = $(`slot-${seat}`);
+    slot.querySelectorAll(".card, .conf").forEach((n) => n.remove());
+    const entry = table.find((t) => t.seat === seat);
+    if (entry) {
+      slot.append(cardEl(entry.card, { classes: ["pop"] }));
+      if (entry.confidence !== undefined) {
+        const conf = document.createElement("span");
+        conf.className = "conf mono"; conf.textContent = `confidence ${entry.confidence}%`;
+        slot.append(conf);
+      }
+    }
+  }
+}
+
+function render() {
+  const s = view;
+  $("round").textContent = s.round;
+  $("trump").textContent = s.trump.symbol;
+  $("trump").style.color = s.trump.color === "red" ? "#f2545b" : "var(--text)";
+  $("trump-name").textContent = s.trump.name.toUpperCase();
+  $("target").textContent = s.target;
+  $("you-round").textContent = s.roundPoints.you;
+  $("agent-round").textContent = s.roundPoints.agent;
+  $("total-you").textContent = s.totals.you;
+  $("total-agent").textContent = s.totals.agent;
+  $("bar-you").style.width = Math.min(100, (100 * s.totals.you) / s.target) + "%";
+  $("bar-agent").style.width = Math.min(100, (100 * s.totals.agent) / s.target) + "%";
+
+  const yours = $("your-hand"); yours.innerHTML = "";
+  for (const c of s.hand) {
+    const playable = s.yourTurn && !busy && c.legal;
+    const classes = [];
+    if (c.isTrump) classes.push("trump");
+    if (s.yourTurn && !busy) classes.push(playable ? "playable" : "illegal");
+    const el = cardEl(c, { classes });
+    if (playable) el.onclick = () => play(c.id);
+    yours.append(el);
+  }
+  const agent = $("agent-hand"); agent.innerHTML = "";
+  for (const c of s.agentHand) agent.append(reveal ? cardEl(c, { small: true }) : backEl());
+
+  $("turn").textContent = s.roundResult || busy ? "" : s.yourTurn ? "YOUR TURN — CLICK A HIGHLIGHTED CARD" : "";
+
+  const lt = $("last-trick"); lt.innerHTML = "";
+  if (s.lastTrick) {
+    for (const t of s.lastTrick.cards) lt.append(cardEl(t.card, { small: true }));
+    const info = document.createElement("span"); info.className = "info";
+    info.textContent = `Trick ${s.lastTrick.trickNo} → ${s.lastTrick.winner === "you" ? "you" : "agent"} (+${s.lastTrick.points})`;
+    lt.append(info);
+  } else {
+    lt.innerHTML = '<span class="info">No trick played yet.</span>';
+  }
+
+  const hist = $("hist");
+  hist.querySelectorAll("tr.r").forEach((r) => r.remove());
+  for (const h of s.history) {
+    const tr = document.createElement("tr"); tr.className = "r";
+    tr.innerHTML = `<td>${h.round}</td><td>${h.trump}</td><td>${h.you}</td><td>${h.agent}</td>`;
+    hist.append(tr);
+  }
+  renderOverlay();
+}
+
+function renderOverlay() {
+  const s = view, ov = $("overlay"), box = $("overlay-box");
+  if (!s.roundResult || busy) { ov.classList.remove("show"); return; }
+  const r = s.roundResult;
+  const bel = r.belote.length ? `<p>Belote-rebelote (+20): ${r.belote.map((w) => (w === "you" ? "you" : "agent")).join(" and ")}</p>` : "";
+  if (s.gameOver) {
+    const won = s.totals.you > s.totals.agent, draw = s.totals.you === s.totals.agent;
+    box.innerHTML = `<h3>${draw ? "Draw!" : won ? "You win the game!" : "The agent wins the game"}</h3>
+      <div class="big-score">${s.totals.you} – ${s.totals.agent}</div><p>Final score (you – agent)</p>
+      <button class="primary" id="ov-btn">New game</button>`;
+    $("ov-btn").onclick = newGame;
+  } else {
+    box.innerHTML = `<h3>Round ${s.round} over</h3>
+      <div class="big-score">${r.you} – ${r.agent}</div><p>Round points (you – agent)</p>${bel}
+      <button class="primary" id="ov-btn">Next round</button>`;
+    $("ov-btn").onclick = nextRound;
+  }
+  ov.classList.add("show");
+}
+
+async function replay(state) {
+  busy = true;
+  const table = view ? [...view.table] : [];
+  for (const ev of state.events) {
+    if (ev.type === "play") {
+      if (ev.seat === "you" && view) view.hand = view.hand.filter((c) => c.id !== ev.card.id);
+      if (ev.seat === "agent" && view) view.agentHand = view.agentHand.filter((c) => c.id !== ev.card.id);
+      table.push({ seat: ev.seat, card: ev.card, confidence: ev.confidence });
+      if (view) render();
+      renderTable(table);
+      const what = ev.seat === "you" ? `You play ${ev.card.label}`
+        : `Agent plays ${ev.card.label} (confidence ${ev.confidence}%)`;
+      banner(what); log(what);
+      await sleep(ev.seat === "agent" ? 900 : 450);
+    } else if (ev.type === "trick") {
+      banner(ev.text); log(ev.text, true);
+      await sleep(1300);
+      table.length = 0; renderTable(table);
+    } else {
+      banner(ev.text); log(ev.text, true);
+      await sleep(ev.type === "message" ? 700 : 400);
+    }
+  }
+  busy = false;
+  view = state;
+  render();
+  renderTable(state.table);
+  if (state.yourTurn) banner(state.table.length ? "Your turn: answer the agent's card" : "Your turn: lead a card");
+}
+
+async function api(path, body) {
+  $("error").textContent = "";
+  const res = await fetch(path, { method: body === undefined ? "GET" : "POST",
+    headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const data = await res.json();
+  if (!res.ok) { $("error").textContent = data.error || "Error"; throw new Error(data.error); }
+  return data;
+}
+
+async function play(id) { if (busy) return; busy = true; render(); try { await replay(await api("/api/play", { card: id })); } catch { busy = false; render(); } }
+async function nextRound() { if (busy) return; $("overlay").classList.remove("show"); view.table = []; await replay(await api("/api/next", {})); }
+async function newGame() {
+  if (busy) return;
+  $("overlay").classList.remove("show"); $("log").innerHTML = "";
+  view = null; renderTable([]);
+  await replay(await api("/api/new", {}));
+}
+
+$("new-game").onclick = newGame;
+$("reveal").onclick = () => { reveal = !reveal; $("reveal").textContent = reveal ? "Hide agent's hand" : "Show agent's hand"; if (view) render(); };
+
+(async () => {
+  const s = await api("/api/state");
+  view = s; render(); renderTable(s.table);
+  banner(s.yourTurn ? (s.table.length ? "Your turn: answer the agent's card" : "Your turn: lead a card") : "Click “New game” to start");
+  log(`Round ${s.round} — trump is ${s.trump.name} ${s.trump.symbol}.`, true);
+})();
+</script>
+</body>
+</html>

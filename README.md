@@ -20,6 +20,14 @@ python -m scripts.play_vs_agent --name Noa
 
 L'agent utilise le meilleur modèle entraîné ([models/ppo_CA_3M.pt](models/ppo_CA_3M.pt) : self-play, 3 millions de parties). Sa main reste cachée ; `--reveal` l'affiche (pratique pour une démo), `--target` change le score à atteindre, `q` quitte la partie.
 
+**Version web avec de vraies cartes** (textes en anglais, pour les présentations) :
+
+```bash
+python -m demo.server
+```
+
+Puis ouvrir l'adresse affichée (`http://localhost:8000`, ou le port suivant libre si 8000 est pris). Sur la machine du Technion, l'onglet **Ports** de VS Code redirige ce port vers ton navigateur. On clique sur une carte pour la jouer (seules les cartes légales sont cliquables) ; « Show agent's hand » retourne la main de l'agent, et chaque coup de l'agent affiche sa confiance.
+
 ## Règles principales
 
 - Chaque manche distribue 8 cartes par joueur (16 cartes restent inutilisées).
