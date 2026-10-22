@@ -12,6 +12,14 @@ python main.py
 
 Le jeu demande le nom des deux joueurs, puis le score cible pour gagner la partie (501 points par défaut). À chaque tour, le joueur actif choisit une carte en indiquant son numéro dans la liste affichée.
 
+### Jouer contre l'agent entraîné
+
+```bash
+python -m scripts.play_vs_agent --name Noa
+```
+
+L'agent utilise le meilleur modèle entraîné ([models/ppo_CA_3M.pt](models/ppo_CA_3M.pt) : self-play, 3 millions de parties). Sa main reste cachée ; `--reveal` l'affiche (pratique pour une démo), `--target` change le score à atteindre, `q` quitte la partie.
+
 ## Règles principales
 
 - Chaque manche distribue 8 cartes par joueur (16 cartes restent inutilisées).
@@ -29,6 +37,7 @@ Le jeu demande le nom des deux joueurs, puis le score cible pour gagner la parti
 - [scripts/](scripts/) — entraînement, évaluation, visualisation de parties et courbes.
 - [tests/](tests/) — tests de l'environnement et de chaque brique PPO.
 - [figures/](figures/) — courbes d'apprentissage de l'entraînement long (3 millions de parties).
+- [models/](models/) — meilleur agent entraîné, utilisé par `scripts/play_vs_agent.py`.
 
 ## Installation
 
