@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 from scripts.plot_training import SURFACE, TEXT_SECONDARY, _style_axes, parse_log  # noqa: E402
 
 # Une couleur par entraînement, distinctes de celles des adversaires de plot_training.
-RUN_COLORS = ["#2a78d6", "#6250d6", "#e87ba4", "#008300"]
+RUN_COLORS = ["#2a78d6", "#6250d6", "#e87ba4", "#008300", "#e34948", "#eb6834"]
 
 STRINGS = {
     "fr": {
@@ -38,9 +38,14 @@ def main():
     parser.add_argument("--max-games", type=int, help="tronque les courbes à ce nombre de parties")
     parser.add_argument("--out", default="figures/seeds.png")
     parser.add_argument("--lang", default="fr", choices=sorted(STRINGS))
+    parser.add_argument("--footnote", help="remplace la note en bas de figure (ex. si les configurations diffèrent)")
     args = parser.parse_args()
 
     labels = args.labels or [f"run {i + 1}" for i in range(len(args.logs))]
+    if len(args.logs) > len(RUN_COLORS):
+        parser.error(f"au plus {len(RUN_COLORS)} entraînements par figure")
+    if len(labels) != len(args.logs):
+        parser.error("il faut autant de --labels que de logs")
     texts = STRINGS[args.lang]
     opp_label = args.opponent.replace("Agent", "")
 
@@ -59,7 +64,7 @@ def main():
 
     ax.set_xlim(0, x_end)
     ax.legend(loc="lower right", frameon=False, fontsize=10, labelcolor=TEXT_SECONDARY)
-    fig.text(0.01, 0.01, texts["footnote"], fontsize=8.5, color=TEXT_SECONDARY)
+    fig.text(0.01, 0.01, args.footnote or texts["footnote"], fontsize=8.5, color=TEXT_SECONDARY)
     fig.subplots_adjust(left=0.08, right=0.97, top=0.88, bottom=0.14)
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     fig.savefig(args.out, facecolor=SURFACE)
