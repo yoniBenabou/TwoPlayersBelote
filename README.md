@@ -4,6 +4,10 @@ Un jeu de Belote à deux joueurs, jouable en ligne de commande (CLI) en Python.
 
 Cette variante se joue avec 16 cartes (8 par joueur) tirées d'un jeu de 32 cartes ; l'atout est tiré aléatoirement à chaque manche.
 
+## État du projet
+
+Le tag `projet-tout-fonctionne-avant-atout` marque la dernière version validée avant l'ajout du choix de l'atout (annonces) : tous les tests passent, et le meilleur agent ([models/ppo_CA_3M.pt](models/ppo_CA_3M.pt)) gagne 83 % de ses parties de 501 points contre Random et 62 % contre TrumpCount, résultat reproduit sur 3 entraînements. Pour y revenir : `git checkout projet-tout-fonctionne-avant-atout`.
+
 ## Lancer le jeu
 
 ```bash
