@@ -3,7 +3,12 @@ from collections import Counter
 import numpy as np
 
 from ..core.cards import Rank
-from .env import CARD_INDEX, INDEX_CARD, NUM_CARDS, SUITS
+from .env import CARD_INDEX, INDEX_CARD, NAME_SUIT, NUM_CARDS, PASS, SUITS, TAKE
+
+# Annonces (mode bidding) : force d'une couleur comme atout = points d'atout
+# des cartes de cette couleur + 5 par carte (Valet seul = 25, Valet + 9 = 44,
+# 9 + As + 10 = 50). On prend à partir de BID_THRESHOLD.
+BID_THRESHOLD = 40
 
 
 def _beats(card, led_card, trump_suit):
@@ -26,6 +31,27 @@ def _decode_led_card(info):
     return INDEX_CARD[led_card_idx] if led_card_idx is not None else None
 
 
+def trump_strength(hand, suit):
+    cards = [c for c in hand if c.suit == suit]
+    return sum(c.points(suit) for c in cards) + 5 * len(cards)
+
+
+def is_bidding(info):
+    return bool(info) and info.get("phase") in ("bid1", "bid2")
+
+
+def heuristic_bid(obs, legal_mask, info, threshold=BID_THRESHOLD):
+    """Tour 1 : prend si la couleur retournée est assez forte. Tour 2 : nomme
+    sa couleur la plus forte (parmi les autorisées) si elle l'est assez."""
+    hand = _decode_own_hand(obs)
+    if legal_mask[TAKE]:
+        turned_suit = INDEX_CARD[info["turned_card"]].suit
+        return TAKE if trump_strength(hand, turned_suit) >= threshold else PASS
+    candidates = [suit for suit in SUITS if legal_mask[NAME_SUIT[suit]]]
+    best = max(candidates, key=lambda suit: trump_strength(hand, suit))
+    return NAME_SUIT[best] if trump_strength(hand, best) >= threshold else PASS
+
+
 def _strongest_in_longest_suit(legal_cards, trump_suit):
     suit_counts = Counter(c.suit for c in legal_cards)
     longest_suit = max(suit_counts, key=lambda s: suit_counts[s])
@@ -34,7 +60,7 @@ def _strongest_in_longest_suit(legal_cards, trump_suit):
 
 
 class RandomAgent:
-    """Choisit une carte légale au hasard."""
+    """Choisit une action légale au hasard (carte, ou annonce en mode bidding)."""
 
     def act(self, obs, legal_mask, info=None):
         legal_indices = np.where(legal_mask)[0]
@@ -52,6 +78,8 @@ class HeuristicAgent:
     """
 
     def act(self, obs, legal_mask, info=None):
+        if is_bidding(info):
+            return heuristic_bid(obs, legal_mask, info)
         legal_indices = np.where(legal_mask)[0]
         legal_cards = [INDEX_CARD[i] for i in legal_indices]
         trump_suit = _decode_trump_suit(obs)
@@ -120,6 +148,10 @@ class VoidExploitAgent(HeuristicAgent):
         (à ce moment, la main encore complète dans obs est la main de départ)."""
 
     def act(self, obs, legal_mask, info=None):
+        if is_bidding(info):
+            # L'atout n'est pas encore connu : le suivi de la manche (et le
+            # comptage d'atouts de TrumpCountAgent) commence au premier coup joué.
+            return heuristic_bid(obs, legal_mask, info)
         self._update_void_knowledge(obs)
 
         legal_indices = np.where(legal_mask)[0]

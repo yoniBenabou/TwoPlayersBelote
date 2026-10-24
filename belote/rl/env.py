@@ -57,8 +57,22 @@ def opponent_possible_cards(my_hand, played, trump_suit, opponent_follows):
     return possible, void_suits
 
 
-def obs_size(belief=False):
-    return OBS_SIZE + (BELIEF_SIZE if belief else 0)
+# Phase d'annonce (option bidding=True). Actions en plus des 32 cartes :
+# prendre la couleur de la carte retournée, passer, ou nommer une couleur.
+TAKE = NUM_CARDS
+PASS = NUM_CARDS + 1
+NAME_SUIT = {suit: NUM_CARDS + 2 + i for i, suit in enumerate(SUITS)}
+SUIT_OF_ACTION = {action: suit for suit, action in NAME_SUIT.items()}
+NUM_ACTIONS_BIDDING = NUM_CARDS + 2 + len(SUITS)  # 38
+PHASES = ("bid1", "bid2", "play")
+# Bloc ajouté à la fin de l'observation en mode annonces : carte retournée (32)
+# + phase (3) + "je parle en premier" (1) + passes (moi tour 1, adversaire
+# tour 1, moi tour 2, adversaire tour 2) (4) + preneur (moi, adversaire) (2)
+BIDDING_SIZE = NUM_CARDS + len(PHASES) + 1 + 4 + 2
+
+
+def obs_size(belief=False, bidding=False):
+    return OBS_SIZE + (BELIEF_SIZE if belief else 0) + (BIDDING_SIZE if bidding else 0)
 
 
 class BeloteEnv(gym.Env):
@@ -80,28 +94,51 @@ class BeloteEnv(gym.Env):
         joueur 1) : points réels (cartes + dix de der + belote-rebelote),
         sans le bonus de victoire ±1 contenu dans les rewards (aussi
         disponible dans self.final_points jusqu'au prochain reset).
+
+    Mode annonces (bidding=True) : une carte tirée parmi les 16 non
+    distribuées est retournée (visible des deux joueurs, personne ne la
+    prend) et propose sa couleur comme atout. Celui qui mènera le premier
+    pli parle en premier. Tour 1 : prendre (TAKE) ou passer (PASS) ; tour 2 :
+    nommer une des 3 autres couleurs (NAME_SUIT) ou passer ; si les deux
+    passent deux fois, la manche s'arrête sans points (redistribution,
+    info["redeal"]). Le jeu de la carte suit, inchangé. Contrat : si le
+    preneur finit avec moins de points que l'adversaire, il est "dedans" :
+    l'adversaire marque tous les points des plis et du dix de der (la
+    belote-rebelote reste à son détenteur) ; égalité = chacun garde ses
+    points. deal = (main0, main1, carte retournée) dans ce mode.
     """
 
     metadata = {"render_modes": []}
 
-    def __init__(self, win_bonus: bool = True, belief: bool = False):
+    def __init__(self, win_bonus: bool = True, belief: bool = False, bidding: bool = False):
         """win_bonus : ajoute +1/-1 au reward final selon qui a le plus de
         points. False = reward uniquement fait des points gagnés (plis, dix
         de der, belote-rebelote), sans ce bonus qui dépend surtout de la donne.
         belief : ajoute à la fin de l'observation le tableau des cartes
         possibles chez l'adversaire (BELIEF_SIZE valeurs, cf.
-        opponent_possible_cards) ; le début de l'observation est inchangé."""
+        opponent_possible_cards) ; le début de l'observation est inchangé.
+        bidding : phase d'annonce avant le jeu (cf. docstring de la classe) ;
+        38 actions au lieu de 32 et BIDDING_SIZE valeurs en plus à la fin
+        de l'observation."""
         super().__init__()
         self.win_bonus = win_bonus
         self.belief = belief
-        self.obs_size = obs_size(belief)
-        self.action_space = spaces.Discrete(NUM_CARDS)
+        self.bidding = bidding
+        self.obs_size = obs_size(belief, bidding)
+        self.num_actions = NUM_ACTIONS_BIDDING if bidding else NUM_CARDS
+        self.action_space = spaces.Discrete(self.num_actions)
         self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(self.obs_size,), dtype=np.float32)
 
         self.players = [Player("Joueur 0"), Player("Joueur 1")]
         self.trump_suit = None
         self.deal = None
         self.final_points = None
+        self.phase = "play"
+        self.turned_card = None
+        self.first_speaker = None
+        self.taker = None
+        self.passes = set()  # (siège, phase) des joueurs qui ont passé
+        self.dedans = False
         self.played_public = None
         self.led_card = None
         self.current_idx = None
@@ -119,14 +156,22 @@ class BeloteEnv(gym.Env):
 
         deal = (options or {}).get("deal")
         if deal is None:
-            hand1, hand2 = deal_round(shuffled_deck())
-            deal = (hand1, hand2, random_trump())
-        hand1, hand2, trump = deal
-        self.deal = (list(hand1), list(hand2), trump)
+            deck = shuffled_deck()
+            hand1, hand2 = deal_round(deck)
+            # mode annonces : carte retournée tirée parmi les 16 non distribuées
+            deal = (hand1, hand2, deck[2 * NUM_TRICKS] if self.bidding else random_trump())
+        hand1, hand2, third = deal
+        self.deal = (list(hand1), list(hand2), third)
         self.players[0].reset_for_manche(hand1)
         self.players[1].reset_for_manche(hand2)
 
-        self.trump_suit = trump
+        if self.bidding:
+            self.turned_card, self.trump_suit, self.phase = third, None, "bid1"
+        else:
+            self.turned_card, self.trump_suit, self.phase = None, third, "play"
+        self.taker = None
+        self.passes = set()
+        self.dedans = False
         self.final_points = None
         self.played_public = [False] * NUM_CARDS
         self.led_card = None
@@ -138,15 +183,34 @@ class BeloteEnv(gym.Env):
         self._trick_leader_card = [None] * NUM_TRICKS
         self._trick_follower_card = [None] * NUM_TRICKS
 
+        self.first_speaker = self.current_idx
+
         observation = self._observe(self.current_idx)
-        info = {"legal_actions": self._legal_action_mask(), "current_player": self.current_idx, "led_card": None}
-        return observation, info
+        return observation, self._info()
+
+    def _info(self, redeal=False):
+        if self.done:
+            return {"legal_actions": None, "current_player": None, "led_card": None,
+                    "final_points": self.final_points, "phase": self.phase, "redeal": redeal,
+                    "taker": self.taker, "dedans": self.dedans}
+        led_card_idx = CARD_INDEX[self.led_card] if self.led_card is not None else None
+        return {"legal_actions": self._legal_action_mask(), "current_player": self.current_idx,
+                "led_card": led_card_idx, "phase": self.phase,
+                "turned_card": CARD_INDEX[self.turned_card] if self.turned_card is not None else None}
 
     def _legal_action_mask(self):
-        player = self.players[self.current_idx]
-        mask = np.zeros(NUM_CARDS, dtype=bool)
-        for card in legal_moves(player.hand, self.led_card, self.trump_suit):
-            mask[CARD_INDEX[card]] = True
+        mask = np.zeros(self.num_actions, dtype=bool)
+        if self.phase == "bid1":
+            mask[TAKE] = mask[PASS] = True
+        elif self.phase == "bid2":
+            mask[PASS] = True
+            for suit in SUITS:
+                if suit != self.turned_card.suit:
+                    mask[NAME_SUIT[suit]] = True
+        else:
+            player = self.players[self.current_idx]
+            for card in legal_moves(player.hand, self.led_card, self.trump_suit):
+                mask[CARD_INDEX[card]] = True
         return mask
 
     def _observe(self, player_idx):
@@ -164,7 +228,8 @@ class BeloteEnv(gym.Env):
             obs[offset + i] = 1.0 if played else 0.0
         offset += NUM_CARDS
 
-        obs[offset + SUIT_INDEX[self.trump_suit]] = 1.0
+        if self.trump_suit is not None:  # inconnu pendant les annonces
+            obs[offset + SUIT_INDEX[self.trump_suit]] = 1.0
         offset += len(SUITS)
 
         obs[offset] = player.manche_points(self.trump_suit) / MAX_SCORE
@@ -208,12 +273,31 @@ class BeloteEnv(gym.Env):
 
         if self.belief:
             self._observe_belief(obs, offset, player_idx)
+            offset += BELIEF_SIZE
+        if self.bidding:
+            self._observe_bidding(obs, offset, player_idx)
         return obs
+
+    def _observe_bidding(self, obs, offset, player_idx):
+        """Carte retournée, phase, ordre de parole, passes et preneur, vus par player_idx."""
+        obs[offset + CARD_INDEX[self.turned_card]] = 1.0
+        offset += NUM_CARDS
+        obs[offset + PHASES.index(self.phase)] = 1.0
+        offset += len(PHASES)
+        obs[offset] = 1.0 if self.first_speaker == player_idx else 0.0
+        offset += 1
+        for seat, phase in ((player_idx, "bid1"), (1 - player_idx, "bid1"), (player_idx, "bid2"), (1 - player_idx, "bid2")):
+            obs[offset] = 1.0 if (seat, phase) in self.passes else 0.0
+            offset += 1
+        if self.taker is not None:
+            obs[offset + (0 if self.taker == player_idx else 1)] = 1.0
 
     def _observe_belief(self, obs, offset, player_idx):
         """Tableau des cartes possibles chez l'adversaire, uniquement à partir
         d'informations publiques (ma main, cartes jouées, plis passés)."""
         played = [INDEX_CARD[i] for i, p in enumerate(self.played_public) if p]
+        if self.turned_card is not None:  # visible et jamais distribuée : pas chez l'adversaire
+            played.append(self.turned_card)
         opponent_follows = [
             (self._trick_leader_card[i][1], self._trick_follower_card[i][1])
             for i in range(NUM_TRICKS)
@@ -234,6 +318,8 @@ class BeloteEnv(gym.Env):
     def step(self, action):
         if self.done:
             raise RuntimeError("Épisode terminé : appelez reset() avant de rejouer.")
+        if self.phase != "play":
+            return self._step_bid(int(action))
 
         card = INDEX_CARD[int(action)]
         player_idx = self.current_idx
@@ -273,10 +359,21 @@ class BeloteEnv(gym.Env):
 
                 final_points = {i: self.players[i].manche_points(self.trump_suit) for i in (0, 1)}
                 final_points[winner_idx] += 10  # dix de der
+                belote = {i: 20 if has_belote(self.players[i].dealt_hand, self.trump_suit) else 0 for i in (0, 1)}
                 for i in (0, 1):
-                    if has_belote(self.players[i].dealt_hand, self.trump_suit):
-                        final_points[i] += 20
-                        rewards[i] += 20 / MAX_SCORE
+                    final_points[i] += belote[i]
+                    rewards[i] += belote[i] / MAX_SCORE
+
+                if self.taker is not None and final_points[self.taker] < final_points[1 - self.taker]:
+                    # Preneur "dedans" : l'adversaire marque ses points de plis et
+                    # de dix de der ; chacun garde sa belote-rebelote.
+                    taker, other = self.taker, 1 - self.taker
+                    transfer = final_points[taker] - belote[taker]
+                    final_points[taker] -= transfer
+                    final_points[other] += transfer
+                    rewards[taker] -= transfer / MAX_SCORE
+                    rewards[other] += transfer / MAX_SCORE
+                    self.dedans = True
 
                 self.final_points = (final_points[0], final_points[1])
 
@@ -293,21 +390,28 @@ class BeloteEnv(gym.Env):
                 self._trick_cards = []
                 self.current_idx = winner_idx
 
-        if self.done:
-            observation = self._observe(self.current_idx)
-            info = {
-                "legal_actions": None,
-                "current_player": None,
-                "led_card": None,
-                "final_points": self.final_points,
-            }
-        else:
-            observation = self._observe(self.current_idx)
-            led_card_idx = CARD_INDEX[self.led_card] if self.led_card is not None else None
-            info = {
-                "legal_actions": self._legal_action_mask(),
-                "current_player": self.current_idx,
-                "led_card": led_card_idx,
-            }
+        observation = self._observe(self.current_idx)
+        return observation, {"0": rewards[0], "1": rewards[1]}, self.done, self._info()
 
-        return observation, {"0": rewards[0], "1": rewards[1]}, self.done, info
+    def _step_bid(self, action):
+        """Une annonce (mode bidding). Aucun reward pendant les annonces."""
+        seat = self.current_idx
+        if not 0 <= action < self.num_actions or not self._legal_action_mask()[action]:
+            raise ValueError(f"Annonce illégale pour le joueur {seat} en phase {self.phase} : action {action}.")
+        redeal = False
+        if action == PASS:
+            self.passes.add((seat, self.phase))
+            if seat == self.first_speaker:
+                self.current_idx = 1 - seat
+            elif self.phase == "bid1":
+                self.phase, self.current_idx = "bid2", self.first_speaker
+            else:
+                # Les deux ont passé deux fois : redistribution, manche sans points.
+                self.done, redeal = True, True
+                self.final_points = (0, 0)
+        else:
+            self.trump_suit = self.turned_card.suit if action == TAKE else SUIT_OF_ACTION[action]
+            self.taker = seat
+            self.phase, self.current_idx = "play", self.first_speaker
+        observation = self._observe(self.current_idx)
+        return observation, {"0": 0.0, "1": 0.0}, self.done, self._info(redeal)

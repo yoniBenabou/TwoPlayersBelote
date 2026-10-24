@@ -45,7 +45,9 @@ def card_json(card, trump=None):
 class GameSession:
     def __init__(self, checkpoint, target=DEFAULT_TARGET_SCORE, seed=None):
         self.agent = load_agent(checkpoint)
-        self.env = BeloteEnv(belief=self.agent.uses_belief)
+        if self.agent.uses_bidding:
+            raise SystemExit("Ce modèle utilise les annonces, pas encore gérées par cette interface.")
+        self.env = BeloteEnv(**self.agent.env_kwargs())
         self.rng = random.Random(seed)
         self.target = target
         self.new_game()

@@ -24,8 +24,15 @@ class PPOAgent:
 
     @property
     def uses_belief(self) -> bool:
-        """L'environnement doit être créé avec BeloteEnv(belief=agent.uses_belief)."""
         return self.network.uses_belief
+
+    @property
+    def uses_bidding(self) -> bool:
+        return self.network.uses_bidding
+
+    def env_kwargs(self) -> dict:
+        """L'environnement doit être créé avec BeloteEnv(**agent.env_kwargs())."""
+        return self.network.env_kwargs()
 
     def _masked_logits_and_value(self, obs, legal_mask):
         obs_tensor = torch.as_tensor(np.asarray(obs), dtype=torch.float32)

@@ -56,6 +56,8 @@ def train(
     vs_heuristics: bool = False,
     seed: int | None = None,
     belief: bool = False,
+    bidding: bool = False,
+    init_from: str | None = None,
 ):
     """vs_heuristics : au lieu du self-play, chaque manche d'entraînement
     oppose l'agent à un adversaire tiré au hasard parmi les heuristiques
@@ -63,7 +65,10 @@ def train(
     seed : graine aléatoire (donnes, initialisation du réseau, échantillonnage)
     pour pouvoir refaire un entraînement avec une autre graine.
     belief : ajoute à l'observation le tableau des cartes possibles chez
-    l'adversaire (BeloteEnv(belief=True))."""
+    l'adversaire (BeloteEnv(belief=True)).
+    bidding : phase d'annonce de l'atout avant le jeu (BeloteEnv(bidding=True)).
+    init_from : démarrage à chaud depuis un modèle déjà entraîné (cf.
+    ActorCriticNetwork.init_from), par exemple l'agent sans annonces."""
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
@@ -74,14 +79,16 @@ def train(
     config = {
         "total_games": total_games, "rollout_episodes": rollout_episodes,
         "eval_every_n_games": eval_every_n_games, "lr": lr, "entropy_coef": entropy_coef,
-        "win_bonus": win_bonus, "vs_heuristics": vs_heuristics, "seed": seed, "belief": belief,
+        "win_bonus": win_bonus, "vs_heuristics": vs_heuristics, "seed": seed, "belief": belief, "bidding": bidding, "init_from": init_from,
     }
     with open("config.json", "w") as f:
         json.dump(config, f, indent=2)
 
-    env = BeloteEnv(win_bonus=win_bonus, belief=belief)
+    env = BeloteEnv(win_bonus=win_bonus, belief=belief, bidding=bidding)
     opponents = [HeuristicAgent(), VoidExploitAgent(), TrumpCountAgent()] if vs_heuristics else None
-    network = ActorCriticNetwork(obs_size=env.obs_size)
+    network = ActorCriticNetwork(obs_size=env.obs_size, num_actions=env.num_actions)
+    if init_from:
+        network.init_from(init_from)
     agent = PPOAgent(network)
     eval_agent = PPOAgent(network, deterministic=True)
     optimizer = torch.optim.Adam(network.parameters(), lr=lr)
@@ -126,9 +133,13 @@ if __name__ == "__main__":
     parser.add_argument("--vs-heuristics", action="store_true", help="adversaires heuristiques au lieu du self-play")
     parser.add_argument("--seed", type=int, help="graine aléatoire (reproductibilité)")
     parser.add_argument("--belief", action="store_true", help="ajoute le tableau des cartes possibles chez l'adversaire")
+    parser.add_argument("--bidding", action="store_true", help="phase d'annonce de l'atout avant le jeu")
+    parser.add_argument("--init-from", help="modèle .pt de départ (démarrage à chaud)")
     parser.add_argument("--out-dir", default=".", help="dossier où écrire checkpoints/, runs/ et config.json")
     args = parser.parse_args()
 
+    # Chemins d'entrée rendus absolus avant de se placer dans le dossier de sortie.
+    init_from = os.path.abspath(args.init_from) if args.init_from else None
     os.makedirs(args.out_dir, exist_ok=True)
     os.chdir(args.out_dir)
     train(
@@ -140,4 +151,6 @@ if __name__ == "__main__":
         vs_heuristics=args.vs_heuristics,
         seed=args.seed,
         belief=args.belief,
+        bidding=args.bidding,
+        init_from=init_from,
     )

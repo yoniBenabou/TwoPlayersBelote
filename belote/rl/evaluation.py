@@ -51,7 +51,7 @@ def evaluate_against(agent, opponent, n_deals):
     Retourne (sur les 2 * n_deals parties) : win rate (égalité = 0.5) + IC95,
     écart moyen de points réels par partie (agent - adversaire) + IC95,
     points moyens de chacun."""
-    env = BeloteEnv(belief=getattr(agent, "uses_belief", False))
+    env = BeloteEnv(**agent.env_kwargs()) if hasattr(agent, "env_kwargs") else BeloteEnv()
     wins, losses, ties = 0, 0, 0
     deal_win_scores, deal_point_diffs = [], []
     total_agent_points, total_opponent_points = 0, 0

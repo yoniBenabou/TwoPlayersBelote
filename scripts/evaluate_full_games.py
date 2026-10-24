@@ -10,11 +10,13 @@ import math
 import random
 import sys
 
+from belote.core.cards import shuffled_deck
+from belote.core.engine import deal_round, random_trump
 from belote.rl.agents import HeuristicAgent, RandomAgent, TrumpCountAgent, VoidExploitAgent
 from belote.rl.env import BeloteEnv
 from belote.rl.evaluation import play_episode
 from scripts.compare_checkpoints import load_agent
-from scripts.oracle import TARGET, outcome, random_deal
+from scripts.oracle import TARGET, outcome
 
 AGENTS = {"random": RandomAgent, "heuristic": HeuristicAgent, "voidexploit": VoidExploitAgent, "trumpcount": TrumpCountAgent}
 
@@ -22,6 +24,13 @@ AGENTS = {"random": RandomAgent, "heuristic": HeuristicAgent, "voidexploit": Voi
 def make_agent(name):
     """Nom d'un agent de référence, ou chemin d'un modèle PPO (.pt)."""
     return AGENTS[name]() if name in AGENTS else load_agent(name)
+
+
+def random_deal(bidding):
+    """(main A, main B, atout), ou (main A, main B, carte retournée) en mode annonces."""
+    deck = shuffled_deck()
+    hand_a, hand_b = deal_round(deck)
+    return hand_a, hand_b, deck[16] if bidding else random_trump()
 
 
 def play_game(env, agent, opponent, deals, agent_has_a):
@@ -41,12 +50,13 @@ def play_game(env, agent, opponent, deals, agent_has_a):
 
 
 def evaluate(agent, opponent, n_pairs, seed=0):
-    env = BeloteEnv(belief=getattr(agent, "uses_belief", False) or getattr(opponent, "uses_belief", False))
+    ppo = agent if hasattr(agent, "env_kwargs") else opponent if hasattr(opponent, "env_kwargs") else None
+    env = BeloteEnv(**ppo.env_kwargs()) if ppo else BeloteEnv()
     rng = random.Random(seed)
     pair_scores, rounds = [], 0
     for _ in range(n_pairs):
         random.seed(rng.random())
-        deals = [random_deal() for _ in range(40)]
+        deals = [random_deal(env.bidding) for _ in range(40)]
         pair = 0.0
         for agent_has_a in (True, False):
             mine, theirs, n = play_game(env, agent, opponent, deals, agent_has_a)

@@ -85,7 +85,9 @@ def play_manche(env, agent, leader, manche_no, name, ask, reveal):
 
 def play(checkpoint=DEFAULT_CHECKPOINT, target=DEFAULT_TARGET_SCORE, name="Toi", reveal=False, ask=input):
     agent = load_agent(checkpoint)
-    env = BeloteEnv(belief=agent.uses_belief)
+    if agent.uses_bidding:
+        raise SystemExit("Ce modèle utilise les annonces, pas encore gérées par cette interface.")
+    env = BeloteEnv(**agent.env_kwargs())
     scores = {HUMAN: 0, AGENT: 0}
     leader = random.choice([HUMAN, AGENT])
     manche_no = 1

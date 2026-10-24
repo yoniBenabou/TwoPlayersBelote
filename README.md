@@ -67,7 +67,13 @@ Toujours depuis la racine du projet, en mode module (`-m`).
 python -m scripts.train --out-dir experiments/mon_run --seed 1
 ```
 
-Options : `--total-games`, `--eval-every`, `--lr`, `--entropy-coef`, `--win-bonus` (ajoute le ±1 de victoire au reward), `--vs-heuristics` (adversaires heuristiques au lieu du self-play), `--seed`, `--out-dir` (où écrire `checkpoints/`, `runs/` TensorBoard, `config.json`). Le log d'évaluation s'affiche sur la sortie standard : le rediriger vers un `train.log` pour tracer les courbes.
+Options : `--total-games`, `--eval-every`, `--lr`, `--entropy-coef`, `--win-bonus` (ajoute le ±1 de victoire au reward), `--vs-heuristics` (adversaires heuristiques au lieu du self-play), `--belief` (tableau des cartes possibles chez l'adversaire), `--bidding` (annonce de l'atout, voir ci-dessous), `--init-from` (démarrage à chaud depuis un modèle déjà entraîné), `--seed`, `--out-dir` (où écrire `checkpoints/`, `runs/` TensorBoard, `config.json`). Le log d'évaluation s'affiche sur la sortie standard : le rediriger vers un `train.log` pour tracer les courbes.
+
+**Annonce de l'atout (`--bidding`)** : une carte tirée parmi les 16 non distribuées est retournée et propose sa couleur. Tour 1 : prendre ou passer ; tour 2 : nommer une des 3 autres couleurs ou passer ; si les deux passent deux fois, on redistribue. Le premier à parler mène le premier pli. Si le preneur fait moins de points que l'adversaire, il est « dedans » : l'adversaire marque tous les points des plis (chacun garde sa belote-rebelote).
+
+```bash
+python -m scripts.train --bidding --init-from models/ppo_CA_3M.pt --out-dir experiments/bidding --seed 1
+```
 
 **Évaluation et analyse :**
 
@@ -93,4 +99,4 @@ Toutes les évaluations utilisent des **donnes dupliquées** : chaque donne est 
 python -m tests.test_env
 ```
 
-(de même pour `test_network`, `test_ppo_agent`, `test_self_play`, `test_gae`, `test_ppo_loss`, `test_ppo_update`)
+(de même pour `test_network`, `test_ppo_agent`, `test_self_play`, `test_gae`, `test_ppo_loss`, `test_ppo_update`, `test_bidding`)

@@ -82,7 +82,9 @@ def main(args):
     if args.seed is not None:
         random.seed(args.seed)
     ppo = load_ppo(args.checkpoint)
-    env = BeloteEnv(belief=ppo.uses_belief)
+    if ppo.uses_bidding:
+        raise SystemExit("Ce modèle utilise les annonces, pas encore gérées par cette interface.")
+    env = BeloteEnv(**ppo.env_kwargs())
     if not args.checkpoint:
         print("Réseau à poids aléatoires (pas encore entraîné).")
     opponent = ppo if args.opponent == "self" else OPPONENTS[args.opponent]()
