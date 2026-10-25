@@ -75,6 +75,16 @@ Options : `--total-games`, `--eval-every`, `--lr`, `--entropy-coef`, `--win-bonu
 python -m scripts.train --bidding --init-from models/ppo_CA_3M.pt --out-dir experiments/bidding --seed 1
 ```
 
+**Entraînements longs : reprise, garde-fou et surveillance**
+
+- À chaque évaluation, `checkpoints/resume_state.pt` enregistre tout l'état (poids, optimiseur Adam, compteurs, générateurs aléatoires). Un entraînement interrompu reprend exactement où il en était avec `python -m scripts.train --resume --out-dir experiments/mon_run` (la configuration est relue dans `config.json`).
+- Si une mise à jour produit des poids non finis (NaN), l'entraînement s'arrête net et écrit `nan_dump.pt` : état juste avant la mise à jour fautive et rollout correspondant, pour la rejouer.
+- `scripts/watchdog.py` surveille des entraînements tmux et relance avec `--resume` ceux qui sont morts ou bloqués (3 relances au plus, journal dans `watchdog.log`) :
+
+```bash
+tmux new-session -d -s watchdog "python -m scripts.watchdog experiments/run1:session1 experiments/run2:session2"
+```
+
 **Évaluation et analyse :**
 
 ```bash
@@ -99,4 +109,4 @@ Toutes les évaluations utilisent des **donnes dupliquées** : chaque donne est 
 python -m tests.test_env
 ```
 
-(de même pour `test_network`, `test_ppo_agent`, `test_self_play`, `test_gae`, `test_ppo_loss`, `test_ppo_update`, `test_bidding`)
+(de même pour `test_network`, `test_ppo_agent`, `test_self_play`, `test_gae`, `test_ppo_loss`, `test_ppo_update`, `test_bidding`, `test_train_safety`)

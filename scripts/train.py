@@ -1,4 +1,5 @@
 import argparse
+import copy
 import json
 import os
 import random
@@ -27,6 +28,19 @@ ENTROPY_COEF = 0.01
 WIN_BONUS = False
 CHECKPOINT_DIR = "checkpoints"
 LOG_DIR = "runs"
+# État complet pour reprendre un entraînement interrompu (--resume), écrasé à
+# chaque évaluation : poids, optimiseur Adam, compteurs, générateurs aléatoires.
+RESUME_FILE = os.path.join(CHECKPOINT_DIR, "resume_state.pt")
+# Écrit si une mise à jour PPO rend les poids non finis : état juste avant la
+# mise à jour fautive + les coups du rollout, pour la rejouer et diagnostiquer.
+NAN_DUMP_FILE = "nan_dump.pt"
+# Paramètres de train() enregistrés dans config.json (et relus par --resume).
+CONFIG_KEYS = ("total_games", "rollout_episodes", "eval_every_n_games", "lr", "entropy_coef", "win_bonus",
+               "vs_heuristics", "seed", "belief", "bidding", "init_from")
+
+
+class NonFiniteTrainingError(RuntimeError):
+    """Une mise à jour PPO a produit des poids ou une loss non finis (NaN/inf)."""
 
 
 def log_optimization_metrics(writer, metrics, games_trained):
@@ -46,6 +60,33 @@ def save_checkpoint(network, games_trained):
     print(f"Checkpoint sauvegardé : {path}")
 
 
+def save_resume_state(network, optimizer, games_trained, next_eval_at):
+    state = {
+        "network": network.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "games_trained": games_trained,
+        "next_eval_at": next_eval_at,
+        "rng": {"python": random.getstate(), "numpy": np.random.get_state(), "torch": torch.get_rng_state()},
+    }
+    tmp = RESUME_FILE + ".tmp"
+    torch.save(state, tmp)
+    os.replace(tmp, RESUME_FILE)  # jamais de fichier à moitié écrit si on est interrompu ici
+
+
+def load_resume_state(network, optimizer):
+    state = torch.load(RESUME_FILE, map_location="cpu", weights_only=False)
+    network.load_state_dict(state["network"])
+    optimizer.load_state_dict(state["optimizer"])
+    random.setstate(state["rng"]["python"])
+    np.random.set_state(state["rng"]["numpy"])
+    torch.set_rng_state(state["rng"]["torch"])
+    return state["games_trained"], state["next_eval_at"]
+
+
+def all_finite(network, metrics):
+    return all(torch.isfinite(p).all() for p in network.parameters()) and all(np.isfinite(v) for v in metrics.values())
+
+
 def train(
     total_games: int = TOTAL_GAMES,
     rollout_episodes: int = ROLLOUT_EPISODES,
@@ -58,6 +99,7 @@ def train(
     belief: bool = False,
     bidding: bool = False,
     init_from: str | None = None,
+    resume: bool = False,
 ):
     """vs_heuristics : au lieu du self-play, chaque manche d'entraînement
     oppose l'agent à un adversaire tiré au hasard parmi les heuristiques
@@ -68,7 +110,9 @@ def train(
     l'adversaire (BeloteEnv(belief=True)).
     bidding : phase d'annonce de l'atout avant le jeu (BeloteEnv(bidding=True)).
     init_from : démarrage à chaud depuis un modèle déjà entraîné (cf.
-    ActorCriticNetwork.init_from), par exemple l'agent sans annonces."""
+    ActorCriticNetwork.init_from), par exemple l'agent sans annonces.
+    resume : reprend là où RESUME_FILE s'est arrêté (poids, optimiseur,
+    compteurs, générateurs aléatoires) ; config.json n'est pas réécrit."""
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
@@ -81,13 +125,14 @@ def train(
         "eval_every_n_games": eval_every_n_games, "lr": lr, "entropy_coef": entropy_coef,
         "win_bonus": win_bonus, "vs_heuristics": vs_heuristics, "seed": seed, "belief": belief, "bidding": bidding, "init_from": init_from,
     }
-    with open("config.json", "w") as f:
-        json.dump(config, f, indent=2)
+    if not resume:
+        with open("config.json", "w") as f:
+            json.dump(config, f, indent=2)
 
     env = BeloteEnv(win_bonus=win_bonus, belief=belief, bidding=bidding)
     opponents = [HeuristicAgent(), VoidExploitAgent(), TrumpCountAgent()] if vs_heuristics else None
     network = ActorCriticNetwork(obs_size=env.obs_size, num_actions=env.num_actions)
-    if init_from:
+    if init_from and not resume:
         network.init_from(init_from)
     agent = PPOAgent(network)
     eval_agent = PPOAgent(network, deterministic=True)
@@ -96,6 +141,9 @@ def train(
 
     games_trained = 0
     next_eval_at = 0
+    if resume:
+        games_trained, next_eval_at = load_resume_state(network, optimizer)
+        print(f"=== Reprise à {games_trained} parties d'entraînement ===")
 
     print(f"=== Entraînement PPO : {total_games} parties, éval toutes les {eval_every_n_games} parties ===")
     print(f"Config : {config}")
@@ -107,12 +155,22 @@ def train(
             log_eval_results(writer, results, games_trained)
             save_checkpoint(network, games_trained)
             next_eval_at += eval_every_n_games
+            save_resume_state(network, optimizer, games_trained, next_eval_at)
 
         if games_trained >= total_games:
             break
 
         buffer = collect_rollout(env, agent, n_episodes=rollout_episodes, opponents=opponents)
+        before = {"network": copy.deepcopy(network.state_dict()), "optimizer": copy.deepcopy(optimizer.state_dict())}
         metrics = ppo_update(agent, optimizer, buffer, entropy_coef=entropy_coef)
+        if not all_finite(network, metrics):
+            torch.save({"games_trained": games_trained, "network_before": before["network"],
+                        "optimizer_before": before["optimizer"], "buffer": buffer, "metrics": metrics,
+                        "config": config}, NAN_DUMP_FILE)
+            writer.close()
+            raise NonFiniteTrainingError(
+                f"Poids ou loss non finis après la mise à jour à {games_trained} parties (métriques : {metrics}). "
+                f"État d'avant et rollout fautif sauvegardés dans {os.path.abspath(NAN_DUMP_FILE)}.")
         games_trained += rollout_episodes
         log_optimization_metrics(writer, metrics, games_trained)
 
@@ -136,7 +194,19 @@ if __name__ == "__main__":
     parser.add_argument("--bidding", action="store_true", help="phase d'annonce de l'atout avant le jeu")
     parser.add_argument("--init-from", help="modèle .pt de départ (démarrage à chaud)")
     parser.add_argument("--out-dir", default=".", help="dossier où écrire checkpoints/, runs/ et config.json")
+    parser.add_argument("--resume", action="store_true",
+                        help="reprend l'entraînement de --out-dir (config.json + checkpoints/resume_state.pt) ; "
+                             "les autres options sont ignorées")
     args = parser.parse_args()
+
+    if args.resume:
+        os.chdir(args.out_dir)
+        if not os.path.exists(RESUME_FILE):
+            sys.exit(f"Rien à reprendre : {os.path.abspath(RESUME_FILE)} n'existe pas.")
+        with open("config.json") as f:
+            saved = json.load(f)
+        train(**{k: saved[k] for k in CONFIG_KEYS if k in saved}, resume=True)
+        sys.exit(0)
 
     # Chemins d'entrée rendus absolus avant de se placer dans le dossier de sortie.
     init_from = os.path.abspath(args.init_from) if args.init_from else None
