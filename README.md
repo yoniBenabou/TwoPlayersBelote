@@ -100,6 +100,8 @@ python -m scripts.watch_self_play_game --checkpoint experiments/my_run/checkpoin
 - `plot_training`: point-difference and win-rate curves against the 4 opponents.
 - `compare_checkpoints`: final agent against its earlier versions.
 - `evaluate_full_games`: win rate over full games (first to 501 points), with duplicate deals. `--opponent` also accepts a model, and `heurbid:<model.pt>` gives a model trained without bidding the heuristic bids (e.g. `--opponent heurbid:models/ppo_CA_3M.pt` for the head-to-head against the old agent).
+- Strategy study (how the agents play and bid, on the same 20,000 deals against TrumpCount):
+  `strategy_collect --subject new|old|old_native|trumpcount|heuristic` records every decision (`--shadow old` also asks the agent without bidding what it would have played in the exact same position); `strategy_analysis` prints the tables (leads, trump management, ruffs, discards, last trick, risky 10s, bidding, taker vs defender) and writes `figures/strategy_*_en.png`; `strategy_counterfactual` replays deals with a different card at one decision to measure what a choice is worth in points; `commented_games` writes [report/commented_games.md](report/commented_games.md).
 - `bidding_stats`: how an agent bids: how often it takes (round 1, round 2), how often it is set ("dedans"), average margin as taker.
 - `oracle`: theoretical ceiling, a player who sees the opponent's hand against Random (`--mode round` or `--mode game`).
 - `watch_self_play_game`: detailed games, trick by trick (`--opponent self|random|heuristic|voidexploit|trumpcount`, `--duplicate` replays the deal with the hands swapped).
