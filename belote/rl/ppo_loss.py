@@ -31,7 +31,9 @@ def compute_ppo_loss(
 
     advantages = torch.as_tensor(np.asarray(advantages), dtype=torch.float32)
     if normalize_advantages:
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        # Écart-type "biaisé" : vaut 0 (et pas NaN) pour un minibatch d'un seul
+        # élément ; l'avantage normalisé est alors 0 au lieu de contaminer les poids.
+        advantages = (advantages - advantages.mean()) / (advantages.std(unbiased=False) + 1e-8)
 
     old_log_probs = torch.as_tensor(np.asarray(old_log_probs), dtype=torch.float32)
     log_ratio = new_log_probs - old_log_probs

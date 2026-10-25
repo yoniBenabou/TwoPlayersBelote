@@ -27,11 +27,14 @@ def ppo_update(
     par update."""
     n = len(buffer)
     metrics_history = []
+    # Minibatchs de tailles égales (~minibatch_size) : avec des manches de
+    # longueur variable (annonces), un découpage fixe pouvait laisser un
+    # dernier minibatch d'un seul coup, à la normalisation instable.
+    n_minibatches = max(1, round(n / minibatch_size))
 
     for _epoch in range(n_epochs):
         indices = np.random.permutation(n)
-        for start in range(0, n, minibatch_size):
-            minibatch_indices = indices[start: start + minibatch_size]
+        for minibatch_indices in np.array_split(indices, n_minibatches):
             minibatch = [buffer[i] for i in minibatch_indices]
             batch = stack_transitions(minibatch)
 

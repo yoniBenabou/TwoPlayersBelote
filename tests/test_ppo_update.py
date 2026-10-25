@@ -74,6 +74,28 @@ def check_optimizer_state_persists_across_calls(n_episodes=20):
     assert _all_finite(metrics2), metrics2
 
 
+def check_odd_buffer_sizes_stay_finite():
+    """Régression : avec des manches de longueur variable (annonces), la taille
+    du buffer n'est plus un multiple de 256. Un dernier minibatch d'un seul
+    coup donnait un écart-type NaN dans la normalisation des avantages, et
+    tous les poids devenaient NaN. Buffer de 2 * 256 + 1 coups, et minibatch
+    d'un seul coup dans compute_ppo_loss."""
+    from belote.rl.ppo_loss import compute_ppo_loss
+    from belote.rl.self_play import stack_transitions
+
+    env = BeloteEnv()
+    network = ActorCriticNetwork()
+    agent = PPOAgent(network)
+    buffer = collect_rollout(env, agent, n_episodes=40)[: 2 * 256 + 1]
+    optimizer = torch.optim.Adam(network.parameters(), lr=3e-4)
+    metrics = ppo_update(agent, optimizer, buffer)
+    assert _all_finite(metrics), metrics
+    assert all(torch.isfinite(p).all() for p in network.parameters())
+
+    loss, single = compute_ppo_loss(agent, **stack_transitions(buffer[:1]))
+    assert torch.isfinite(loss) and _all_finite(single), single
+
+
 def main():
     check_basic_run_returns_finite_metrics()
     print("ppo_update : métriques finies avec les bonnes clés : OK")
@@ -86,6 +108,9 @@ def main():
 
     check_optimizer_state_persists_across_calls()
     print("État de l'optimiseur persiste correctement entre deux appels : OK")
+
+    check_odd_buffer_sizes_stay_finite()
+    print("Buffer de taille quelconque (dernier minibatch d'un coup) : pas de NaN : OK")
 
 
 if __name__ == "__main__":
