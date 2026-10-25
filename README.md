@@ -1,55 +1,55 @@
 # TwoPlayersBelote
 
-Un jeu de Belote à deux joueurs, jouable en ligne de commande (CLI) en Python.
+A two-player Belote card game, playable from the command line (CLI), written in Python.
 
-Cette variante se joue avec 16 cartes (8 par joueur) tirées d'un jeu de 32 cartes ; l'atout est tiré aléatoirement à chaque manche.
+This variant is played with 16 cards (8 per player) drawn from a 32-card deck; the trump suit is drawn at random each round.
 
-## État du projet
+## Project status
 
-Le tag `projet-tout-fonctionne-avant-atout` marque la dernière version validée avant l'ajout du choix de l'atout (annonces) : tous les tests passent, et le meilleur agent ([models/ppo_CA_3M.pt](models/ppo_CA_3M.pt)) gagne 83 % de ses parties de 501 points contre Random et 62 % contre TrumpCount, résultat reproduit sur 3 entraînements. Pour y revenir : `git checkout projet-tout-fonctionne-avant-atout`.
+The tag `projet-tout-fonctionne-avant-atout` marks the last validated version before trump bidding was added: all tests pass, and the best agent ([models/ppo_CA_3M.pt](models/ppo_CA_3M.pt)) wins 83% of its 501-point games against Random and 62% against TrumpCount, a result reproduced over 3 training runs. To go back to it: `git checkout projet-tout-fonctionne-avant-atout`.
 
-## Lancer le jeu
+## Running the game
 
 ```bash
 python main.py
 ```
 
-Le jeu demande le nom des deux joueurs, puis le score cible pour gagner la partie (501 points par défaut). À chaque tour, le joueur actif choisit une carte en indiquant son numéro dans la liste affichée.
+The game asks for both players' names, then the target score to win the game (501 points by default). On each turn, the active player picks a card by typing its number in the displayed list.
 
-### Jouer contre l'agent entraîné
+### Playing against the trained agent
 
 ```bash
 python -m scripts.play_vs_agent --name Noa
 ```
 
-L'agent utilise le meilleur modèle entraîné ([models/ppo_CA_3M.pt](models/ppo_CA_3M.pt) : self-play, 3 millions de parties). Sa main reste cachée ; `--reveal` l'affiche (pratique pour une démo), `--target` change le score à atteindre, `q` quitte la partie.
+The agent uses the best trained model ([models/ppo_CA_3M.pt](models/ppo_CA_3M.pt): self-play, 3 million games). Its hand stays hidden; `--reveal` shows it (handy for a demo), `--target` changes the score to reach, and `q` quits the game.
 
-**Version web avec de vraies cartes** (textes en anglais, pour les présentations) :
+**Web version with real cards** (English text, for presentations):
 
 ```bash
 python -m demo.server
 ```
 
-Puis ouvrir l'adresse affichée (`http://localhost:8000`, ou le port suivant libre si 8000 est pris). Sur la machine du Technion, l'onglet **Ports** de VS Code redirige ce port vers ton navigateur. On clique sur une carte pour la jouer (seules les cartes légales sont cliquables) ; « Show agent's hand » retourne la main de l'agent, et chaque coup de l'agent affiche sa confiance.
+Then open the address shown (`http://localhost:8000`, or the next free port if 8000 is taken). On the Technion machine, the VS Code **Ports** tab forwards this port to your browser. Click a card to play it (only legal cards are clickable); "Show agent's hand" reveals the agent's hand, and each of the agent's moves shows its confidence.
 
-## Règles principales
+## Main rules
 
-- Chaque manche distribue 8 cartes par joueur (16 cartes restent inutilisées).
-- L'atout est choisi aléatoirement au début de chaque manche.
-- Il faut respecter la couleur demandée, couper à l'atout si on n'a pas la couleur, et monter à l'atout si l'atout est demandé et qu'on le peut.
-- Valeurs des cartes : classiques hors atout (As=11, 10=10, Roi=4, Dame=3, Valet=2), spécifiques à l'atout (Valet=20, 9=14, As=11, 10=10, Roi=4, Dame=3).
-- Bonus de fin de manche : +10 points pour le dernier pli ("dix de der"), +20 points pour la Belote-Rebelote (Roi + Dame d'atout dans la main distribuée).
-- La partie se termine dès qu'un joueur atteint le score cible.
+- Each round deals 8 cards per player (16 cards are left unused).
+- The trump suit is chosen at random at the start of each round.
+- You must follow the suit led, trump if you cannot follow suit, and play a higher trump if trump is led and you can.
+- Card values: standard for non-trump suits (Ace=11, 10=10, King=4, Queen=3, Jack=2), specific for trump (Jack=20, 9=14, Ace=11, 10=10, King=4, Queen=3).
+- End-of-round bonuses: +10 points for the last trick ("dix de der"), +20 points for Belote-Rebelote (King + Queen of trump in the dealt hand).
+- The game ends as soon as a player reaches the target score.
 
-## Structure du projet
+## Project structure
 
-- [main.py](main.py) — point d'entrée, lance la CLI.
-- [belote/core/](belote/core/) — moteur du jeu : cartes ([cards.py](belote/core/cards.py)), règles ([engine.py](belote/core/engine.py)), joueur ([player.py](belote/core/player.py)), CLI ([cli.py](belote/core/cli.py)).
-- [belote/rl/](belote/rl/) — apprentissage par renforcement : environnement Gym ([env.py](belote/rl/env.py)), agents de référence ([agents.py](belote/rl/agents.py)), réseau et PPO (`networks.py`, `ppo_agent.py`, `self_play.py`, `gae.py`, `ppo_loss.py`, `ppo_update.py`), évaluation ([evaluation.py](belote/rl/evaluation.py)).
-- [scripts/](scripts/) — entraînement, évaluation, visualisation de parties et courbes.
-- [tests/](tests/) — tests de l'environnement et de chaque brique PPO.
-- [figures/](figures/) — courbes d'apprentissage de l'entraînement long (3 millions de parties).
-- [models/](models/) — meilleur agent entraîné, utilisé par `scripts/play_vs_agent.py`.
+- [main.py](main.py) — entry point, launches the CLI.
+- [belote/core/](belote/core/) — game engine: cards ([cards.py](belote/core/cards.py)), rules ([engine.py](belote/core/engine.py)), player ([player.py](belote/core/player.py)), CLI ([cli.py](belote/core/cli.py)).
+- [belote/rl/](belote/rl/) — reinforcement learning: Gym environment ([env.py](belote/rl/env.py)), baseline agents ([agents.py](belote/rl/agents.py)), network and PPO (`networks.py`, `ppo_agent.py`, `self_play.py`, `gae.py`, `ppo_loss.py`, `ppo_update.py`), evaluation ([evaluation.py](belote/rl/evaluation.py)).
+- [scripts/](scripts/) — training, evaluation, game visualization and learning curves.
+- [tests/](tests/) — tests for the environment and for each PPO component.
+- [figures/](figures/) — learning curves from the long training run (3 million games).
+- [models/](models/) — best trained agent, used by `scripts/play_vs_agent.py`.
 
 ## Installation
 
@@ -57,56 +57,56 @@ Puis ouvrir l'adresse affichée (`http://localhost:8000`, ou le port suivant lib
 pip install -r requirements.txt
 ```
 
-## Lancer les scripts et les tests
+## Running scripts and tests
 
-Toujours depuis la racine du projet, en mode module (`-m`).
+Always from the project root, in module mode (`-m`).
 
-**Entraînement** ([scripts/train.py](scripts/train.py)). Sans option, utilise la meilleure configuration trouvée : self-play, reward sans bonus de victoire, learning rate 3e-4, 2 millions de parties, évaluation toutes les 50 000 parties.
+**Training** ([scripts/train.py](scripts/train.py)). With no options, it uses the best configuration found: self-play, reward without win bonus, learning rate 3e-4, 2 million games, evaluation every 50,000 games.
 
 ```bash
-python -m scripts.train --out-dir experiments/mon_run --seed 1
+python -m scripts.train --out-dir experiments/my_run --seed 1
 ```
 
-Options : `--total-games`, `--eval-every`, `--lr`, `--entropy-coef`, `--win-bonus` (ajoute le ±1 de victoire au reward), `--vs-heuristics` (adversaires heuristiques au lieu du self-play), `--belief` (tableau des cartes possibles chez l'adversaire), `--bidding` (annonce de l'atout, voir ci-dessous), `--init-from` (démarrage à chaud depuis un modèle déjà entraîné), `--seed`, `--out-dir` (où écrire `checkpoints/`, `runs/` TensorBoard, `config.json`). Le log d'évaluation s'affiche sur la sortie standard : le rediriger vers un `train.log` pour tracer les courbes.
+Options: `--total-games`, `--eval-every`, `--lr`, `--entropy-coef`, `--win-bonus` (adds the ±1 win term to the reward), `--vs-heuristics` (heuristic opponents instead of self-play), `--belief` (table of cards the opponent may hold), `--bidding` (trump bidding, see below), `--init-from` (warm start from an already trained model), `--seed`, `--out-dir` (where to write `checkpoints/`, TensorBoard `runs/`, `config.json`). The evaluation log is printed to standard output: redirect it to a `train.log` to plot the curves.
 
-**Annonce de l'atout (`--bidding`)** : une carte tirée parmi les 16 non distribuées est retournée et propose sa couleur. Tour 1 : prendre ou passer ; tour 2 : nommer une des 3 autres couleurs ou passer ; si les deux passent deux fois, on redistribue. Le premier à parler mène le premier pli. Si le preneur fait moins de points que l'adversaire, il est « dedans » : l'adversaire marque tous les points des plis (chacun garde sa belote-rebelote).
+**Trump bidding (`--bidding`)**: a card drawn from the 16 undealt cards is turned face up and proposes its suit. Round 1: take or pass; round 2: name one of the 3 other suits or pass; if both players pass twice, the cards are redealt. The first player to speak leads the first trick. If the taker scores fewer points than the opponent, they are "dedans" (set): the opponent scores all trick points (each player keeps their own Belote-Rebelote).
 
 ```bash
 python -m scripts.train --bidding --init-from models/ppo_CA_3M.pt --out-dir experiments/bidding --seed 1
 ```
 
-**Entraînements longs : reprise, garde-fou et surveillance**
+**Long training runs: resuming, safeguard and monitoring**
 
-- À chaque évaluation, `checkpoints/resume_state.pt` enregistre tout l'état (poids, optimiseur Adam, compteurs, générateurs aléatoires). Un entraînement interrompu reprend exactement où il en était avec `python -m scripts.train --resume --out-dir experiments/mon_run` (la configuration est relue dans `config.json`).
-- Si une mise à jour produit des poids non finis (NaN), l'entraînement s'arrête net et écrit `nan_dump.pt` : état juste avant la mise à jour fautive et rollout correspondant, pour la rejouer.
-- `scripts/watchdog.py` surveille des entraînements tmux et relance avec `--resume` ceux qui sont morts ou bloqués (3 relances au plus, journal dans `watchdog.log`) :
+- At each evaluation, `checkpoints/resume_state.pt` saves the full state (weights, Adam optimizer, counters, random generators). An interrupted run resumes exactly where it left off with `python -m scripts.train --resume --out-dir experiments/my_run` (the configuration is read back from `config.json`).
+- If an update produces non-finite weights (NaN), training stops immediately and writes `nan_dump.pt`: the state just before the faulty update and the matching rollout, so it can be replayed.
+- `scripts/watchdog.py` monitors tmux training sessions and restarts with `--resume` any that have died or stalled (at most 3 restarts, logged to `watchdog.log`):
 
 ```bash
 tmux new-session -d -s watchdog "python -m scripts.watchdog experiments/run1:session1 experiments/run2:session2"
 ```
 
-**Évaluation et analyse :**
+**Evaluation and analysis:**
 
 ```bash
 python -m scripts.benchmark
-python -m scripts.plot_training experiments/mon_run/train.log --out-dir figures --prefix mon_run_
-python -m scripts.compare_checkpoints experiments/mon_run/checkpoints
-python -m scripts.watch_self_play_game --checkpoint experiments/mon_run/checkpoints/ppo_2000000.pt --opponent trumpcount --duplicate --seed 138
+python -m scripts.plot_training experiments/my_run/train.log --out-dir figures --prefix my_run_
+python -m scripts.compare_checkpoints experiments/my_run/checkpoints
+python -m scripts.watch_self_play_game --checkpoint experiments/my_run/checkpoints/ppo_2000000.pt --opponent trumpcount --duplicate --seed 138
 ```
 
-- `benchmark` : agents de référence les uns contre les autres.
-- `plot_training` : courbes d'écart de points et de taux de victoire contre les 4 adversaires.
-- `compare_checkpoints` : agent final contre ses versions précédentes.
-- `evaluate_full_games` : taux de victoire en parties complètes (premier à 501 points), parties dupliquées.
-- `oracle` : plafond théorique, un joueur qui voit la main adverse contre Random (`--mode round` ou `--mode game`).
-- `watch_self_play_game` : parties détaillées pli par pli (`--opponent self|random|heuristic|voidexploit|trumpcount`, `--duplicate` rejoue la donne en échangeant les mains).
+- `benchmark`: baseline agents against each other.
+- `plot_training`: point-difference and win-rate curves against the 4 opponents.
+- `compare_checkpoints`: final agent against its earlier versions.
+- `evaluate_full_games`: win rate over full games (first to 501 points), with duplicate deals.
+- `oracle`: theoretical ceiling, a player who sees the opponent's hand against Random (`--mode round` or `--mode game`).
+- `watch_self_play_game`: detailed games, trick by trick (`--opponent self|random|heuristic|voidexploit|trumpcount`, `--duplicate` replays the deal with the hands swapped).
 
-Toutes les évaluations utilisent des **donnes dupliquées** : chaque donne est jouée deux fois en échangeant les mains, ce qui annule la chance de la donne.
+All evaluations use **duplicate deals**: each deal is played twice with the hands swapped, which cancels out the luck of the deal.
 
-**Tests :**
+**Tests:**
 
 ```bash
 python -m tests.test_env
 ```
 
-(de même pour `test_network`, `test_ppo_agent`, `test_self_play`, `test_gae`, `test_ppo_loss`, `test_ppo_update`, `test_bidding`, `test_train_safety`)
+(likewise for `test_network`, `test_ppo_agent`, `test_self_play`, `test_gae`, `test_ppo_loss`, `test_ppo_update`, `test_bidding`, `test_train_safety`)
