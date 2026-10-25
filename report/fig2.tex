@@ -1,0 +1,8 @@
+\begin{tikzpicture}[x=0.085cm, y=-0.95cm]
+\foreach \i/\v/\n/\d/\c in {0/51/Random/against itself/muted, 1/62/Heuristic/hand-written/muted, 2/70.7/VoidExploit/hand-written/muted, 3/72/TrumpCount/best hand-written strategy/muted, 4/83/\textbf{Our AI}/{self-taught, self-play}/accent, 5/99/Cheater/sees the opponent's hand/muted!45}{
+  \fill[\c] (0,\i-0.22) rectangle (\v,\i+0.22);
+  \node[anchor=west, font=\small] at (\v+1,\i) {\v\%};
+  \node[anchor=east, font=\small, align=right] at (-2,\i) {\n\\[-2pt]{\scriptsize\color{quiet}\d}};
+}
+\draw[dashed, axis] (50,-0.6) -- (50,5.6) node[below, font=\footnotesize, text=quiet] {50\%: even};
+\end{tikzpicture}

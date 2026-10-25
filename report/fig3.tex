@@ -1,0 +1,12 @@
+\begin{tikzpicture}
+\begin{axis}[width=\linewidth, height=6.5cm, xmin=0, xmax=3.05, ymin=-10, ymax=8,
+  xtick={0,0.5,...,3}, xticklabel={\pgfmathprintnumber{\tick}\,M}, ytick={-8,-4,0,4,8},
+  yticklabel={\pgfmathparse{\tick>0}\ifnum\pgfmathresult=1 +\fi\pgfmathprintnumber[fixed,precision=0]{\tick}},
+  xlabel={Training games}, ylabel={Points per hand vs TrumpCount},
+  grid=major, grid style={draw=gray!20}, axis lines=left, tick label style={font=\small}, label style={font=\small}, clip=false]
+\draw[axis] (axis cs:0,0) -- (axis cs:3.05,0) node[pos=1, above left, font=\footnotesize, text=quiet] {TrumpCount's level};
+\addplot[accent, line width=1pt, mark=*, mark size=1.1pt] coordinates {(0.0000,-8.1) (0.0500,-2.9) (0.1001,-1.0) (0.1500,0.6) (0.2001,1.4) (0.2501,2.3) (0.3000,2.9) (0.3501,3.0) (0.4000,3.8) (0.4500,3.3) (0.5001,2.2) (0.5500,3.1) (0.6001,3.2) (0.6501,2.5) (0.7000,3.5) (0.7501,4.0) (0.8000,3.8) (0.8500,3.5) (0.9001,3.7) (0.9500,3.3) (1.0001,4.2) (1.0501,4.0) (1.1000,3.2) (1.1501,3.8) (1.2000,3.8) (1.2500,4.2) (1.3001,3.7) (1.3500,3.5) (1.4001,3.4) (1.4501,4.2) (1.5000,4.7) (1.5501,3.9) (1.6000,4.5) (1.6500,4.8) (1.7001,3.9) (1.7500,5.4) (1.8001,4.5) (1.8501,4.8) (1.9000,4.5) (1.9501,4.5) (2.0000,4.1) (2.0500,4.8) (2.1001,5.1) (2.1500,4.7) (2.2001,5.4) (2.2501,6.1) (2.3000,4.0) (2.3501,5.0) (2.4000,6.3) (2.4500,4.8) (2.5001,6.1) (2.5500,5.6) (2.6001,5.7) (2.6501,5.2) (2.7000,6.0) (2.7501,4.1) (2.8000,4.9) (2.8500,4.6) (2.9001,4.2) (2.9500,4.9) (3.0001,5.2)};
+\node[anchor=west, font={\footnotesize\bfseries}] at (axis cs:0.06,-8.1) {$-8.1$ at start};
+\node[anchor=south east, font={\footnotesize\bfseries}] at (axis cs:3.0,6.4) {+5.2 at 3\,M};
+\end{axis}
+\end{tikzpicture}
