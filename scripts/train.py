@@ -36,7 +36,7 @@ RESUME_FILE = os.path.join(CHECKPOINT_DIR, "resume_state.pt")
 NAN_DUMP_FILE = "nan_dump.pt"
 # Paramètres de train() enregistrés dans config.json (et relus par --resume).
 CONFIG_KEYS = ("total_games", "rollout_episodes", "eval_every_n_games", "lr", "entropy_coef", "win_bonus",
-               "vs_heuristics", "seed", "belief", "bidding", "init_from")
+               "vs_heuristics", "seed", "belief", "bidding", "init_from", "dedans")
 
 
 class NonFiniteTrainingError(RuntimeError):
@@ -100,6 +100,7 @@ def train(
     bidding: bool = False,
     init_from: str | None = None,
     resume: bool = False,
+    dedans: bool = True,
 ):
     """vs_heuristics : au lieu du self-play, chaque manche d'entraînement
     oppose l'agent à un adversaire tiré au hasard parmi les heuristiques
@@ -111,6 +112,8 @@ def train(
     bidding : phase d'annonce de l'atout avant le jeu (BeloteEnv(bidding=True)).
     init_from : démarrage à chaud depuis un modèle déjà entraîné (cf.
     ActorCriticNetwork.init_from), par exemple l'agent sans annonces.
+    dedans=False : expérience de contrôle, entraînement sans la règle du
+    preneur "dedans" (l'évaluation, elle, applique toujours les vraies règles).
     resume : reprend là où RESUME_FILE s'est arrêté (poids, optimiseur,
     compteurs, générateurs aléatoires) ; config.json n'est pas réécrit."""
     if seed is not None:
@@ -124,12 +127,13 @@ def train(
         "total_games": total_games, "rollout_episodes": rollout_episodes,
         "eval_every_n_games": eval_every_n_games, "lr": lr, "entropy_coef": entropy_coef,
         "win_bonus": win_bonus, "vs_heuristics": vs_heuristics, "seed": seed, "belief": belief, "bidding": bidding, "init_from": init_from,
+        "dedans": dedans,
     }
     if not resume:
         with open("config.json", "w") as f:
             json.dump(config, f, indent=2)
 
-    env = BeloteEnv(win_bonus=win_bonus, belief=belief, bidding=bidding)
+    env = BeloteEnv(win_bonus=win_bonus, belief=belief, bidding=bidding, dedans=dedans)
     opponents = [HeuristicAgent(), VoidExploitAgent(), TrumpCountAgent()] if vs_heuristics else None
     network = ActorCriticNetwork(obs_size=env.obs_size, num_actions=env.num_actions)
     if init_from and not resume:
@@ -192,6 +196,8 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, help="graine aléatoire (reproductibilité)")
     parser.add_argument("--belief", action="store_true", help="ajoute le tableau des cartes possibles chez l'adversaire")
     parser.add_argument("--bidding", action="store_true", help="phase d'annonce de l'atout avant le jeu")
+    parser.add_argument("--no-dedans", dest="dedans", action="store_false",
+                        help="contrôle : entraîner sans la règle du preneur dedans (évaluation avec)")
     parser.add_argument("--init-from", help="modèle .pt de départ (démarrage à chaud)")
     parser.add_argument("--out-dir", default=".", help="dossier où écrire checkpoints/, runs/ et config.json")
     parser.add_argument("--resume", action="store_true",
@@ -223,4 +229,5 @@ if __name__ == "__main__":
         belief=args.belief,
         bidding=args.bidding,
         init_from=init_from,
+        dedans=args.dedans,
     )

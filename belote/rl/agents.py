@@ -232,3 +232,20 @@ class TrumpCountAgent(VoidExploitAgent):
             return max(aces, key=lambda c: c.strength(trump_suit))
 
         return _strongest_in_longest_suit(legal_cards, trump_suit)
+
+
+class HeuristicBiddingWrapper:
+    """Donne les annonces heuristiques (heuristic_bid) à un agent entraîné sans
+    annonces, pour le faire jouer dans BeloteEnv(bidding=True) : il annonce
+    avec l'heuristique, puis joue ses cartes en ne voyant que le début de
+    l'observation (le bloc d'annonces est ajouté à la fin, cf. env.obs_size)
+    et les 32 actions de cartes."""
+
+    def __init__(self, card_agent, obs_size):
+        self.card_agent = card_agent
+        self.obs_size = obs_size
+
+    def act(self, obs, legal_mask, info=None):
+        if is_bidding(info):
+            return heuristic_bid(obs, legal_mask, info)
+        return self.card_agent.act(obs[:self.obs_size], legal_mask[:NUM_CARDS], info)

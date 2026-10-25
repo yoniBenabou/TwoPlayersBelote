@@ -93,6 +93,27 @@
   .overlay h3 { margin: 0 0 6px; font-size: 24px; } .overlay p { color: var(--muted); margin: 6px 0 18px; }
   .overlay .big-score { font: bold 38px "Courier New", monospace; margin: 8px 0; }
   .error { color: #f2545b; font-size: 13px; min-height: 16px; }
+
+  /* annonces */
+  .bid-box { display: none; flex-direction: column; align-items: center; gap: 14px; min-height: 180px; }
+  .bid-box.show { display: flex; }
+  .turned { position: relative; display: flex; flex-direction: column; align-items: center; }
+  .turned .who { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  .bid-help { font-size: 14px; color: var(--muted); text-align: center; max-width: 460px; }
+  .bid-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; min-height: 44px; align-items: center; }
+  .bid-buttons button { font-size: 20px; min-width: 64px; padding: 8px 16px; }
+  .bid-buttons button.red { color: #f2545b; }
+  .bid-buttons button.pass { font-size: 15px; }
+  .bid-buttons .wait { font-size: 13px; color: var(--muted); }
+  .bids { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; font-size: 12px; }
+  .bids span { border: 1px solid var(--line); background: rgba(10,14,19,.55); border-radius: 999px; padding: 3px 10px; }
+  .chip { font: bold 10px "Courier New", monospace; letter-spacing: .1em; color: #062b1f; background: var(--accent);
+          border-radius: 4px; padding: 2px 6px; }
+  .chip:empty { display: none; }
+  .contract { display: flex; gap: 12px; align-items: center; }
+  .contract .info { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .contract .info b { color: var(--text); }
+  .rule { font-size: 12px; color: var(--muted); margin: 10px 0 0; line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -104,6 +125,7 @@
   <div class="spacer"></div>
   <div class="badge">Round <b id="round">–</b></div>
   <div class="badge">Trump <b id="trump">–</b> <span id="trump-name" class="mono" style="font-size:12px;color:var(--muted)"></span></div>
+  <div class="badge" id="taker-badge" style="display:none">Taker <b id="taker">–</b></div>
   <button id="reveal">Show agent's hand</button>
   <button id="new-game">New game</button>
 </header>
@@ -111,11 +133,17 @@
 <main>
   <section class="table" id="table">
     <div>
-      <div class="seat-label"><span class="mono">PPO AGENT</span><span class="pts">round points: <b id="agent-round">0</b></span></div>
+      <div class="seat-label"><span class="mono">PPO AGENT</span><span class="chip" id="agent-chip"></span><span class="pts">round points: <b id="agent-round">0</b></span></div>
       <div class="hand" id="agent-hand"></div>
     </div>
     <div class="center">
-      <div class="trick">
+      <div class="bid-box" id="bid-box">
+        <div class="turned"><span class="who mono">TURNED CARD</span><div id="turned-card"></div></div>
+        <div class="bid-help" id="bid-help"></div>
+        <div class="bid-buttons" id="bid-buttons"></div>
+        <div class="bids" id="bids"></div>
+      </div>
+      <div class="trick" id="trick">
         <div class="slot" id="slot-agent"><span class="who mono">AGENT</span></div>
         <div class="slot" id="slot-you"><span class="who mono">YOU</span></div>
       </div>
@@ -124,7 +152,7 @@
       <div class="error" id="error"></div>
     </div>
     <div>
-      <div class="seat-label"><span class="mono">YOUR HAND</span><span class="pts">round points: <b id="you-round">0</b></span></div>
+      <div class="seat-label"><span class="mono">YOUR HAND</span><span class="chip" id="you-chip"></span><span class="pts">round points: <b id="you-round">0</b></span></div>
       <div class="hand" id="your-hand"></div>
     </div>
     <div class="overlay" id="overlay"><div class="box" id="overlay-box"></div></div>
@@ -138,6 +166,12 @@
       <div class="score-row"><span>PPO agent</span><b id="total-agent">0</b></div>
       <div class="bar"><div id="bar-agent" style="width:0"></div></div>
     </div>
+    <div class="panel" id="contract-panel" style="display:none">
+      <h2 class="mono">CONTRACT</h2>
+      <div class="contract"><div id="contract-card"></div><div class="info" id="contract-info"></div></div>
+      <p class="rule">If the taker scores fewer points than the defender, the taker is set (“dedans”):
+        the defender scores all the trick points.</p>
+    </div>
     <div class="panel">
       <h2 class="mono">LAST TRICK</h2>
       <div class="last-trick" id="last-trick"><span class="info">No trick played yet.</span></div>
@@ -148,7 +182,7 @@
     </div>
     <div class="panel">
       <h2 class="mono">ROUNDS</h2>
-      <table class="hist" id="hist"><tr><th>Round</th><th>Trump</th><th>You</th><th>Agent</th></tr></table>
+      <table class="hist" id="hist"><tr><th>Round</th><th>Trump</th><th>Taker</th><th>You</th><th>Agent</th></tr></table>
     </div>
   </aside>
 </main>
@@ -195,12 +229,60 @@ function renderTable(table) {
   }
 }
 
+const who = (seat) => (seat === "you" ? "You" : "Agent");
+const isBidPhase = (s) => s.bidding && (s.phase === "bid1" || s.phase === "bid2");
+function bidHelp(s) {
+  if (!s.turnedCard) return "";
+  return s.phase === "bid1"
+    ? `Bidding, round 1: take ${s.turnedCard.suit} (the turned card's suit) as trump, or pass.`
+    : `Bidding, round 2: name one of the other suits as trump, or pass.`;
+}
+
+function renderBidding(s) {
+  const bidding = isBidPhase(s);
+  $("bid-box").classList.toggle("show", bidding);
+  $("trick").style.display = bidding ? "none" : "flex";
+  $("taker-badge").style.display = s.bidding ? "" : "none";
+  $("taker").textContent = s.taker ? who(s.taker) : "–";
+  $("you-chip").textContent = s.taker === "you" ? "TAKER" : "";
+  $("agent-chip").textContent = s.taker === "agent" ? "TAKER" : "";
+  $("contract-panel").style.display = s.bidding && s.turnedCard ? "" : "none";
+  if (!s.bidding || !s.turnedCard) return;
+
+  const cc = $("contract-card"); cc.innerHTML = ""; cc.append(cardEl(s.turnedCard, { small: true }));
+  const bids = s.bids || [];
+  const taking = bids.find((b) => b.label !== "pass");
+  $("contract-info").innerHTML = s.taker && s.trump
+    ? `Turned card: <b>${s.turnedCard.label}</b><br>Taker: <b>${who(s.taker)}</b> (round ${taking ? taking.round : "?"})<br>`
+      + `Trump: <b style="color:${s.trump.color === "red" ? "#f2545b" : "var(--text)"}">${s.trump.symbol} ${s.trump.name}</b>`
+    : `Turned card: <b>${s.turnedCard.label}</b><br>Bidding in progress…`;
+
+  if (!bidding) return;
+  const tc = $("turned-card"); tc.innerHTML = ""; tc.append(cardEl(s.turnedCard));
+  $("bid-help").textContent = bidHelp(s);
+  const buttons = $("bid-buttons"); buttons.innerHTML = "";
+  if (s.yourBid && !busy && s.bidOptions) {
+    for (const o of s.bidOptions) {
+      const b = document.createElement("button");
+      b.textContent = o.label;
+      b.className = o.bid === "pass" ? "pass" : o.bid === "take" ? "primary" : o.color === "red" ? "red" : "";
+      b.title = o.bid === "pass" ? "Pass" : `${o.symbol} ${o.name} as trump`;
+      b.onclick = () => bid(o.bid);
+      buttons.append(b);
+    }
+  } else {
+    buttons.innerHTML = '<span class="wait mono">WAITING FOR THE AGENT…</span>';
+  }
+  $("bids").innerHTML = bids.map((b) => `<span>${who(b.seat)} · round ${b.round}: ${b.label}</span>`).join("");
+}
+
 function render() {
   const s = view;
   $("round").textContent = s.round;
-  $("trump").textContent = s.trump.symbol;
-  $("trump").style.color = s.trump.color === "red" ? "#f2545b" : "var(--text)";
-  $("trump-name").textContent = s.trump.name.toUpperCase();
+  $("trump").textContent = s.trump ? s.trump.symbol : "?";
+  $("trump").style.color = s.trump && s.trump.color === "red" ? "#f2545b" : "var(--text)";
+  $("trump-name").textContent = s.trump ? s.trump.name.toUpperCase() : "BIDDING";
+  renderBidding(s);
   $("target").textContent = s.target;
   $("you-round").textContent = s.roundPoints.you;
   $("agent-round").textContent = s.roundPoints.agent;
@@ -213,7 +295,7 @@ function render() {
   for (const c of s.hand) {
     const playable = s.yourTurn && !busy && c.legal;
     const classes = [];
-    if (c.isTrump) classes.push("trump");
+    if (s.trump && c.suitName === s.trump.name) classes.push("trump");
     if (s.yourTurn && !busy) classes.push(playable ? "playable" : "illegal");
     const el = cardEl(c, { classes });
     if (playable) el.onclick = () => play(c.id);
@@ -222,7 +304,8 @@ function render() {
   const agent = $("agent-hand"); agent.innerHTML = "";
   for (const c of s.agentHand) agent.append(reveal ? cardEl(c, { small: true }) : backEl());
 
-  $("turn").textContent = s.roundResult || busy ? "" : s.yourTurn ? "YOUR TURN — CLICK A HIGHLIGHTED CARD" : "";
+  $("turn").textContent = s.roundResult || busy ? "" : s.yourTurn ? "YOUR TURN — CLICK A HIGHLIGHTED CARD"
+    : s.yourBid ? "YOUR BID — USE THE BUTTONS" : "";
 
   const lt = $("last-trick"); lt.innerHTML = "";
   if (s.lastTrick) {
@@ -238,7 +321,8 @@ function render() {
   hist.querySelectorAll("tr.r").forEach((r) => r.remove());
   for (const h of s.history) {
     const tr = document.createElement("tr"); tr.className = "r";
-    tr.innerHTML = `<td>${h.round}</td><td>${h.trump}</td><td>${h.you}</td><td>${h.agent}</td>`;
+    const taker = h.taker ? who(h.taker) + (h.dedans ? " (set)" : "") : "–";
+    tr.innerHTML = `<td>${h.round}</td><td>${h.trump}</td><td>${taker}</td><td>${h.you}</td><td>${h.agent}</td>`;
     hist.append(tr);
   }
   renderOverlay();
@@ -249,6 +333,10 @@ function renderOverlay() {
   if (!s.roundResult || busy) { ov.classList.remove("show"); return; }
   const r = s.roundResult;
   const bel = r.belote.length ? `<p>Belote-rebelote (+20): ${r.belote.map((w) => (w === "you" ? "you" : "agent")).join(" and ")}</p>` : "";
+  const contract = !r.taker ? "" : r.dedans
+    ? `<p><b>${r.taker === "you" ? "You" : "The agent"} took and ${r.taker === "you" ? "are" : "is"} set (“dedans”)</b>: `
+      + `${r.taker === "you" ? "the agent scores" : "you score"} all the trick points.</p>`
+    : `<p>${r.taker === "you" ? "You" : "The agent"} took and made it.</p>`;
   if (s.gameOver) {
     const won = s.totals.you > s.totals.agent, draw = s.totals.you === s.totals.agent;
     box.innerHTML = `<h3>${draw ? "Draw!" : won ? "You win the game!" : "The agent wins the game"}</h3>
@@ -257,7 +345,7 @@ function renderOverlay() {
     $("ov-btn").onclick = newGame;
   } else {
     box.innerHTML = `<h3>Round ${s.round} over</h3>
-      <div class="big-score">${r.you} – ${r.agent}</div><p>Round points (you – agent)</p>${bel}
+      <div class="big-score">${r.you} – ${r.agent}</div><p>Round points (you – agent)</p>${contract}${bel}
       <button class="primary" id="ov-btn">Next round</button>`;
     $("ov-btn").onclick = nextRound;
   }
@@ -268,7 +356,25 @@ async function replay(state) {
   busy = true;
   const table = view ? [...view.table] : [];
   for (const ev of state.events) {
-    if (ev.type === "play") {
+    if (ev.deal) {  // nouvelle donne : nouvelle main et carte retournée, annonces à zéro
+      view = Object.assign(view || { ...state }, {
+        round: state.round, bidding: true, phase: "bid1", turnedCard: ev.turnedCard, bids: [], bidOptions: null,
+        taker: null, trump: null, hand: ev.hand.map((c) => ({ ...c, legal: false })), agentHand: ev.agentHand,
+        table: [], lastTrick: null, yourTurn: false, yourBid: false, roundResult: null, roundPoints: { you: 0, agent: 0 },
+      });
+      table.length = 0; render(); renderTable(table);
+      banner(ev.text); log(ev.text, true);
+      await sleep(900);
+    } else if (ev.type === "bid") {
+      if (view) {
+        view.bids = [...(view.bids || []), { seat: ev.seat, round: ev.round, label: ev.label }];
+        view.phase = ev.nextPhase;
+        if (ev.trump) { view.trump = ev.trump; view.taker = ev.seat; }
+        render();
+      }
+      banner(ev.text); log(ev.text, ev.label !== "pass");
+      await sleep(ev.seat === "agent" ? 1100 : 450);
+    } else if (ev.type === "play") {
       if (ev.seat === "you" && view) view.hand = view.hand.filter((c) => c.id !== ev.card.id);
       if (ev.seat === "agent" && view) view.agentHand = view.agentHand.filter((c) => c.id !== ev.card.id);
       table.push({ seat: ev.seat, card: ev.card, confidence: ev.confidence });
@@ -292,6 +398,7 @@ async function replay(state) {
   render();
   renderTable(state.table);
   if (state.yourTurn) banner(state.table.length ? "Your turn: answer the agent's card" : "Your turn: lead a card");
+  else if (state.yourBid) banner(`Your bid. ${bidHelp(state)}`);
 }
 
 async function api(path, body) {
@@ -304,6 +411,7 @@ async function api(path, body) {
 }
 
 async function play(id) { if (busy) return; busy = true; render(); try { await replay(await api("/api/play", { card: id })); } catch { busy = false; render(); } }
+async function bid(b) { if (busy) return; busy = true; render(); try { await replay(await api("/api/bid", { bid: b })); } catch { busy = false; render(); } }
 async function nextRound() { if (busy) return; $("overlay").classList.remove("show"); view.table = []; await replay(await api("/api/next", {})); }
 async function newGame() {
   if (busy) return;
@@ -318,8 +426,11 @@ $("reveal").onclick = () => { reveal = !reveal; $("reveal").textContent = reveal
 (async () => {
   const s = await api("/api/state");
   view = s; render(); renderTable(s.table);
-  banner(s.yourTurn ? (s.table.length ? "Your turn: answer the agent's card" : "Your turn: lead a card") : "Click “New game” to start");
-  log(`Round ${s.round} — trump is ${s.trump.name} ${s.trump.symbol}.`, true);
+  banner(s.yourTurn ? (s.table.length ? "Your turn: answer the agent's card" : "Your turn: lead a card")
+    : s.yourBid ? `Your bid. ${bidHelp(s)}` : "Click “New game” to start");
+  if (s.trump) log(`Round ${s.round} — trump is ${s.trump.name} ${s.trump.symbol}.`, true);
+  else if (s.turnedCard) log(`Round ${s.round} — turned card: ${s.turnedCard.label}.`, true);
+  for (const b of s.bids || []) log(`${who(b.seat)} (round ${b.round}): ${b.label}`);
 })();
 </script>
 </body>

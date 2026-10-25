@@ -13,7 +13,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from demo.game import DEFAULT_TARGET_SCORE, GameSession, IllegalMove
+from demo.game import DEFAULT_CHECKPOINT, DEFAULT_TARGET_SCORE, GameSession, IllegalMove
 
 INDEX_HTML = Path(__file__).with_name("index.html")
 
@@ -49,6 +49,7 @@ def make_handler(session):
             actions = {
                 "/api/new": lambda: session.new_game(),
                 "/api/play": lambda: session.play_human(payload.get("card")),
+                "/api/bid": lambda: session.bid_human(payload.get("bid")),
                 "/api/next": lambda: session.next_round(),
             }
             if self.path not in actions:
@@ -69,7 +70,8 @@ def main():
     parser = argparse.ArgumentParser(description="Démo web : belote à deux contre l'agent PPO.")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--checkpoint", default="models/ppo_CA_3M.pt")
+    parser.add_argument("--checkpoint", default=DEFAULT_CHECKPOINT,
+                        help="modèle avec annonces (par défaut) ou sans (atout tiré au hasard)")
     parser.add_argument("--target", type=int, default=DEFAULT_TARGET_SCORE)
     args = parser.parse_args()
 

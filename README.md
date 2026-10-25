@@ -32,6 +32,8 @@ python -m demo.server
 
 Then open the address shown (`http://localhost:8000`, or the next free port if 8000 is taken). On the Technion machine, the VS Code **Ports** tab forwards this port to your browser. Click a card to play it (only legal cards are clickable); "Show agent's hand" reveals the agent's hand, and each of the agent's moves shows its confidence.
 
+By default the demo uses the agent trained with trump bidding ([models/ppo_bidding_2M.pt](models/ppo_bidding_2M.pt)): each round starts with the turned card in the middle of the table and the buttons "Take ♠ / Pass" (round 1) or "♥ ♦ ♣ / Pass" (round 2); the taker is shown next to their hand, in the header and in the Contract panel, and the Rounds table records who took and who was set ("dedans"). `--checkpoint models/ppo_CA_3M.pt` brings back the version without bidding (random trump).
+
 ## Main rules
 
 - Each round deals 8 cards per player (16 cards are left unused).
@@ -69,7 +71,7 @@ python -m scripts.train --out-dir experiments/my_run --seed 1
 
 Options: `--total-games`, `--eval-every`, `--lr`, `--entropy-coef`, `--win-bonus` (adds the ±1 win term to the reward), `--vs-heuristics` (heuristic opponents instead of self-play), `--belief` (table of cards the opponent may hold), `--bidding` (trump bidding, see below), `--init-from` (warm start from an already trained model), `--seed`, `--out-dir` (where to write `checkpoints/`, TensorBoard `runs/`, `config.json`). The evaluation log is printed to standard output: redirect it to a `train.log` to plot the curves.
 
-**Trump bidding (`--bidding`)**: a card drawn from the 16 undealt cards is turned face up and proposes its suit. Round 1: take or pass; round 2: name one of the 3 other suits or pass; if both players pass twice, the cards are redealt. The first player to speak leads the first trick. If the taker scores fewer points than the opponent, they are "dedans" (set): the opponent scores all trick points (each player keeps their own Belote-Rebelote).
+**Trump bidding (`--bidding`)**: a card drawn from the 16 undealt cards is turned face up and proposes its suit. Round 1: take or pass; round 2: name one of the 3 other suits or pass; if both players pass twice, the cards are redealt. The first player to speak leads the first trick. If the taker scores fewer points than the opponent, they are "dedans" (set): the opponent scores all trick points (each player keeps their own Belote-Rebelote). `--no-dedans` trains without this rule (control experiment; evaluation still applies it).
 
 ```bash
 python -m scripts.train --bidding --init-from models/ppo_CA_3M.pt --out-dir experiments/bidding --seed 1
@@ -97,7 +99,8 @@ python -m scripts.watch_self_play_game --checkpoint experiments/my_run/checkpoin
 - `benchmark`: baseline agents against each other.
 - `plot_training`: point-difference and win-rate curves against the 4 opponents.
 - `compare_checkpoints`: final agent against its earlier versions.
-- `evaluate_full_games`: win rate over full games (first to 501 points), with duplicate deals.
+- `evaluate_full_games`: win rate over full games (first to 501 points), with duplicate deals. `--opponent` also accepts a model, and `heurbid:<model.pt>` gives a model trained without bidding the heuristic bids (e.g. `--opponent heurbid:models/ppo_CA_3M.pt` for the head-to-head against the old agent).
+- `bidding_stats`: how an agent bids: how often it takes (round 1, round 2), how often it is set ("dedans"), average margin as taker.
 - `oracle`: theoretical ceiling, a player who sees the opponent's hand against Random (`--mode round` or `--mode game`).
 - `watch_self_play_game`: detailed games, trick by trick (`--opponent self|random|heuristic|voidexploit|trumpcount`, `--duplicate` replays the deal with the hands swapped).
 

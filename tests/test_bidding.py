@@ -87,11 +87,12 @@ def check_second_round_and_redeal():
             pass
 
 
-def check_contract_and_rewards(n_episodes=3000):
+def check_contract_and_rewards(n_episodes=3000, dedans_rule=True):
     """Sur des manches aléatoires : la règle du "dedans" est appliquée
     exactement (recalcul à partir des plis), et la somme des rewards de chaque
-    joueur vaut toujours ses points finaux."""
-    env = BeloteEnv(bidding=True, win_bonus=False)
+    joueur vaut toujours ses points finaux. dedans_rule=False : la règle
+    n'est jamais appliquée (expérience de contrôle)."""
+    env = BeloteEnv(bidding=True, win_bonus=False, dedans=dedans_rule)
     dedans = played = 0
     for g in range(n_episodes):
         obs, info = env.reset(options={"starting_player": g % 2})
@@ -109,7 +110,7 @@ def check_contract_and_rewards(n_episodes=3000):
         raw[env.trick_winners[7]] += 10
         belote = {i: 20 if has_belote(env.players[i].dealt_hand, trump) else 0 for i in (0, 1)}
         expected = {i: raw[i] + belote[i] for i in (0, 1)}
-        if expected[taker] < expected[1 - taker]:
+        if dedans_rule and expected[taker] < expected[1 - taker]:
             dedans += 1
             assert info["dedans"]
             expected = {taker: belote[taker], 1 - taker: raw[0] + raw[1] + belote[1 - taker]}
@@ -118,7 +119,7 @@ def check_contract_and_rewards(n_episodes=3000):
         assert info["final_points"] == (expected[0], expected[1]), (info["final_points"], expected)
         for i in (0, 1):
             assert abs(totals[str(i)] * MAX_SCORE - expected[i]) < 1e-6
-    assert dedans > 0 and played > 0.9 * n_episodes
+    assert (dedans > 0) == dedans_rule and played > 0.9 * n_episodes
 
 
 def check_heuristics_bid_and_play(n_episodes=300):
@@ -197,6 +198,9 @@ def main():
 
     check_contract_and_rewards()
     print("Contrat « dedans » exact et rewards == points finaux sur 3000 manches : OK")
+
+    check_contract_and_rewards(dedans_rule=False)
+    print("Contrôle sans la règle du dedans : jamais appliquée : OK")
 
     check_heuristics_bid_and_play()
     print("Agents de référence : annonces puis jeu, comptage d'atouts après l'annonce : OK")

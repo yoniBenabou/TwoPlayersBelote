@@ -110,7 +110,7 @@ class BeloteEnv(gym.Env):
 
     metadata = {"render_modes": []}
 
-    def __init__(self, win_bonus: bool = True, belief: bool = False, bidding: bool = False):
+    def __init__(self, win_bonus: bool = True, belief: bool = False, bidding: bool = False, dedans: bool = True):
         """win_bonus : ajoute +1/-1 au reward final selon qui a le plus de
         points. False = reward uniquement fait des points gagnés (plis, dix
         de der, belote-rebelote), sans ce bonus qui dépend surtout de la donne.
@@ -119,11 +119,15 @@ class BeloteEnv(gym.Env):
         opponent_possible_cards) ; le début de l'observation est inchangé.
         bidding : phase d'annonce avant le jeu (cf. docstring de la classe) ;
         38 actions au lieu de 32 et BIDDING_SIZE valeurs en plus à la fin
-        de l'observation."""
+        de l'observation.
+        dedans : applique la règle du preneur "dedans" (mode annonces).
+        False ne sert qu'à l'expérience de contrôle : prendre ne coûte alors
+        jamais rien."""
         super().__init__()
         self.win_bonus = win_bonus
         self.belief = belief
         self.bidding = bidding
+        self.dedans_rule = dedans
         self.obs_size = obs_size(belief, bidding)
         self.num_actions = NUM_ACTIONS_BIDDING if bidding else NUM_CARDS
         self.action_space = spaces.Discrete(self.num_actions)
@@ -364,7 +368,7 @@ class BeloteEnv(gym.Env):
                     final_points[i] += belote[i]
                     rewards[i] += belote[i] / MAX_SCORE
 
-                if self.taker is not None and final_points[self.taker] < final_points[1 - self.taker]:
+                if self.dedans_rule and self.taker is not None and final_points[self.taker] < final_points[1 - self.taker]:
                     # Preneur "dedans" : l'adversaire marque ses points de plis et
                     # de dix de der ; chacun garde sa belote-rebelote.
                     taker, other = self.taker, 1 - self.taker

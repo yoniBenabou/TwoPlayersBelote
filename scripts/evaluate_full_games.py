@@ -12,7 +12,9 @@ import sys
 
 from belote.core.cards import shuffled_deck
 from belote.core.engine import deal_round, random_trump
-from belote.rl.agents import HeuristicAgent, RandomAgent, TrumpCountAgent, VoidExploitAgent
+from belote.rl.agents import (
+    HeuristicAgent, HeuristicBiddingWrapper, RandomAgent, TrumpCountAgent, VoidExploitAgent,
+)
 from belote.rl.env import BeloteEnv
 from belote.rl.evaluation import play_episode
 from scripts.compare_checkpoints import load_agent
@@ -22,8 +24,16 @@ AGENTS = {"random": RandomAgent, "heuristic": HeuristicAgent, "voidexploit": Voi
 
 
 def make_agent(name):
-    """Nom d'un agent de référence, ou chemin d'un modèle PPO (.pt)."""
-    return AGENTS[name]() if name in AGENTS else load_agent(name)
+    """Nom d'un agent de référence, chemin d'un modèle PPO (.pt), ou
+    "heurbid:<modèle .pt sans annonces>" : ce modèle avec les annonces heuristiques."""
+    if name in AGENTS:
+        return AGENTS[name]()
+    if name.startswith("heurbid:"):
+        agent = load_agent(name[len("heurbid:"):])
+        if agent.uses_bidding:
+            raise ValueError("heurbid: attend un modèle entraîné sans annonces")
+        return HeuristicBiddingWrapper(agent, agent.network.obs_size)
+    return load_agent(name)
 
 
 def random_deal(bidding):
@@ -58,7 +68,7 @@ def evaluate(agent, opponent, n_pairs, seed=0, bidding=False):
     pair_scores, rounds = [], 0
     for _ in range(n_pairs):
         random.seed(rng.random())
-        deals = [random_deal(env.bidding) for _ in range(40)]
+        deals = [random_deal(env.bidding) for _ in range(60)]
         pair = 0.0
         for agent_has_a in (True, False):
             mine, theirs, n = play_game(env, agent, opponent, deals, agent_has_a)
@@ -73,8 +83,9 @@ def evaluate(agent, opponent, n_pairs, seed=0, bidding=False):
 
 def main():
     parser = argparse.ArgumentParser(description="Taux de victoire en parties complètes (premier à 501 points).")
-    parser.add_argument("--agent", default="models/ppo_CA_3M.pt", help="modèle .pt ou random|heuristic|voidexploit|trumpcount")
-    parser.add_argument("--opponent", default="random", choices=sorted(AGENTS))
+    parser.add_argument("--agent", default="models/ppo_CA_3M.pt", help="modèle .pt, heurbid:<modèle .pt> ou random|heuristic|voidexploit|trumpcount")
+    parser.add_argument("--opponent", default="random",
+                        help="random|heuristic|voidexploit|trumpcount, modèle .pt ou heurbid:<modèle .pt>")
     parser.add_argument("--pairs", type=int, default=500, help="parties dupliquées (2 parties chacune)")
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--bidding", action="store_true", help="mode annonces (si aucun des joueurs n'est un modèle PPO)")
