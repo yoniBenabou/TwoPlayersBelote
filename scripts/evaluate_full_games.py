@@ -49,9 +49,11 @@ def play_game(env, agent, opponent, deals, agent_has_a):
     raise RuntimeError("partie trop longue : augmenter le nombre de donnes préparées")
 
 
-def evaluate(agent, opponent, n_pairs, seed=0):
+def evaluate(agent, opponent, n_pairs, seed=0, bidding=False):
+    """bidding ne sert que si aucun des deux joueurs n'est un modèle PPO (sinon
+    le mode est celui du modèle)."""
     ppo = agent if hasattr(agent, "env_kwargs") else opponent if hasattr(opponent, "env_kwargs") else None
-    env = BeloteEnv(**ppo.env_kwargs()) if ppo else BeloteEnv()
+    env = BeloteEnv(**ppo.env_kwargs()) if ppo else BeloteEnv(bidding=bidding)
     rng = random.Random(seed)
     pair_scores, rounds = [], 0
     for _ in range(n_pairs):
@@ -75,8 +77,9 @@ def main():
     parser.add_argument("--opponent", default="random", choices=sorted(AGENTS))
     parser.add_argument("--pairs", type=int, default=500, help="parties dupliquées (2 parties chacune)")
     parser.add_argument("--seed", type=int, default=123)
+    parser.add_argument("--bidding", action="store_true", help="mode annonces (si aucun des joueurs n'est un modèle PPO)")
     args = parser.parse_args()
-    r = evaluate(make_agent(args.agent), make_agent(args.opponent), args.pairs, args.seed)
+    r = evaluate(make_agent(args.agent), make_agent(args.opponent), args.pairs, args.seed, args.bidding)
     print(f"{args.agent} vs {args.opponent} : {100 * r['win_rate']:.1f}% (±{100 * r['win_rate_ci95']:.1f}pp) "
           f"de parties gagnées sur {r['n_games']} parties, {r['rounds_per_game']:.1f} manches par partie")
 
