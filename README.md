@@ -42,6 +42,14 @@ python -m scripts.human_results --exclude Noa Yoni
 
 gives the agent's win rate against humans with a 95% confidence interval (Wilson), per-player results and per-round statistics, counting only finished games where the agent's hand stayed hidden. Games against the network alone and against the search agent are reported separately (`--search K` keeps a single setting).
 
+**Four-player Coinche (test table)**: you play South with North as your partner, against East and West, all three played by simple rule-based bots (no trained AI yet). The "Rules" button lists the exact rules used, and "Show all hands" reveals the other hands to check them.
+
+```bash
+python -m demo4.server
+```
+
+Then open `http://localhost:8100`. Engine: [belote/coinche/engine.py](belote/coinche/engine.py) (bidding 80 to 160 or capot, coinche ×2, surcoinche ×4, follow suit, overtrump, free card when your partner is winning, 1,000-point games); tests: `python -m tests.test_coinche`.
+
 ## Main rules
 
 - Each round deals 8 cards per player (16 cards are left unused).
