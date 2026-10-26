@@ -40,6 +40,9 @@
   .slot { width: 104px; height: 146px; border: 1px dashed rgba(230,235,240,.18); border-radius: 12px; display: flex;
           align-items: center; justify-content: center; position: relative; }
   .slot .who { position: absolute; top: -20px; font-size: 11px; color: var(--muted); }
+  .slot .announce { position: absolute; top: -46px; font: bold 15px Arial, sans-serif; color: #062b1f; background: #f5c542;
+                    border-radius: 999px; padding: 3px 12px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,.4);
+                    animation: pop .35s ease; }
   .slot .conf { position: absolute; bottom: -24px; font-size: 11px; color: var(--accent); white-space: nowrap; }
   .banner { min-height: 28px; font-size: 16px; text-align: center; padding: 6px 16px; border-radius: 999px;
             background: rgba(10,14,19,.55); border: 1px solid rgba(45,226,166,.25); }
@@ -221,7 +224,7 @@ function banner(text) { $("banner").textContent = text; }
 function renderTable(table) {
   for (const seat of ["agent", "you"]) {
     const slot = $(`slot-${seat}`);
-    slot.querySelectorAll(".card, .conf").forEach((n) => n.remove());
+    slot.querySelectorAll(".card, .conf, .announce").forEach((n) => n.remove());
     const entry = table.find((t) => t.seat === seat);
     if (entry) {
       slot.append(cardEl(entry.card, { classes: ["pop"] }));
@@ -229,6 +232,11 @@ function renderTable(table) {
         const conf = document.createElement("span");
         conf.className = "conf mono"; conf.textContent = `confidence ${entry.confidence}%`;
         slot.append(conf);
+      }
+      if (entry.announce) {
+        const a = document.createElement("span");
+        a.className = "announce"; a.textContent = entry.announce;
+        slot.append(a);
       }
     }
   }
@@ -404,14 +412,18 @@ async function replay(state) {
       await sleep(ev.seat === "agent" ? 1100 : 450);
     } else if (ev.type === "play") {
       if (ev.seat === "you" && view) view.hand = view.hand.filter((c) => c.id !== ev.card.id);
-      if (ev.seat === "agent" && view) view.agentHand = view.agentHand.filter((c) => c.id !== ev.card.id);
-      table.push({ seat: ev.seat, card: ev.card, confidence: ev.confidence });
+      if (ev.seat === "agent" && view) {
+        // main cachée : les dos de cartes n'ont pas d'id, on en retire un
+        const i = view.agentHand.findIndex((c) => c.hidden || c.id === ev.card.id);
+        if (i >= 0) view.agentHand = view.agentHand.filter((_, k) => k !== i);
+      }
+      table.push({ seat: ev.seat, card: ev.card, confidence: ev.confidence, announce: ev.announce });
       if (view) render();
       renderTable(table);
       const what = ev.seat === "you" ? `You play ${ev.card.label}`
         : `Agent plays ${ev.card.label} (confidence ${ev.confidence}%)`;
-      banner(what); log(what);
-      await sleep(ev.seat === "agent" ? 900 : 450);
+      banner(ev.announce ? `${what} — ${ev.announce}` : what); log(ev.announce ? `${what} — ${ev.announce}` : what, !!ev.announce);
+      await sleep(ev.announce ? 1300 : ev.seat === "agent" ? 900 : 450);
     } else if (ev.type === "trick") {
       banner(ev.text); log(ev.text, true);
       await sleep(1300);

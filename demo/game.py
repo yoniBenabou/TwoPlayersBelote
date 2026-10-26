@@ -179,6 +179,7 @@ class GameSession:
         self.trick_no = 1
         self.bids = []
         self.plays = []
+        self.calls = {}  # carte -> "Belote!" / "Rebelote!" pour la manche en cours
         self.round_leader = self.leader
         if self.bidding:
             turned = self.env.turned_card
@@ -260,6 +261,10 @@ class GameSession:
         play = {"type": "play", "seat": seat_name(seat), "card": card_json(card, trump)}
         if confidence is not None:
             play["confidence"] = round(confidence * 100)
+        call = self._belote_call(seat, card)
+        if call:
+            play["announce"] = call
+            self.calls[CARD_INDEX[card]] = call
         events = [play]
         self.plays.append([seat_name(seat), card_json(card)["label"]])
         self.trick.append((seat, card))
@@ -281,6 +286,18 @@ class GameSession:
         if done:
             events += self._finish_round()
         return events
+
+    def _belote_call(self, seat, card):
+        """"Belote!" à la première carte posée du Roi et de la Dame d'atout, "Rebelote!" à la
+        seconde, si le joueur avait les deux dans sa main de départ (les points, +20, sont
+        comptés en fin de manche par BeloteEnv)."""
+        trump = self.env.trump_suit
+        if card.suit != trump or card.rank not in (Rank.KING, Rank.QUEEN) \
+                or not has_belote(self.env.players[seat].dealt_hand, trump):
+            return None
+        other = Rank.QUEEN if card.rank == Rank.KING else Rank.KING
+        already = any(s == seat_name(seat) and lbl == card_json(type(card)(trump, other))["label"] for s, lbl in self.plays)
+        return "Rebelote!" if already else "Belote!"
 
     def _apply_bid(self, action, seat, confidence=None):
         turned_suit = self.env.turned_card.suit
@@ -385,7 +402,9 @@ class GameSession:
             "study": self.study,
             "player": self.player,
             "revealing": self.revealing,
-            "table": [{"seat": seat_name(s), "card": card_json(c, trump)} for s, c in self.trick],
+            "table": [dict({"seat": seat_name(s), "card": card_json(c, trump)},
+                           **({"announce": self.calls[CARD_INDEX[c]]} if CARD_INDEX[c] in self.calls else {}))
+                      for s, c in self.trick],
             "lastTrick": self.last_trick,
             "yourTurn": my_turn and not bidding_now,
             "yourBid": my_turn and bidding_now,
