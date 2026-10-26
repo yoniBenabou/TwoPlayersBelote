@@ -305,7 +305,7 @@ function renderBidding(s) {
   const acts = document.createElement("div"); acts.className = "row";
   const pass = document.createElement("button"); pass.textContent = "Pass"; pass.onclick = () => bid({ kind: "pass" }); acts.append(pass);
   if (o.coinche) { const b = document.createElement("button"); b.className = "primary"; b.textContent = "Coinche! (×2)"; b.onclick = () => bid({ kind: "coinche" }); acts.append(b); }
-  if (o.surcoinche) { const b = document.createElement("button"); b.className = "primary"; b.textContent = "Surcoinche! (×4)"; b.onclick = () => bid({ kind: "surcoinche" }); acts.append(b); }
+  if (o.surcoinche) { const b = document.createElement("button"); b.className = "primary"; b.textContent = "Surcoinche! (×3)"; b.onclick = () => bid({ kind: "surcoinche" }); acts.append(b); }
   box.append(acts);
 }
 
@@ -371,11 +371,16 @@ function renderOverlay() {
   const rows = [["Tricks won", r.tricksWon[0], r.tricksWon[1]], ["Trick points" + (r.capot ? " (capot = 250)" : ""), r.points[0], r.points[1]],
                 ["Belote-rebelote", r.belote[0], r.belote[1]], ["Total for the contract", r.total[0], r.total[1]],
                 ["<b>Score this deal</b>", `<b>${r.scores[0]}</b>`, `<b>${r.scores[1]}</b>`]];
+  const notes = [];
+  if (r.mult === 1 && r.made) notes.push("The bidding team's points are rounded to the nearest 10 (up from 5).");
+  if (r.mult > 1) notes.push(`${r.mult === 2 ? "Coinched" : "Surcoinched"}: contract × ${r.mult} + 160 for the ${r.made ? "bidding team" : "defence"}.`);
+  if (r.beloteNeeded && r.mult > 1) notes.push("The belote was needed to make the contract, so it scores nothing.");
   const head = s.gameOver ? (s.totals[0] > s.totals[1] ? "You and North win the game!" : "East and West win the game")
                           : `Contract ${r.made ? "made" : "failed"}`;
   box.innerHTML = `<h3>${head}</h3><p>${r.text}</p>
     <table><tr><th></th><th>You &amp; North</th><th>East &amp; West</th></tr>
     ${rows.map((x) => `<tr><td>${x[0]}</td><td>${x[1]}</td><td>${x[2]}</td></tr>`).join("")}</table>
+    ${notes.map((n) => `<p>${n}</p>`).join("")}
     ${s.gameOver ? `<p>Final score: ${s.totals[0]} – ${s.totals[1]}</p>` : ""}
     <div class="center-btn"><button class="primary" id="ov-btn">${s.gameOver ? "New game" : "Next deal"}</button></div>`;
   $("ov-btn").onclick = s.gameOver ? newGame : nextDeal;

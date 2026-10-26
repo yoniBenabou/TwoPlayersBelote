@@ -48,7 +48,7 @@ gives the agent's win rate against humans with a 95% confidence interval (Wilson
 python -m demo4.server
 ```
 
-Then open `http://localhost:8100`. Engine: [belote/coinche/engine.py](belote/coinche/engine.py) (bidding 80 to 160 or capot, coinche ×2, surcoinche ×4, follow suit, overtrump, free card when your partner is winning, 1,000-point games); tests: `python -m tests.test_coinche`.
+Then open `http://localhost:8100`. Engine: [belote/coinche/engine.py](belote/coinche/engine.py) (bidding 80 to 160 or capot, coinche ×2, surcoinche ×3, follow suit, overtrump, free card when your partner is winning, the table's scoring with rounding and the "useful belote" rule, 1,500-point games); tests: `python -m tests.test_coinche`.
 
 ## Main rules
 

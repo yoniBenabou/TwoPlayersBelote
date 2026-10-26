@@ -119,7 +119,7 @@ class Table:
                    "text": f"{seat_label(seat)}: {bid_label(action)}"}]
         if game.phase == "play":
             c = game.contract
-            mult = {1: "", 2: ", coinched", 4: ", surcoinched"}[c["mult"]]
+            mult = {1: "", 2: ", coinched", 3: ", surcoinched"}[c["mult"]]
             events.append({"type": "message", "contract": True,
                            "text": f"Contract: {contract_label(c['value'], c['suit'])} by {seat_label(c['seat'])}{mult}. "
                                    f"{seat_label(game.current)} lead{'' if game.current == HUMAN else 's'}."})
@@ -197,6 +197,7 @@ class Table:
         if game.phase == "done":
             r = game.result
             result = {"made": r["made"], "scores": r["scores"], "points": r["points"], "belote": r["belote"],
+                      "beloteNeeded": r["belote_needed"], "mult": r["contract"]["mult"],
                       "total": r["total"], "tricksWon": r["tricks_won"],
                       "capot": TEAM_NAMES[r["capot_team"]] if r["capot_team"] is not None else None,
                       "text": self._result_text()}

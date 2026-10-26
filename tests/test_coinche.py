@@ -54,31 +54,36 @@ def check_legal_cards():
 
 
 def check_scoring():
+    """Barème de la table : cf. belote/coinche/engine.py (RULES)."""
     base = {"seat": 0, "value": 100, "suit": C, "mult": 1}
-    # réussi : chacun ses points, + contrat pour l'attaque
-    scores, made, _ = score_deal(base, [5, 3], None, [110, 52])
-    assert made and scores == [210, 52]
-    # belote de l'attaque : compte pour le contrat (90 + 20 >= 100)
-    scores, made, _ = score_deal(base, [4, 4], 0, [90, 72])
-    assert made and scores == [210, 72]
-    # chuté : défense 160 + contrat, attaque 0 (sa belote reste)
-    scores, made, _ = score_deal(base, [4, 4], 0, [70, 92])
-    assert not made and scores == [20, 260]
-    # contrat atteint mais pas plus que la défense : chuté (81 partout, contrat 80)
-    scores, made, _ = score_deal({**base, "value": 80}, [4, 4], None, [81, 81])
-    assert not made and scores == [0, 160 + 80]
-    # coinché réussi : 160 + 2 x contrat, défense 0 ; surcoinché chuté : défense 160 + 4 x contrat
-    scores, made, _ = score_deal({**base, "mult": 2}, [6, 2], None, [120, 42])
-    assert made and scores == [360, 0]
-    scores, made, _ = score_deal({**base, "mult": 4}, [3, 5], None, [60, 102])
-    assert not made and scores == [0, 560]
-    # capot : 250 au lieu de 162 ; contrat capot réussi = 250 + 250
+    case = lambda contract, tricks, belote, points: score_deal(contract, tricks, belote, points)[:2]
+    # réussi : attaque = contrat + points arrondis + belote ; défense = ses points (+ belote)
+    assert case(base, [5, 3], None, [110, 52]) == ([210, 52], True)
+    assert case({**base, "value": 80}, [5, 3], None, [87, 75]) == ([170, 75], True)   # 87 -> 90
+    assert case({**base, "value": 80}, [5, 3], None, [84, 78]) == ([160, 78], True)   # 84 -> 80
+    assert case({**base, "value": 80}, [5, 3], None, [85, 77]) == ([170, 77], True)   # 85 -> 90
+    assert case(base, [4, 4], 0, [90, 72]) == ([210, 72], True)                       # belote compte pour réussir
+    assert case(base, [5, 3], 1, [110, 52]) == ([210, 72], True)                      # belote de la défense
+    # chuté : défense = contrat + 160 + 20 par belote, attaque 0
+    assert case(base, [4, 4], 0, [70, 92]) == ([0, 280], False)
+    assert case(base, [4, 4], 1, [70, 92]) == ([0, 280], False)
+    assert case(base, [4, 4], None, [70, 92]) == ([0, 260], False)
+    assert case({**base, "value": 80}, [4, 4], None, [81, 81]) == ([0, 240], False)   # égalité : chuté
+    # coinché : contrat x 2 + 160 ; belote de l'attaque +20 seulement si elle n'a pas servi
+    coinche = {**base, "mult": 2}
+    assert case(coinche, [6, 2], 0, [120, 42]) == ([380, 0], True)
+    assert case(coinche, [4, 4], 0, [90, 72]) == ([360, 0], True)                     # belote utile : +0
+    assert case(coinche, [4, 4], 0, [70, 92]) == ([0, 380], False)                    # belote de l'attaque à la défense
+    assert case(coinche, [4, 4], None, [70, 92]) == ([0, 360], False)
+    # surcoinché : contrat x 3 + 160
+    surco = {**base, "mult": 3}
+    assert case(surco, [6, 2], None, [120, 42]) == ([460, 0], True)
+    assert case(surco, [3, 5], None, [60, 102]) == ([0, 460], False)
+    # capot : 250 au lieu de 162 ; contrat capot réussi = 250 + 250 ; chuté = 250 + 160
     scores, made, detail = score_deal(base, [8, 0], None, [162, 0])
-    assert made and scores == [350, 0] and detail["capot_team"] == 0
-    scores, made, _ = score_deal({**base, "value": CAPOT}, [8, 0], None, [162, 0])
-    assert made and scores == [500, 0]
-    scores, made, _ = score_deal({**base, "value": CAPOT}, [7, 1], None, [150, 12])
-    assert not made and scores == [0, 410]
+    assert (scores, made, detail["capot_team"]) == ([350, 0], True, 0)
+    assert case({**base, "value": CAPOT}, [8, 0], None, [162, 0]) == ([500, 0], True)
+    assert case({**base, "value": CAPOT}, [7, 1], None, [150, 12]) == ([0, 410], False)
 
 
 def check_bidding_flow():
@@ -102,7 +107,7 @@ def check_bidding_flow():
     assert team_of(nxt) == team_of(a) and ("surcoinche",) in game.legal_bids(nxt)
     assert not any(b[0] == "bid" for b in game.legal_bids(nxt)), "après une coinche : plus d'enchères"
     game.bid(nxt, ("surcoinche",))
-    assert game.phase == "play" and game.contract["mult"] == 4 and game.trump == H
+    assert game.phase == "play" and game.contract["mult"] == 3 and game.trump == H
     assert game.current == (game.dealer + 1) % 4, "le joueur après le donneur entame"
 
     game = CoincheGame(rng=random.Random(3))
@@ -159,7 +164,7 @@ def main():
     check_legal_cards()
     print("Cartes jouables (fournir, monter à l'atout, partenaire maître, couper, sous-couper) : OK")
     check_scoring()
-    print("Score (réussi, chuté, belote, coinche, surcoinche, capot) : OK")
+    print("Barème (arrondi, chute, belote utile ou non, coinche x2, surcoinche x3, capot) : OK")
     check_bidding_flow()
     print("Annonces (redistribution, enchère plus haute, coinche, surcoinche, 3 passes) : OK")
     deals, made, coinched, capots = check_bot_games()

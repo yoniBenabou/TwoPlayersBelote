@@ -10,7 +10,7 @@ Règles retenues (cf. RULES, affichées aussi dans la page web) :
 - Annonces : contrat de 80 à 160 (par 10) ou capot (250) avec une couleur
   d'atout, chaque annonce plus haute que la précédente ; un adversaire de
   l'équipe qui a le contrat peut coincher (×2), puis l'équipe du contrat peut
-  surcoincher (×4). Après une coinche, on ne peut plus que surcoincher ou
+  surcoincher (×3). Après une coinche, on ne peut plus que surcoincher ou
   passer. Fin des annonces : 3 passes après la dernière annonce (ou
   surcoinche) ; 4 passes sans annonce : on redistribue.
 - Jeu : fournir à la couleur demandée ; à l'atout, toujours monter si on peut
@@ -23,14 +23,18 @@ Règles retenues (cf. RULES, affichées aussi dans la page web) :
   main) = 20, toujours marquée par l'équipe qui l'a.
 - Contrat réussi si l'équipe qui prend fait au moins son contrat ET plus que
   la défense (belote comprise) ; capot : tous les plis.
-    réussi, non coinché : chaque équipe marque ses points, + le contrat pour
-                          l'équipe qui a pris ;
-    réussi, coinché     : l'équipe qui a pris marque 160 + contrat × 2 (×4
-                          surcoinché), la défense 0 ;
-    chuté               : la défense marque 160 + contrat (× 2 ou × 4), l'équipe
-                          qui a pris 0.
-  Chaque équipe garde sa belote-rebelote dans tous les cas.
-- Partie en 1 000 points (target).
+- Barème (donné par Noa) :
+    réussi, non coinché : attaque = contrat + ses points arrondis à la dizaine
+                          (supérieure si l'unité >= 5) + 20 si belote ;
+                          défense = ses points + 20 si belote ;
+    chuté, non coinché  : défense = contrat + 160 + 20 par belote (la sienne et
+                          celle de l'attaque) ; attaque 0 ;
+    coinché (×2) ou surcoinché (×3) : contrat × 2 (ou × 3) + 160 pour
+                          l'attaque si réussi, pour la défense si chuté ;
+                          réussi : +20 si l'attaque a la belote et qu'elle
+                          n'a pas servi à réussir, +0 si elle a servi ;
+                          chuté : +20 pour la défense par belote.
+- Partie en 1 500 points (target).
 """
 import random
 
@@ -40,7 +44,7 @@ SEAT_NAMES = ("South", "East", "North", "West")
 SUITS = list(Suit)
 CONTRACTS = list(range(80, 170, 10)) + [250]  # 250 = capot
 CAPOT = 250
-DEFAULT_TARGET = 1000
+DEFAULT_TARGET = 1500
 
 RULES = [
     "4 players, 2 teams: South-North against East-West. 32 cards, 8 each. Play goes counter-clockwise "
@@ -48,7 +52,7 @@ RULES = [
     "The player after the dealer speaks first and leads the first trick. The dealer changes every deal.",
     "Bidding: a contract from 80 to 160 (in steps of 10) or capot (250, all the tricks), with a trump suit. "
     "Each bid must be higher than the previous one.",
-    "An opponent of the bidding team can coinche (×2); the bidding team can then surcoinche (×4). After a "
+    "An opponent of the bidding team can coinche (×2); the bidding team can then surcoinche (×3). After a "
     "coinche, players can only surcoinche or pass.",
     "Bidding ends after 3 passes following the last bid (or right after a surcoinche). If all 4 players pass "
     "without bidding, the cards are redealt.",
@@ -59,14 +63,17 @@ RULES = [
     "Trump order: J, 9, A, 10, K, Q, 8, 7 (J 20, 9 14, A 11, 10 10, K 4, Q 3). Other suits: A, 10, K, Q, J, 9, 8, 7 "
     "(A 11, 10 10, K 4, Q 3, J 2).",
     "Each deal holds 162 points (152 in the cards + 10 for the last trick). A team that takes every trick (capot) "
-    "scores 250 instead of 162. King + Queen of trump in the same hand: belote-rebelote, +20 for that team, "
-    "always kept.",
+    "scores 250 instead of 162. King + Queen of trump in the same hand: belote-rebelote, worth 20.",
     "The contract is made if the bidding team scores at least its contract AND more than the defence "
     "(belote included). Capot: all 8 tricks.",
-    "Made, not coinched: each team scores its points, plus the contract for the bidding team. Made and coinched: "
-    "the bidding team scores 160 + contract × 2 (× 4 if surcoinched), the defence 0.",
-    "Failed: the defence scores 160 + contract (× 2 if coinched, × 4 if surcoinched), the bidding team 0.",
-    "The first team to reach 1,000 points wins the game.",
+    "Made: the bidding team scores contract + its points rounded to the nearest 10 (up from 5: 85 gives 90) "
+    "+ 20 for its belote; the defence scores its points + 20 for its belote.",
+    "Failed: the defence scores contract + 160 + 20 for each belote (its own and the bidding team's); "
+    "the bidding team scores 0.",
+    "Coinched (×2) or surcoinched (×3): contract × 2 (or × 3) + 160, for the bidding team if made, for the "
+    "defence if failed. If made, +20 for the bidding team's belote only if it was not needed to make the "
+    "contract. If failed, +20 for the defence for each belote.",
+    "The first team to reach 1,500 points wins the game.",
 ]
 
 
@@ -126,10 +133,16 @@ def has_belote(hand, trump):
     return Rank.KING in ranks and Rank.QUEEN in ranks
 
 
+def round_points(points):
+    """Arrondi à la dizaine, supérieure si l'unité vaut 5 ou plus (87 -> 90, 84 -> 80)."""
+    return (points + 5) // 10 * 10
+
+
 def score_deal(contract, tricks_won, belote_team, trick_points):
-    """contract : dict(seat, value, suit, mult) ; tricks_won[t] = plis de l'équipe t ;
-    belote_team : équipe qui a la belote-rebelote ou None ; trick_points[t] : points
-    des plis (cartes + 10 de der). Retourne (scores par équipe, contrat réussi ?, détail)."""
+    """Barème de la table (cf. RULES). contract : dict(seat, value, suit, mult) ;
+    tricks_won[t] = plis de l'équipe t ; belote_team : équipe qui a la
+    belote-rebelote ou None ; trick_points[t] : points des plis (cartes + 10 de
+    der). Retourne (scores par équipe, contrat réussi ?, détail)."""
     att = team_of(contract["seat"])
     dfn = 1 - att
     value, mult = contract["value"], contract["mult"]
@@ -139,21 +152,30 @@ def score_deal(contract, tricks_won, belote_team, trick_points):
         points[capot_team], points[1 - capot_team] = CAPOT, 0
     belote = [20 if belote_team == t else 0 for t in (0, 1)]
     total = [points[t] + belote[t] for t in (0, 1)]
-    if value == CAPOT:
-        made = tricks_won[att] == 8
-    else:
-        made = total[att] >= value and total[att] > total[dfn]
+
+    def reaches(att_total):
+        if value == CAPOT:
+            return tricks_won[att] == 8
+        return att_total >= value and att_total > total[dfn]
+
+    made = reaches(total[att])
+    belote_needed = made and belote[att] > 0 and not reaches(points[att])
     scores = [0, 0]
-    if made and mult == 1:
-        scores[att] = total[att] + value
-        scores[dfn] = total[dfn]
-    elif made:
-        scores[att] = 160 + value * mult + belote[att]
-        scores[dfn] = belote[dfn]
+    if mult == 1:
+        if made:
+            scores[att] = value + round_points(points[att]) + belote[att]
+            scores[dfn] = points[dfn] + belote[dfn]
+        else:
+            scores[dfn] = value + 160 + belote[att] + belote[dfn]
     else:
-        scores[dfn] = 160 + value * mult + belote[dfn]
-        scores[att] = belote[att]
-    detail = {"points": points, "belote": belote, "total": total, "capot_team": capot_team}
+        base = value * mult + 160
+        if made:
+            scores[att] = base + (0 if belote_needed else belote[att])
+            scores[dfn] = belote[dfn]
+        else:
+            scores[dfn] = base + belote[att] + belote[dfn]
+    detail = {"points": points, "belote": belote, "total": total, "capot_team": capot_team,
+              "belote_needed": belote_needed}
     return scores, made, detail
 
 
@@ -234,7 +256,7 @@ class CoincheGame:
             self.coinche_seat = seat
             self.passes = 0
         elif kind == "surcoinche":
-            self.contract["mult"] = 4
+            self.contract["mult"] = 3
             return self._start_play()
         self.current = (self.current + 1) % 4
 
