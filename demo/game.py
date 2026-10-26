@@ -9,8 +9,18 @@ défaut), chaque manche commence par les annonces : carte retournée, tour 1
 (prendre ou passer), tour 2 (nommer une autre couleur ou passer), et le
 preneur "dedans" s'il marque moins que l'adversaire. Un modèle sans annonces
 joue avec un atout tiré au hasard, comme avant.
+
+Parties contre des humains (point C) : chaque manche (donne, annonces, cartes,
+points) et chaque partie (joueur, score, gagnant, abandon) sont écrites par
+GameLog dans un fichier JSONL, une ligne par enregistrement. En mode étude
+(study=True), la main de l'agent n'est jamais envoyée au navigateur ; hors
+mode étude, une partie où le joueur l'a regardée est marquée "revealed".
 """
+import json
 import random
+import threading
+import time
+import uuid
 
 import torch
 
@@ -41,6 +51,21 @@ class IllegalMove(Exception):
     pass
 
 
+class GameLog:
+    """Ajoute des enregistrements JSON (un par ligne) à un fichier, sans jamais
+    réécrire les précédents ; partagé entre toutes les parties du serveur."""
+
+    def __init__(self, path):
+        self.path = path
+        self._lock = threading.Lock()
+
+    def write(self, record):
+        line = json.dumps(record, ensure_ascii=False)
+        with self._lock, open(self.path, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+            f.flush()
+
+
 def seat_name(seat):
     return "you" if seat == HUMAN else "agent"
 
@@ -68,16 +93,72 @@ def bid_label(action, turned_suit):
 
 
 class GameSession:
-    def __init__(self, checkpoint=DEFAULT_CHECKPOINT, target=DEFAULT_TARGET_SCORE, seed=None):
-        self.agent = load_agent(checkpoint)
+    def __init__(self, checkpoint=DEFAULT_CHECKPOINT, target=DEFAULT_TARGET_SCORE, seed=None,
+                 agent=None, log=None, study=False, player=None):
+        """agent : agent déjà chargé (partagé entre les parties du serveur),
+        sinon chargé depuis checkpoint. log : GameLog, ou None pour ne rien
+        enregistrer. study : la main de l'agent reste cachée."""
+        self.checkpoint = checkpoint
+        self.agent = agent or load_agent(checkpoint)
         self.env = BeloteEnv(**self.agent.env_kwargs())
         self.bidding = self.env.bidding
         self.rng = random.Random(seed)
         self.target = target
+        self.log = log
+        self.study = study
+        self.player = player
+        self.game_id = None
         self.new_game()
+
+    # ---------- enregistrement ----------
+    def set_player(self, name):
+        name = (name or "").strip()[:40]
+        if not name:
+            raise IllegalMove("Please enter your name.")
+        self.player = name
+        return self.state([])
+
+    def reveal(self, on):
+        if self.study:
+            raise IllegalMove("The agent's hand stays hidden in this study.")
+        self.revealing = bool(on)
+        self.revealed = self.revealed or self.revealing
+        return self.state([])
+
+    def _record(self, record):
+        if self.log is not None:
+            self.log.write(dict(record, game_id=self.game_id, player=self.player, time=time.time()))
+
+    def _record_game(self, status):
+        """status : "finished" ou "abandoned" (nouvelle partie lancée avant la fin)."""
+        human, agent = self.totals[HUMAN], self.totals[AGENT]
+        self._record({"type": "game", "status": status, "you": human, "agent": agent,
+                      "winner": None if status != "finished" or human == agent else ("you" if human > agent else "agent"),
+                      "rounds": len(self.history), "target": self.target, "checkpoint": self.checkpoint,
+                      "bidding": self.bidding, "study": self.study, "revealed": self.revealed,
+                      "started": self.started_at, "human_actions": self.human_actions})
+
+    def _record_round(self, redeal=False):
+        env = self.env
+        hand_labels = lambda cards: [card_json(c)["label"] for c in cards]
+        self._record({
+            "type": "round", "round": self.round_no, "redeal": redeal, "first_speaker": seat_name(self.round_leader),
+            "deal": {"you": hand_labels(env.deal[HUMAN]), "agent": hand_labels(env.deal[AGENT]),
+                     "turned": card_json(env.turned_card)["label"] if env.turned_card is not None else None},
+            "bids": self.bids, "plays": self.plays,
+            "trump": SUIT_INFO[env.trump_suit][1] if env.trump_suit is not None else None,
+            "taker": seat_name(env.taker) if env.taker is not None else None,
+            "dedans": env.dedans, "points": None if redeal else {"you": env.final_points[HUMAN], "agent": env.final_points[AGENT]},
+            "revealed": self.revealed})
 
     # ---------- déroulement ----------
     def new_game(self):
+        if self.game_id is not None and not self.game_over and self.human_actions > 0:
+            self._record_game("abandoned")
+        self.game_id = uuid.uuid4().hex[:12]
+        self.started_at = time.time()
+        self.human_actions = 0
+        self.revealed = self.revealing = False
         self.totals = {HUMAN: 0, AGENT: 0}
         self.round_no = 0
         self.history = []
@@ -97,6 +178,8 @@ class GameSession:
         self.trick, self.last_trick, self.round_result = [], None, None
         self.trick_no = 1
         self.bids = []
+        self.plays = []
+        self.round_leader = self.leader
         if self.bidding:
             turned = self.env.turned_card
             who = "You speak first" if self.leader == HUMAN else "The agent speaks first"
@@ -105,7 +188,7 @@ class GameSession:
                            "text": f"Round {self.round_no} — turned card: {card_json(turned)['label']}. {who}.",
                            "turnedCard": card_json(turned), "firstSpeaker": seat_name(self.leader),
                            "hand": [card_json(c) for c in sort_hand(self.env.players[HUMAN].hand, turned.suit)],
-                           "agentHand": [card_json(c) for c in sort_hand(self.env.players[AGENT].hand, turned.suit)]})
+                           "agentHand": self._agent_hand_json(None, turned.suit)})
         else:
             trump_symbol, trump_name, _ = SUIT_INFO[self.env.trump_suit]
             who = "You lead" if self.leader == HUMAN else "The agent leads"
@@ -116,6 +199,7 @@ class GameSession:
         """Fait jouer l'agent jusqu'au tour de l'humain ou la fin de la manche."""
         events += self._agent_turns()
         if self.info.get("redeal"):
+            self._record_round(redeal=True)
             events.append({"type": "message", "text": "Both players passed twice: the cards are redealt."})
             return self._deal(events)
         return self.state(events)
@@ -126,6 +210,7 @@ class GameSession:
         card = INDEX_CARD.get(int(card_id))
         if card is None or card not in self._legal_cards():
             raise IllegalMove("This card is not allowed: follow suit, trump if you can't, over-trump when trump is led.")
+        self.human_actions += 1
         return self._continue(self._apply(CARD_INDEX[card], HUMAN))
 
     def bid_human(self, bid):
@@ -142,6 +227,7 @@ class GameSession:
             raise IllegalMove(f"Unknown bid: {bid!r}.")
         if not self.info["legal_actions"][action]:
             raise IllegalMove("This bid is not allowed now (round 2: name one of the 3 other suits, or pass).")
+        self.human_actions += 1
         return self._continue(self._apply(action, HUMAN))
 
     def next_round(self):
@@ -175,6 +261,7 @@ class GameSession:
         if confidence is not None:
             play["confidence"] = round(confidence * 100)
         events = [play]
+        self.plays.append([seat_name(seat), card_json(card)["label"]])
         self.trick.append((seat, card))
         self.obs, _rewards, done, self.info = self.env.step(action)
 
@@ -198,7 +285,8 @@ class GameSession:
     def _apply_bid(self, action, seat, confidence=None):
         turned_suit = self.env.turned_card.suit
         label = bid_label(action, turned_suit)
-        self.bids.append({"seat": seat_name(seat), "round": 1 if self.env.phase == "bid1" else 2, "label": label})
+        self.bids.append({"seat": seat_name(seat), "round": 1 if self.env.phase == "bid1" else 2, "label": label,
+                          "suit": None if action == PASS else SUIT_INFO[turned_suit if action == TAKE else SUIT_OF_ACTION[action]][1]})
         who = "You" if seat == HUMAN else "The agent"
         if action == PASS:
             text = f"{who} {'pass' if seat == HUMAN else 'passes'}"
@@ -241,6 +329,7 @@ class GameSession:
         if belote:
             text += " " + " and ".join("You" if w == "you" else "The agent" for w in belote) + " scored belote-rebelote (+20)."
         events = [{"type": "round", "text": text}]
+        self._record_round()
         if max(self.totals.values()) >= self.target:
             self.game_over = True
             if self.totals[HUMAN] == self.totals[AGENT]:
@@ -248,6 +337,7 @@ class GameSession:
             else:
                 final = "You win the game!" if self.totals[HUMAN] > self.totals[AGENT] else "The agent wins the game."
             events.append({"type": "game", "text": f"{final} Final score: you {self.totals[HUMAN]} — agent {self.totals[AGENT]}."})
+            self._record_game("finished")
         return events
 
     def _bid_options(self):
@@ -264,6 +354,13 @@ class GameSession:
                 options.append(dict(suit_json(suit), bid=SUIT_INFO[suit][1], label=SUIT_INFO[suit][0]))
         options.append({"bid": "pass", "label": "Pass"})
         return options
+
+    def _agent_hand_json(self, trump, sort_suit):
+        """Main de l'agent si le joueur a demandé à la voir, sinon des dos de cartes (rien d'autre n'est envoyé)."""
+        hand = sort_hand(self.env.players[AGENT].hand, sort_suit)
+        if self.revealing:
+            return [card_json(c, trump) for c in hand]
+        return [{"hidden": True} for _ in hand]
 
     def state(self, events):
         env, trump = self.env, self.env.trump_suit
@@ -284,7 +381,10 @@ class GameSession:
             "firstSpeaker": seat_name(self.leader) if self.round_result is None else None,
             "trump": suit_json(trump) if trump is not None else None,
             "hand": hand,
-            "agentHand": [card_json(c, trump) for c in sort_hand(env.players[AGENT].hand, sort_suit)],
+            "agentHand": self._agent_hand_json(trump, sort_suit),
+            "study": self.study,
+            "player": self.player,
+            "revealing": self.revealing,
             "table": [{"seat": seat_name(s), "card": card_json(c, trump)} for s, c in self.trick],
             "lastTrick": self.last_trick,
             "yourTurn": my_turn and not bidding_now,

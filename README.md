@@ -34,6 +34,14 @@ Then open the address shown (`http://localhost:8000`, or the next free port if 8
 
 By default the demo uses the agent trained with trump bidding ([models/ppo_bidding_2M.pt](models/ppo_bidding_2M.pt)): each round starts with the turned card in the middle of the table and the buttons "Take ♠ / Pass" (round 1) or "♥ ♦ ♣ / Pass" (round 2); the taker is shown next to their hand, in the header and in the Contract panel, and the Rounds table records who took and who was set ("dedans"). `--checkpoint models/ppo_CA_3M.pt` brings back the version without bidding (random trump).
 
+**Games against humans (study).** Each browser gets its own game, so several people can play at the same time; the page asks for the player's name first. Every round (deal, bids, cards, points) and every game (player, score, winner, finished or abandoned) is appended to `demo/logs/games.jsonl` (`--log` to change it; not committed, since it holds players' names). For volunteers, start the server with `--study`: the agent's hand is never sent to the browser and the "Show agent's hand" button disappears (outside study mode, a game where the hand was shown is marked and left out of the results). Then:
+
+```bash
+python -m scripts.human_results --exclude Noa Yoni
+```
+
+gives the agent's win rate against humans with a 95% confidence interval (Wilson), per-player results and per-round statistics, counting only finished games where the agent's hand stayed hidden.
+
 ## Main rules
 
 - Each round deals 8 cards per player (16 cards are left unused).

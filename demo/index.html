@@ -113,6 +113,10 @@
   .contract { display: flex; gap: 12px; align-items: center; }
   .contract .info { font-size: 13px; color: var(--muted); line-height: 1.5; }
   .contract .info b { color: var(--text); }
+  .name-box input { font-size: 16px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line);
+                    background: var(--bg); color: var(--text); width: 240px; margin: 4px 0 14px; }
+  .name-box .note { font-size: 12px; color: var(--muted); max-width: 320px; margin: 0 auto 16px; line-height: 1.4; }
+  #player-badge { cursor: pointer; }
   .rule { font-size: 12px; color: var(--muted); margin: 10px 0 0; line-height: 1.4; }
 </style>
 </head>
@@ -126,6 +130,7 @@
   <div class="badge">Round <b id="round">–</b></div>
   <div class="badge">Trump <b id="trump">–</b> <span id="trump-name" class="mono" style="font-size:12px;color:var(--muted)"></span></div>
   <div class="badge" id="taker-badge" style="display:none">Taker <b id="taker">–</b></div>
+  <div class="badge" id="player-badge" title="Change name">Player <b id="player">–</b></div>
   <button id="reveal">Show agent's hand</button>
   <button id="new-game">New game</button>
 </header>
@@ -190,7 +195,7 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-let view = null, busy = false, reveal = false;
+let view = null, busy = false;
 
 function cardEl(c, { small = false, classes = [] } = {}) {
   const el = document.createElement("div");
@@ -302,7 +307,10 @@ function render() {
     yours.append(el);
   }
   const agent = $("agent-hand"); agent.innerHTML = "";
-  for (const c of s.agentHand) agent.append(reveal ? cardEl(c, { small: true }) : backEl());
+  for (const c of s.agentHand) agent.append(c.hidden ? backEl() : cardEl(c, { small: true }));
+  $("reveal").style.display = s.study ? "none" : "";
+  $("reveal").textContent = s.revealing ? "Hide agent's hand" : "Show agent's hand";
+  $("player").textContent = s.player || "–";
 
   $("turn").textContent = s.roundResult || busy ? "" : s.yourTurn ? "YOUR TURN — CLICK A HIGHLIGHTED CARD"
     : s.yourBid ? "YOUR BID — USE THE BUTTONS" : "";
@@ -328,8 +336,28 @@ function render() {
   renderOverlay();
 }
 
+function askName() {
+  const ov = $("overlay"), box = $("overlay-box");
+  box.innerHTML = `<div class="name-box"><h3>Welcome!</h3><p>Your name (or a nickname):</p>
+    <input id="name-input" maxlength="40" autocomplete="nickname" value="${(view && view.player) || ""}">
+    <p class="note">For our Technion project, each game against the AI is recorded: your name, the cards
+      and bids played, and the score.</p>
+    <button class="primary" id="name-btn">Start playing</button></div>`;
+  ov.classList.add("show");
+  const go = async () => {
+    const name = $("name-input").value.trim();
+    if (!name) { $("name-input").focus(); return; }
+    try { view = await api("/api/name", { name }); } catch { return; }
+    ov.classList.remove("show"); render(); renderTable(view.table);
+  };
+  $("name-btn").onclick = go;
+  $("name-input").onkeydown = (e) => { if (e.key === "Enter") go(); };
+  $("name-input").focus();
+}
+
 function renderOverlay() {
   const s = view, ov = $("overlay"), box = $("overlay-box");
+  if (!s.player) { askName(); return; }
   if (!s.roundResult || busy) { ov.classList.remove("show"); return; }
   const r = s.roundResult;
   const bel = r.belote.length ? `<p>Belote-rebelote (+20): ${r.belote.map((w) => (w === "you" ? "you" : "agent")).join(" and ")}</p>` : "";
@@ -421,7 +449,12 @@ async function newGame() {
 }
 
 $("new-game").onclick = newGame;
-$("reveal").onclick = () => { reveal = !reveal; $("reveal").textContent = reveal ? "Hide agent's hand" : "Show agent's hand"; if (view) render(); };
+$("reveal").onclick = async () => {
+  if (busy || !view) return;
+  const s = await api("/api/reveal", { on: !view.revealing });
+  view.agentHand = s.agentHand; view.revealing = s.revealing; render();
+};
+$("player-badge").onclick = () => { if (!busy) askName(); };
 
 (async () => {
   const s = await api("/api/state");
