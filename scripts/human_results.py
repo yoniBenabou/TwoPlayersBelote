@@ -2,7 +2,8 @@
 écrit par la démo web (demo/logs/games.jsonl par défaut).
 
 Ne compte que les parties terminées où le joueur n'a pas regardé la main de
-l'agent. Taux de victoire de l'agent avec intervalle de Wilson à 95 %
+l'agent ; les parties abandonnées ("New game" en cours de partie) et
+interrompues (serveur arrêté ou page fermée) sont seulement signalées. Taux de victoire de l'agent avec intervalle de Wilson à 95 %
 (adapté aux petits échantillons), détail par joueur, et statistiques par
 manche (écart de points, prises et dedans de chaque côté).
 
@@ -47,6 +48,11 @@ def main():
     print(f"Parties enregistrées : {len(games)} (terminées : {sum(g['status'] == 'finished' for g in games)}, "
           f"abandonnées : {sum(g['status'] == 'abandoned' for g in games)}, "
           f"main de l'agent regardée : {sum(g['revealed'] for g in games)})")
+    # Manches d'une partie jamais close : serveur arrêté ou onglet fermé en cours de partie.
+    closed = {g["game_id"] for g in records if g["type"] == "game"}
+    interrupted = {r["game_id"] for r in records if r["type"] == "round" and r["game_id"] not in closed and keep(r)}
+    if interrupted:
+        print(f"Parties interrompues (serveur arrêté ou page fermée en cours de partie, non comptées) : {len(interrupted)}")
     n = len(finished)
     if n == 0:
         print("Aucune partie terminée sans regarder la main de l'agent.")
