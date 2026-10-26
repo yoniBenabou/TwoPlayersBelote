@@ -1,5 +1,6 @@
 import argparse
 import copy
+import glob
 import json
 import os
 import random
@@ -36,7 +37,8 @@ RESUME_FILE = os.path.join(CHECKPOINT_DIR, "resume_state.pt")
 NAN_DUMP_FILE = "nan_dump.pt"
 # Paramètres de train() enregistrés dans config.json (et relus par --resume).
 CONFIG_KEYS = ("total_games", "rollout_episodes", "eval_every_n_games", "lr", "entropy_coef", "win_bonus",
-               "vs_heuristics", "seed", "belief", "bidding", "init_from", "dedans")
+               "vs_heuristics", "seed", "belief", "bidding", "init_from", "dedans",
+               "league", "league_init", "self_play_share", "league_max")
 
 
 class NonFiniteTrainingError(RuntimeError):
@@ -83,6 +85,18 @@ def load_resume_state(network, optimizer):
     return state["games_trained"], state["next_eval_at"]
 
 
+def frozen_agent(source):
+    """Version figée pour la ligue : copie d'un réseau, ou modèle .pt ; joue en tirant ses coups."""
+    if isinstance(source, str):
+        network = ActorCriticNetwork.from_checkpoint(source)
+    else:
+        network = copy.deepcopy(source)
+    network.eval()
+    for parameter in network.parameters():
+        parameter.requires_grad_(False)
+    return PPOAgent(network, deterministic=False)
+
+
 def all_finite(network, metrics):
     return all(torch.isfinite(p).all() for p in network.parameters()) and all(np.isfinite(v) for v in metrics.values())
 
@@ -101,6 +115,10 @@ def train(
     init_from: str | None = None,
     resume: bool = False,
     dedans: bool = True,
+    league: bool = False,
+    league_init: list | None = None,
+    self_play_share: float = 0.5,
+    league_max: int = 20,
 ):
     """vs_heuristics : au lieu du self-play, chaque manche d'entraînement
     oppose l'agent à un adversaire tiré au hasard parmi les heuristiques
@@ -114,6 +132,12 @@ def train(
     ActorCriticNetwork.init_from), par exemple l'agent sans annonces.
     dedans=False : expérience de contrôle, entraînement sans la règle du
     preneur "dedans" (l'évaluation, elle, applique toujours les vraies règles).
+    league : self-play contre un mélange d'anciennes versions (étape 3 du
+    curriculum). Une part self_play_share des manches reste en self-play pur ;
+    les autres opposent l'agent à une version figée tirée au hasard dans la
+    ligue : les modèles league_init, puis chaque checkpoint sauvegardé (les
+    league_max plus récents). Les versions de la ligue jouent en tirant leurs
+    coups selon leurs probabilités, comme en self-play.
     resume : reprend là où RESUME_FILE s'est arrêté (poids, optimiseur,
     compteurs, générateurs aléatoires) ; config.json n'est pas réécrit."""
     if seed is not None:
@@ -127,7 +151,8 @@ def train(
         "total_games": total_games, "rollout_episodes": rollout_episodes,
         "eval_every_n_games": eval_every_n_games, "lr": lr, "entropy_coef": entropy_coef,
         "win_bonus": win_bonus, "vs_heuristics": vs_heuristics, "seed": seed, "belief": belief, "bidding": bidding, "init_from": init_from,
-        "dedans": dedans,
+        "dedans": dedans, "league": league, "league_init": league_init,
+        "self_play_share": self_play_share, "league_max": league_max,
     }
     if not resume:
         with open("config.json", "w") as f:
@@ -135,6 +160,8 @@ def train(
 
     env = BeloteEnv(win_bonus=win_bonus, belief=belief, bidding=bidding, dedans=dedans)
     opponents = [HeuristicAgent(), VoidExploitAgent(), TrumpCountAgent()] if vs_heuristics else None
+    league_fixed = [frozen_agent(path) for path in (league_init or [])] if league else []
+    league_recent = []
     network = ActorCriticNetwork(obs_size=env.obs_size, num_actions=env.num_actions)
     if init_from and not resume:
         network.init_from(init_from)
@@ -153,18 +180,29 @@ def train(
     print(f"Config : {config}")
 
     while True:
+        if league and not league_recent:
+            # au départ ou à la reprise : les checkpoints déjà sauvegardés de ce run
+            league_recent = [frozen_agent(path) for path in sorted(glob.glob(os.path.join(CHECKPOINT_DIR, "ppo_*.pt")))]
+            league_recent = league_recent[-league_max:]
         if games_trained >= next_eval_at:
             print(f"\n--- Évaluation à {games_trained} parties d'entraînement ---")
             results = run_evaluation_suite(eval_agent)
             log_eval_results(writer, results, games_trained)
             save_checkpoint(network, games_trained)
+            if league:
+                league_recent = (league_recent + [frozen_agent(network)])[-league_max:]
+                print(f"Ligue : {len(league_fixed)} modèles de départ + {len(league_recent)} versions de ce run")
             next_eval_at += eval_every_n_games
             save_resume_state(network, optimizer, games_trained, next_eval_at)
 
         if games_trained >= total_games:
             break
 
-        buffer = collect_rollout(env, agent, n_episodes=rollout_episodes, opponents=opponents)
+        if league:
+            buffer = collect_rollout(env, agent, n_episodes=rollout_episodes,
+                                     opponents=league_fixed + league_recent, self_play_share=self_play_share)
+        else:
+            buffer = collect_rollout(env, agent, n_episodes=rollout_episodes, opponents=opponents)
         before = {"network": copy.deepcopy(network.state_dict()), "optimizer": copy.deepcopy(optimizer.state_dict())}
         metrics = ppo_update(agent, optimizer, buffer, entropy_coef=entropy_coef)
         if not all_finite(network, metrics):
@@ -198,6 +236,14 @@ if __name__ == "__main__":
     parser.add_argument("--bidding", action="store_true", help="phase d'annonce de l'atout avant le jeu")
     parser.add_argument("--no-dedans", dest="dedans", action="store_false",
                         help="contrôle : entraîner sans la règle du preneur dedans (évaluation avec)")
+    parser.add_argument("--league", action="store_true",
+                        help="self-play contre un mélange d'anciennes versions (ligue)")
+    parser.add_argument("--league-init", nargs="*", default=[],
+                        help="modèles .pt placés dans la ligue dès le départ")
+    parser.add_argument("--self-play-share", type=float, default=0.5,
+                        help="avec --league : part des manches en self-play pur (0.5 par défaut)")
+    parser.add_argument("--league-max", type=int, default=20,
+                        help="avec --league : nombre de versions récentes de ce run gardées dans la ligue")
     parser.add_argument("--init-from", help="modèle .pt de départ (démarrage à chaud)")
     parser.add_argument("--out-dir", default=".", help="dossier où écrire checkpoints/, runs/ et config.json")
     parser.add_argument("--resume", action="store_true",
@@ -230,4 +276,8 @@ if __name__ == "__main__":
         bidding=args.bidding,
         init_from=init_from,
         dedans=args.dedans,
+        league=args.league,
+        league_init=[os.path.abspath(p) for p in args.league_init],
+        self_play_share=args.self_play_share,
+        league_max=args.league_max,
     )

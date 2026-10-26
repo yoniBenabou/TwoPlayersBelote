@@ -85,6 +85,12 @@ Options: `--total-games`, `--eval-every`, `--lr`, `--entropy-coef`, `--win-bonus
 python -m scripts.train --bidding --init-from models/ppo_CA_3M.pt --out-dir experiments/bidding --seed 1
 ```
 
+**League of past versions (`--league`)**: instead of pure self-play, half of the rounds (`--self-play-share`) are played against a frozen past version drawn at random from a league: the models given with `--league-init`, then every checkpoint of the run (the 20 most recent, `--league-max`). Past versions sample their moves, as in self-play. It works with `--resume`: the league is rebuilt from the run's checkpoints.
+
+```bash
+python -m scripts.train --bidding --league --init-from models/ppo_bidding_2M.pt --league-init <earlier checkpoints .pt> --out-dir experiments/league --seed 4
+```
+
 **Long training runs: resuming, safeguard and monitoring**
 
 - At each evaluation, `checkpoints/resume_state.pt` saves the full state (weights, Adam optimizer, counters, random generators). An interrupted run resumes exactly where it left off with `python -m scripts.train --resume --out-dir experiments/my_run` (the configuration is read back from `config.json`).

@@ -98,6 +98,7 @@ def collect_rollout(
     agent: PPOAgent,
     n_episodes: int = DEFAULT_ROLLOUT_EPISODES,
     opponents=None,
+    self_play_share: float = 0.0,
 ) -> list[Transition]:
     """Enchaîne n_episodes manches en self-play, en alternant qui mène le
     premier pli d'une manche à l'autre (même principe que benchmark.run_match
@@ -110,10 +111,13 @@ def collect_rollout(
 
     opponents (liste d'agents de agents.py) : au lieu du self-play, chaque
     manche oppose l'agent à un adversaire tiré au hasard dans la liste ;
-    l'agent alterne aussi de siège (meneur ou non au premier pli)."""
+    l'agent alterne aussi de siège (meneur ou non au premier pli).
+    self_play_share : avec des opponents, part des manches jouées malgré tout
+    en self-play (ligue d'anciennes versions : moitié self-play, moitié contre
+    une ancienne version tirée au hasard)."""
     buffer: list[Transition] = []
     for i in range(n_episodes):
-        if opponents:
+        if opponents and (self_play_share == 0 or random.random() >= self_play_share):
             episode = collect_episode(
                 env, agent, starting_player=i % 2,
                 opponent=random.choice(opponents), learner_seat=(i // 2) % 2,
