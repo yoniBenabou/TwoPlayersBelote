@@ -1,3 +1,4 @@
+import copy
 import random
 
 import numpy as np
@@ -191,6 +192,26 @@ class BeloteEnv(gym.Env):
 
         observation = self._observe(self.current_idx)
         return observation, self._info()
+
+    def clone(self):
+        """Copie indépendante de l'état de la manche, pour simuler la suite
+        (recherche PIMC) sans toucher à la vraie partie. La donne d'origine
+        (self.deal) n'est pas copiée : une simulation ne doit voir que les
+        mains qu'on lui donne."""
+        other = copy.copy(self)
+        other.players = []
+        for player in self.players:
+            twin = copy.copy(player)
+            twin.hand, twin.dealt_hand, twin.pile = list(player.hand), list(player.dealt_hand), list(player.pile)
+            other.players.append(twin)
+        other.deal = None
+        other.passes = set(self.passes)
+        other.played_public = list(self.played_public)
+        other.trick_winners = list(self.trick_winners)
+        other._trick_cards = list(self._trick_cards)
+        other._trick_leader_card = list(self._trick_leader_card)
+        other._trick_follower_card = list(self._trick_follower_card)
+        return other
 
     def _info(self, redeal=False):
         if self.done:

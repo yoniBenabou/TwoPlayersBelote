@@ -10,6 +10,9 @@ def play_episode(env, agent_seat0, agent_seat1, deal=None):
     points réels (cartes + dix de der + belote-rebelote) de chaque siège."""
     obs, info = env.reset(options={"starting_player": 0, "deal": deal})
     agents = {0: agent_seat0, 1: agent_seat1}
+    for agent in agents.values():
+        if hasattr(agent, "attach_env"):  # recherche PIMC : lit l'état public de la partie
+            agent.attach_env(env)
 
     while True:
         player_idx = env.current_idx

@@ -16,6 +16,7 @@ from belote.rl.agents import (
     HeuristicAgent, HeuristicBiddingWrapper, RandomAgent, TrumpCountAgent, VoidExploitAgent,
 )
 from belote.rl.env import BeloteEnv
+from belote.rl.pimc import PIMCAgent
 from belote.rl.evaluation import play_episode
 from scripts.compare_checkpoints import load_agent
 from scripts.oracle import TARGET, outcome
@@ -25,9 +26,13 @@ AGENTS = {"random": RandomAgent, "heuristic": HeuristicAgent, "voidexploit": Voi
 
 def make_agent(name):
     """Nom d'un agent de référence, chemin d'un modèle PPO (.pt), ou
-    "heurbid:<modèle .pt sans annonces>" : ce modèle avec les annonces heuristiques."""
+    "heurbid:<modèle .pt sans annonces>" : ce modèle avec les annonces heuristiques,
+    ou "pimc:<modèle .pt>[:K]" : ce modèle + recherche PIMC sur K mains imaginées."""
     if name in AGENTS:
         return AGENTS[name]()
+    if name.startswith("pimc:"):  # pimc:<modèle .pt>[:nombre de mains imaginées]
+        parts = name.split(":")
+        return PIMCAgent(load_agent(parts[1]), n_samples=int(parts[2]) if len(parts) > 2 else 20)
     if name.startswith("heurbid:"):
         agent = load_agent(name[len("heurbid:"):])
         if agent.uses_bidding:

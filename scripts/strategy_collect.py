@@ -25,6 +25,7 @@ import numpy as np
 from belote.core.cards import build_deck
 from belote.rl.agents import HeuristicAgent, HeuristicBiddingWrapper, TrumpCountAgent
 from belote.rl.env import INDEX_CARD, SUITS, BeloteEnv
+from belote.rl.pimc import PIMCAgent
 from scripts.compare_checkpoints import load_agent
 
 NEW_MODEL = "models/ppo_bidding_2M.pt"
@@ -41,6 +42,8 @@ def make_subject(name):
         if name == "old_native":
             return agent, False
         return HeuristicBiddingWrapper(agent, agent.network.obs_size), True
+    if name.startswith("pimc"):  # pimc ou pimc<K> : agent avec annonces + recherche PIMC
+        return PIMCAgent(load_agent(NEW_MODEL), n_samples=int(name[4:] or 20)), True
     if name == "trumpcount":
         return TrumpCountAgent(), True
     if name == "heuristic":
@@ -72,6 +75,8 @@ def collect(subject_name, n_rounds, seed=2026, shadow_name=None):
         obs, info = env.reset(options={"starting_player": first,
                                        "deal": (h0, h1, turned if bidding else random_trump)})
         agents = {me: subject, 1 - me: opponent}
+        if hasattr(subject, "attach_env"):
+            subject.attach_env(env)
         log = {"k": k, "me": me, "first": first, "hands": (list(h0), list(h1)),
                "turned": turned if bidding else None, "bids": [], "plays": []}
         my_plays, my_bids = [], []
@@ -124,7 +129,7 @@ def collect(subject_name, n_rounds, seed=2026, shadow_name=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Collecte des décisions d'un agent (étude de stratégie).")
-    parser.add_argument("--subject", required=True, choices=["new", "old", "old_native", "trumpcount", "heuristic"])
+    parser.add_argument("--subject", required=True, help="new, old, old_native, trumpcount, heuristic ou pimc<K> (ex. pimc20)")
     parser.add_argument("--rounds", type=int, default=20000)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--out-dir", default=DEFAULT_OUT)

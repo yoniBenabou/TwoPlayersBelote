@@ -111,6 +111,7 @@ python -m scripts.watch_self_play_game --checkpoint experiments/my_run/checkpoin
 - Strategy study (how the agents play and bid, on the same 20,000 deals against TrumpCount):
   `strategy_collect --subject new|old|old_native|trumpcount|heuristic` records every decision (`--shadow old` also asks the agent without bidding what it would have played in the exact same position); `strategy_analysis` prints the tables (leads, trump management, ruffs, discards, last trick, risky 10s, bidding, taker vs defender) and writes `figures/strategy_*_en.png`; `strategy_counterfactual` replays deals with a different card at one decision to measure what a choice is worth in points; `commented_games` writes [report/commented_games.md](report/commented_games.md).
 - `plot_bidding_ablations`: [figures/bidding_ablations_en.png](figures/bidding_ablations_en.png), learning curves of the bidding runs (warm start, from scratch, without the "dedans" rule) and how often each agent takes depending on its hand.
+- Search at play time (PIMC, [belote/rl/pimc.py](belote/rl/pimc.py)): before each card, the agent imagines K possible hands for the opponent, consistent with everything public (cards played, turned card, suits the opponent has shown to be void in), finishes the round with the network on both sides for each playable card, and plays the card that scores most on average. Bids stay with the network. Use it anywhere an agent is expected, as `pimc:<model.pt>:K` (e.g. `--agent pimc:models/ppo_bidding_2M.pt:20`); `python -m tests.test_pimc` checks among other things that it never looks at the opponent's real hand. Over 1,000 501-point games (same deals), the network alone wins 81.9% against TrumpCount, 87.1% with K=20 and 87.8% with K=50; head to head against the network alone, search wins 58.8% (K=20) and 63.2% (K=50) of games, for about 0.2 s (K=20) to 0.5 s (K=50) of thinking per round.
 - `bidding_stats`: how an agent bids: how often it takes (round 1, round 2), how often it is set ("dedans"), average margin as taker.
 - `oracle`: theoretical ceiling, a player who sees the opponent's hand against Random (`--mode round` or `--mode game`).
 - `watch_self_play_game`: detailed games, trick by trick (`--opponent self|random|heuristic|voidexploit|trumpcount`, `--duplicate` replays the deal with the hands swapped).
@@ -123,4 +124,4 @@ All evaluations use **duplicate deals**: each deal is played twice with the hand
 python -m tests.test_env
 ```
 
-(likewise for `test_network`, `test_ppo_agent`, `test_self_play`, `test_gae`, `test_ppo_loss`, `test_ppo_update`, `test_bidding`, `test_train_safety`)
+(likewise for `test_network`, `test_ppo_agent`, `test_self_play`, `test_gae`, `test_ppo_loss`, `test_ppo_update`, `test_bidding`, `test_train_safety`, `test_pimc`)
