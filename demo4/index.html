@@ -372,7 +372,7 @@ function renderOverlay() {
                 ["Belote-rebelote", r.belote[0], r.belote[1]], ["Total for the contract", r.total[0], r.total[1]],
                 ["<b>Score this deal</b>", `<b>${r.scores[0]}</b>`, `<b>${r.scores[1]}</b>`]];
   const notes = [];
-  if (r.mult === 1 && r.made) notes.push("The bidding team's points are rounded to the nearest 10 (up from 5).");
+  if (r.mult === 1 && r.made) notes.push("Both teams' points are rounded to the nearest 10 (up from 5).");
   if (r.mult > 1) notes.push(`${r.mult === 2 ? "Coinched" : "Surcoinched"}: contract × ${r.mult} + 160 for the ${r.made ? "bidding team" : "defence"}.`);
   if (r.beloteNeeded && r.mult > 1) notes.push("The belote was needed to make the contract, so it scores nothing.");
   const head = s.gameOver ? (s.totals[0] > s.totals[1] ? "You and North win the game!" : "East and West win the game")

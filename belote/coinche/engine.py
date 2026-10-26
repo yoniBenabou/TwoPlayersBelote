@@ -21,19 +21,20 @@ Règles retenues (cf. RULES, affichées aussi dans la page web) :
 - Points : 152 dans les cartes + 10 de der = 162 ; capot (tous les plis) =
   250 au lieu de 162 ; belote-rebelote (Roi + Dame d'atout dans la même
   main) = 20, toujours marquée par l'équipe qui l'a.
-- Contrat réussi si l'équipe qui prend fait au moins son contrat ET plus que
-  la défense (belote comprise) ; capot : tous les plis.
+- Contrat réussi si l'équipe qui prend fait au moins son contrat (belote
+  comprise) ; capot : tous les plis.
 - Barème (donné par Noa) :
     réussi, non coinché : attaque = contrat + ses points arrondis à la dizaine
                           (supérieure si l'unité >= 5) + 20 si belote ;
-                          défense = ses points + 20 si belote ;
+                          défense = ses points arrondis + 20 si belote ;
     chuté, non coinché  : défense = contrat + 160 + 20 par belote (la sienne et
                           celle de l'attaque) ; attaque 0 ;
     coinché (×2) ou surcoinché (×3) : contrat × 2 (ou × 3) + 160 pour
                           l'attaque si réussi, pour la défense si chuté ;
                           réussi : +20 si l'attaque a la belote et qu'elle
                           n'a pas servi à réussir, +0 si elle a servi ;
-                          chuté : +20 pour la défense par belote.
+                          chuté : +20 pour la défense si la belote était à
+                          l'attaque ; la belote de la défense ne compte pas.
 - Partie en 1 500 points (target).
 """
 import random
@@ -64,15 +65,14 @@ RULES = [
     "(A 11, 10 10, K 4, Q 3, J 2).",
     "Each deal holds 162 points (152 in the cards + 10 for the last trick). A team that takes every trick (capot) "
     "scores 250 instead of 162. King + Queen of trump in the same hand: belote-rebelote, worth 20.",
-    "The contract is made if the bidding team scores at least its contract AND more than the defence "
-    "(belote included). Capot: all 8 tricks.",
-    "Made: the bidding team scores contract + its points rounded to the nearest 10 (up from 5: 85 gives 90) "
-    "+ 20 for its belote; the defence scores its points + 20 for its belote.",
+    "The contract is made if the bidding team scores at least its contract (belote included). Capot: all 8 tricks.",
+    "Made: the bidding team scores contract + its points + 20 for its belote; the defence scores its points "
+    "+ 20 for its belote. Points are rounded to the nearest 10, up from 5 (84 gives 80, 85 gives 90).",
     "Failed: the defence scores contract + 160 + 20 for each belote (its own and the bidding team's); "
     "the bidding team scores 0.",
     "Coinched (×2) or surcoinched (×3): contract × 2 (or × 3) + 160, for the bidding team if made, for the "
-    "defence if failed. If made, +20 for the bidding team's belote only if it was not needed to make the "
-    "contract. If failed, +20 for the defence for each belote.",
+    "defence if failed; the other team scores 0. Only the bidding team's belote counts: if made, +20 for the "
+    "bidding team only if the belote was not needed to make the contract; if failed, +20 for the defence.",
     "The first team to reach 1,500 points wins the game.",
 ]
 
@@ -156,7 +156,7 @@ def score_deal(contract, tricks_won, belote_team, trick_points):
     def reaches(att_total):
         if value == CAPOT:
             return tricks_won[att] == 8
-        return att_total >= value and att_total > total[dfn]
+        return att_total >= value
 
     made = reaches(total[att])
     belote_needed = made and belote[att] > 0 and not reaches(points[att])
@@ -164,16 +164,16 @@ def score_deal(contract, tricks_won, belote_team, trick_points):
     if mult == 1:
         if made:
             scores[att] = value + round_points(points[att]) + belote[att]
-            scores[dfn] = points[dfn] + belote[dfn]
+            scores[dfn] = round_points(points[dfn]) + belote[dfn]
         else:
             scores[dfn] = value + 160 + belote[att] + belote[dfn]
     else:
         base = value * mult + 160
+        # coinché : seule la belote de l'attaque compte
         if made:
             scores[att] = base + (0 if belote_needed else belote[att])
-            scores[dfn] = belote[dfn]
         else:
-            scores[dfn] = base + belote[att] + belote[dfn]
+            scores[dfn] = base + belote[att]
     detail = {"points": points, "belote": belote, "total": total, "capot_team": capot_team,
               "belote_needed": belote_needed}
     return scores, made, detail

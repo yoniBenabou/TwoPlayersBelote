@@ -57,24 +57,25 @@ def check_scoring():
     """Barème de la table : cf. belote/coinche/engine.py (RULES)."""
     base = {"seat": 0, "value": 100, "suit": C, "mult": 1}
     case = lambda contract, tricks, belote, points: score_deal(contract, tricks, belote, points)[:2]
-    # réussi : attaque = contrat + points arrondis + belote ; défense = ses points (+ belote)
-    assert case(base, [5, 3], None, [110, 52]) == ([210, 52], True)
-    assert case({**base, "value": 80}, [5, 3], None, [87, 75]) == ([170, 75], True)   # 87 -> 90
-    assert case({**base, "value": 80}, [5, 3], None, [84, 78]) == ([160, 78], True)   # 84 -> 80
-    assert case({**base, "value": 80}, [5, 3], None, [85, 77]) == ([170, 77], True)   # 85 -> 90
-    assert case(base, [4, 4], 0, [90, 72]) == ([210, 72], True)                       # belote compte pour réussir
-    assert case(base, [5, 3], 1, [110, 52]) == ([210, 72], True)                      # belote de la défense
+    # réussi : contrat + points arrondis + belote pour l'attaque ; points arrondis + belote pour la défense
+    assert case(base, [5, 3], None, [110, 52]) == ([210, 50], True)
+    assert case({**base, "value": 80}, [5, 3], None, [87, 75]) == ([170, 80], True)   # 87 -> 90, 75 -> 80
+    assert case({**base, "value": 80}, [5, 3], None, [84, 78]) == ([160, 80], True)   # 84 -> 80, 78 -> 80
+    assert case({**base, "value": 80}, [5, 3], None, [85, 77]) == ([170, 80], True)   # 85 -> 90
+    assert case(base, [4, 4], 0, [90, 72]) == ([210, 70], True)                       # belote compte pour réussir
+    assert case(base, [5, 3], 1, [110, 52]) == ([210, 70], True)                      # belote de la défense
+    assert case({**base, "value": 80}, [4, 4], None, [81, 81]) == ([160, 80], True)   # pas besoin de faire plus
     # chuté : défense = contrat + 160 + 20 par belote, attaque 0
     assert case(base, [4, 4], 0, [70, 92]) == ([0, 280], False)
     assert case(base, [4, 4], 1, [70, 92]) == ([0, 280], False)
     assert case(base, [4, 4], None, [70, 92]) == ([0, 260], False)
-    assert case({**base, "value": 80}, [4, 4], None, [81, 81]) == ([0, 240], False)   # égalité : chuté
-    # coinché : contrat x 2 + 160 ; belote de l'attaque +20 seulement si elle n'a pas servi
+    # coinché : contrat x 2 + 160 ; seule la belote de l'attaque compte (+20 si elle n'a pas servi à réussir)
     coinche = {**base, "mult": 2}
     assert case(coinche, [6, 2], 0, [120, 42]) == ([380, 0], True)
     assert case(coinche, [4, 4], 0, [90, 72]) == ([360, 0], True)                     # belote utile : +0
+    assert case(coinche, [6, 2], 1, [120, 42]) == ([360, 0], True)                    # belote de la défense : 0
     assert case(coinche, [4, 4], 0, [70, 92]) == ([0, 380], False)                    # belote de l'attaque à la défense
-    assert case(coinche, [4, 4], None, [70, 92]) == ([0, 360], False)
+    assert case(coinche, [4, 4], 1, [70, 92]) == ([0, 360], False)                    # belote de la défense : 0
     # surcoinché : contrat x 3 + 160
     surco = {**base, "mult": 3}
     assert case(surco, [6, 2], None, [120, 42]) == ([460, 0], True)
