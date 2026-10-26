@@ -91,6 +91,8 @@ python -m scripts.train --bidding --init-from models/ppo_CA_3M.pt --out-dir expe
 python -m scripts.train --bidding --league --init-from models/ppo_bidding_2M.pt --league-init <earlier checkpoints .pt> --out-dir experiments/league --seed 4
 ```
 
+**Exploitability (`--exploit <model.pt>`)**: trains an agent only against that frozen model, which plays as in a real game (its most likely move), to look for hidden weaknesses; every evaluation also reports the margin against it (`Cible`). Starting from the same model (`--init-from`), the exploiter begins at exactly 50%.
+
 **Long training runs: resuming, safeguard and monitoring**
 
 - At each evaluation, `checkpoints/resume_state.pt` saves the full state (weights, Adam optimizer, counters, random generators). An interrupted run resumes exactly where it left off with `python -m scripts.train --resume --out-dir experiments/my_run` (the configuration is read back from `config.json`).

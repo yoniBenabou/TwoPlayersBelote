@@ -12,7 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from belote.rl.agents import HeuristicAgent, TrumpCountAgent, VoidExploitAgent
 from belote.rl.env import BeloteEnv
-from belote.rl.evaluation import run_evaluation_suite
+from belote.rl.evaluation import evaluate_against, run_evaluation_suite
 from belote.rl.networks import ActorCriticNetwork
 from belote.rl.ppo_agent import PPOAgent
 from belote.rl.ppo_update import ppo_update
@@ -38,7 +38,7 @@ NAN_DUMP_FILE = "nan_dump.pt"
 # Paramètres de train() enregistrés dans config.json (et relus par --resume).
 CONFIG_KEYS = ("total_games", "rollout_episodes", "eval_every_n_games", "lr", "entropy_coef", "win_bonus",
                "vs_heuristics", "seed", "belief", "bidding", "init_from", "dedans",
-               "league", "league_init", "self_play_share", "league_max")
+               "league", "league_init", "self_play_share", "league_max", "exploit")
 
 
 class NonFiniteTrainingError(RuntimeError):
@@ -119,6 +119,7 @@ def train(
     league_init: list | None = None,
     self_play_share: float = 0.5,
     league_max: int = 20,
+    exploit: str | None = None,
 ):
     """vs_heuristics : au lieu du self-play, chaque manche d'entraînement
     oppose l'agent à un adversaire tiré au hasard parmi les heuristiques
@@ -138,6 +139,10 @@ def train(
     ligue : les modèles league_init, puis chaque checkpoint sauvegardé (les
     league_max plus récents). Les versions de la ligue jouent en tirant leurs
     coups selon leurs probabilités, comme en self-play.
+    exploit : modèle .pt de l'agent à exploiter (point D15). Toutes les manches
+    d'entraînement l'opposent à cet agent figé, qui joue comme en partie
+    réelle (son coup le plus probable) ; chaque évaluation mesure aussi
+    l'écart contre lui.
     resume : reprend là où RESUME_FILE s'est arrêté (poids, optimiseur,
     compteurs, générateurs aléatoires) ; config.json n'est pas réécrit."""
     if seed is not None:
@@ -152,7 +157,7 @@ def train(
         "eval_every_n_games": eval_every_n_games, "lr": lr, "entropy_coef": entropy_coef,
         "win_bonus": win_bonus, "vs_heuristics": vs_heuristics, "seed": seed, "belief": belief, "bidding": bidding, "init_from": init_from,
         "dedans": dedans, "league": league, "league_init": league_init,
-        "self_play_share": self_play_share, "league_max": league_max,
+        "self_play_share": self_play_share, "league_max": league_max, "exploit": exploit,
     }
     if not resume:
         with open("config.json", "w") as f:
@@ -162,6 +167,12 @@ def train(
     opponents = [HeuristicAgent(), VoidExploitAgent(), TrumpCountAgent()] if vs_heuristics else None
     league_fixed = [frozen_agent(path) for path in (league_init or [])] if league else []
     league_recent = []
+    target = None
+    if exploit:
+        target_network = ActorCriticNetwork.from_checkpoint(exploit)
+        target_network.eval()
+        target = PPOAgent(target_network, deterministic=True)
+        opponents = [target]
     network = ActorCriticNetwork(obs_size=env.obs_size, num_actions=env.num_actions)
     if init_from and not resume:
         network.init_from(init_from)
@@ -187,6 +198,12 @@ def train(
         if games_trained >= next_eval_at:
             print(f"\n--- Évaluation à {games_trained} parties d'entraînement ---")
             results = run_evaluation_suite(eval_agent)
+            if target is not None:
+                result = evaluate_against(eval_agent, target, 1000)
+                results["Target"] = result
+                print(f"  Cible (figée)    win_rate={result['win_rate'] * 100:5.1f}% "
+                      f"(±{result['win_rate_ci95'] * 100:.1f}pp) | écart points {result['avg_point_diff']:+6.1f} "
+                      f"(±{result['avg_point_diff_ci95']:.1f}) | n={result['n_games']} parties")
             log_eval_results(writer, results, games_trained)
             save_checkpoint(network, games_trained)
             if league:
@@ -244,6 +261,8 @@ if __name__ == "__main__":
                         help="avec --league : part des manches en self-play pur (0.5 par défaut)")
     parser.add_argument("--league-max", type=int, default=20,
                         help="avec --league : nombre de versions récentes de ce run gardées dans la ligue")
+    parser.add_argument("--exploit", metavar="MODELE",
+                        help="entraîner uniquement contre ce modèle figé, pour trouver ses failles (exploitabilité)")
     parser.add_argument("--init-from", help="modèle .pt de départ (démarrage à chaud)")
     parser.add_argument("--out-dir", default=".", help="dossier où écrire checkpoints/, runs/ et config.json")
     parser.add_argument("--resume", action="store_true",
@@ -262,6 +281,8 @@ if __name__ == "__main__":
 
     # Chemins d'entrée rendus absolus avant de se placer dans le dossier de sortie.
     init_from = os.path.abspath(args.init_from) if args.init_from else None
+    exploit = os.path.abspath(args.exploit) if args.exploit else None
+    league_init = [os.path.abspath(p) for p in args.league_init]
     os.makedirs(args.out_dir, exist_ok=True)
     os.chdir(args.out_dir)
     train(
@@ -277,7 +298,8 @@ if __name__ == "__main__":
         init_from=init_from,
         dedans=args.dedans,
         league=args.league,
-        league_init=[os.path.abspath(p) for p in args.league_init],
+        league_init=league_init,
         self_play_share=args.self_play_share,
         league_max=args.league_max,
+        exploit=exploit,
     )
