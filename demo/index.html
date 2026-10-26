@@ -211,6 +211,9 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Temps d'affichage de chaque message (ms) : à augmenter si ça va trop vite.
+const DELAY = { deal: 1600, agentBid: 1900, yourBid: 700, agentCard: 1500, yourCard: 700, announce: 2300,
+                trick: 2200, message: 1600, other: 900 };
 let view = null, busy = false;
 
 function cardEl(c, { small = false, classes = [] } = {}) {
@@ -413,7 +416,7 @@ async function replay(state) {
       });
       table.length = 0; render(); renderTable(table);
       banner(ev.text); log(ev.text, true);
-      await sleep(900);
+      await sleep(DELAY.deal);
     } else if (ev.type === "bid") {
       if (view) {
         view.bids = [...(view.bids || []), { seat: ev.seat, round: ev.round, label: ev.label }];
@@ -422,7 +425,7 @@ async function replay(state) {
         render();
       }
       banner(ev.text); log(ev.text, ev.label !== "pass");
-      await sleep(ev.seat === "agent" ? 1100 : 450);
+      await sleep(ev.seat === "agent" ? DELAY.agentBid : DELAY.yourBid);
     } else if (ev.type === "play") {
       if (ev.seat === "you" && view) view.hand = view.hand.filter((c) => c.id !== ev.card.id);
       if (ev.seat === "agent" && view) {
@@ -436,14 +439,14 @@ async function replay(state) {
       const what = ev.seat === "you" ? `You play ${ev.card.label}`
         : `Agent plays ${ev.card.label} (confidence ${ev.confidence}%)`;
       banner(ev.announce ? `${what} — ${ev.announce}` : what); log(ev.announce ? `${what} — ${ev.announce}` : what, !!ev.announce);
-      await sleep(ev.announce ? 1300 : ev.seat === "agent" ? 900 : 450);
+      await sleep(ev.announce ? DELAY.announce : ev.seat === "agent" ? DELAY.agentCard : DELAY.yourCard);
     } else if (ev.type === "trick") {
       banner(ev.text); log(ev.text, true);
-      await sleep(1300);
+      await sleep(DELAY.trick);
       table.length = 0; renderTable(table);
     } else {
       banner(ev.text); log(ev.text, true);
-      await sleep(ev.type === "message" ? 700 : 400);
+      await sleep(ev.type === "message" ? DELAY.message : DELAY.other);
     }
   }
   busy = false;
