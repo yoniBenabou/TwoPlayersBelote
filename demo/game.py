@@ -27,6 +27,7 @@ import torch
 from belote.core.cards import Rank, Suit, sort_hand
 from belote.core.engine import has_belote, legal_moves
 from belote.rl.env import CARD_INDEX, INDEX_CARD, NAME_SUIT, PASS, SUIT_OF_ACTION, TAKE, BeloteEnv
+from belote.rl.pimc import PIMCAgent
 from scripts.compare_checkpoints import load_agent
 
 HUMAN, AGENT = 0, 1  # sièges dans BeloteEnv
@@ -94,13 +95,19 @@ def bid_label(action, turned_suit):
 
 class GameSession:
     def __init__(self, checkpoint=DEFAULT_CHECKPOINT, target=DEFAULT_TARGET_SCORE, seed=None,
-                 agent=None, log=None, study=False, player=None):
+                 agent=None, log=None, study=False, player=None, search=0):
         """agent : agent déjà chargé (partagé entre les parties du serveur),
         sinon chargé depuis checkpoint. log : GameLog, ou None pour ne rien
-        enregistrer. study : la main de l'agent reste cachée."""
+        enregistrer. study : la main de l'agent reste cachée. search : nombre
+        de mains adverses imaginées par la recherche PIMC avant chaque carte
+        (0 = réseau seul) ; la confiance affichée reste celle du réseau."""
         self.checkpoint = checkpoint
-        self.agent = agent or load_agent(checkpoint)
-        self.env = BeloteEnv(**self.agent.env_kwargs())
+        self.network_agent = agent or load_agent(checkpoint)
+        self.search = search
+        self.agent = PIMCAgent(self.network_agent, n_samples=search, seed=random.randrange(2**31)) if search else self.network_agent
+        self.env = BeloteEnv(**self.network_agent.env_kwargs())
+        if hasattr(self.agent, "attach_env"):
+            self.agent.attach_env(self.env)
         self.bidding = self.env.bidding
         self.rng = random.Random(seed)
         self.target = target
@@ -135,7 +142,7 @@ class GameSession:
         self._record({"type": "game", "status": status, "you": human, "agent": agent,
                       "winner": None if status != "finished" or human == agent else ("you" if human > agent else "agent"),
                       "rounds": len(self.history), "target": self.target, "checkpoint": self.checkpoint,
-                      "bidding": self.bidding, "study": self.study, "revealed": self.revealed,
+                      "bidding": self.bidding, "study": self.study, "search": self.search, "revealed": self.revealed,
                       "started": self.started_at, "human_actions": self.human_actions})
 
     def _record_round(self, redeal=False):
@@ -248,7 +255,7 @@ class GameSession:
             legal_mask = self.info["legal_actions"]
             action = self.agent.act(self.obs, legal_mask, self.info)
             with torch.no_grad():
-                logits, _value = self.agent._masked_logits_and_value(self.obs, legal_mask)
+                logits, _value = self.network_agent._masked_logits_and_value(self.obs, legal_mask)
                 probs = torch.softmax(logits, dim=-1)
             events += self._apply(action, AGENT, probs[action].item())
         return events

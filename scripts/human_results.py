@@ -1,7 +1,8 @@
 """Résultats de l'agent contre des humains (point C), à partir du fichier
 écrit par la démo web (demo/logs/games.jsonl par défaut).
 
-Ne compte que les parties terminées où le joueur n'a pas regardé la main de
+Les réglages de l'agent (réseau seul, recherche PIMC à K mains) sont séparés ;
+--search K n'en garde qu'un. Ne compte que les parties terminées où le joueur n'a pas regardé la main de
 l'agent ; les parties abandonnées ("New game" en cours de partie) et
 interrompues (serveur arrêté ou page fermée) sont seulement signalées. Taux de victoire de l'agent avec intervalle de Wilson à 95 %
 (adapté aux petits échantillons), détail par joueur, et statistiques par
@@ -38,6 +39,7 @@ def main():
     parser = argparse.ArgumentParser(description="Taux de victoire de l'agent contre des humains.")
     parser.add_argument("--log", default=DEFAULT_LOG)
     parser.add_argument("--exclude", nargs="*", default=[], help="joueurs à exclure (ex. les auteurs du projet)")
+    parser.add_argument("--search", type=int, help="ne garder qu'un réglage de l'agent : 0 = réseau seul, K = recherche PIMC")
     args = parser.parse_args()
     records = load(args.log)
     excluded = {name.lower() for name in args.exclude}
@@ -53,6 +55,23 @@ def main():
     interrupted = {r["game_id"] for r in records if r["type"] == "round" and r["game_id"] not in closed and keep(r)}
     if interrupted:
         print(f"Parties interrompues (serveur arrêté ou page fermée en cours de partie, non comptées) : {len(interrupted)}")
+    setting = lambda g: g.get("search", 0)  # parties enregistrées avant l'option : réseau seul
+    by_setting = defaultdict(list)
+    for g in finished:
+        by_setting[setting(g)].append(g)
+    if len(by_setting) > 1 or args.search is not None:
+        print("\nPar réglage de l'agent :")
+        for k, gs in sorted(by_setting.items()):
+            w = sum(g["winner"] == "agent" for g in gs) + sum(g["winner"] is None for g in gs) / 2
+            lo, hi = wilson(w, len(gs))
+            label = "réseau seul" if k == 0 else f"recherche PIMC, {k} mains"
+            print(f"  {label:<26} {len(gs):>4} parties, l'agent gagne {100 * w / len(gs):.1f}% "
+                  f"(IC 95 % [{100 * lo:.1f}% ; {100 * hi:.1f}%])")
+    if args.search is not None:
+        finished = by_setting.get(args.search, [])
+        print(f"\nDétail pour le réglage --search {args.search} :")
+    elif len(by_setting) > 1:
+        print("\nDétail, tous réglages confondus (--search K pour un seul) :")
     n = len(finished)
     if n == 0:
         print("Aucune partie terminée sans regarder la main de l'agent.")

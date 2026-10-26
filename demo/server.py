@@ -3,6 +3,7 @@
     python -m demo.server            # puis ouvrir http://localhost:8000
     python -m demo.server --port 8080 --target 301
     python -m demo.server --study    # parties contre des volontaires (point C)
+    python -m demo.server --study --search 50   # ... contre l'agent le plus fort (recherche PIMC)
 
 Chaque navigateur a sa propre partie (cookie belote_sid) : plusieurs personnes
 peuvent jouer en même temps. Chaque manche et chaque partie sont enregistrées
@@ -36,9 +37,10 @@ MAX_SESSIONS = 500  # au-delà, on oublie les parties restées inactives le plus
 class Sessions:
     """Une GameSession par navigateur, toutes avec le même agent (chargé une fois)."""
 
-    def __init__(self, checkpoint, target, log, study):
+    def __init__(self, checkpoint, target, log, study, search=0):
         self.agent = load_agent(checkpoint)
-        self.kwargs = {"checkpoint": checkpoint, "target": target, "log": log, "study": study, "agent": self.agent}
+        self.kwargs = {"checkpoint": checkpoint, "target": target, "log": log, "study": study, "agent": self.agent,
+                       "search": search}
         self.sessions = {}  # sid -> [GameSession, verrou, dernier accès]
         self.lock = threading.Lock()
 
@@ -122,13 +124,15 @@ def main():
     parser.add_argument("--target", type=int, default=DEFAULT_TARGET_SCORE)
     parser.add_argument("--log", default=DEFAULT_LOG, help="fichier JSONL des manches et parties ('' : rien)")
     parser.add_argument("--study", action="store_true", help="parties contre des volontaires : main de l'agent cachée")
+    parser.add_argument("--search", type=int, default=0, metavar="K",
+                        help="recherche PIMC sur K mains adverses imaginées avant chaque carte (0 = réseau seul ; 50 = le plus fort)")
     args = parser.parse_args()
 
     log = None
     if args.log:
         os.makedirs(os.path.dirname(os.path.abspath(args.log)), exist_ok=True)
         log = GameLog(args.log)
-    sessions = Sessions(args.checkpoint, args.target, log, args.study)
+    sessions = Sessions(args.checkpoint, args.target, log, args.study, args.search)
     # La machine du Technion est partagée : si le port est pris (par un autre
     # utilisateur), on essaie les suivants plutôt que d'échouer.
     for port in range(args.port, args.port + 50):
@@ -140,6 +144,7 @@ def main():
     else:
         sys.exit(f"No free port between {args.port} and {args.port + 49}.")
     mode = "study mode, agent's hand hidden" if args.study else "demo mode"
+    mode += f", search over {args.search} imagined hands" if args.search else ", network only"
     print(f"Belote demo running: http://localhost:{port}  ({mode}; games logged to {args.log or 'nowhere'})"
           "  (Ctrl+C to stop)", flush=True)
     try:
