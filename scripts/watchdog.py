@@ -54,10 +54,19 @@ def run_status(run_dir):
     return finished, age
 
 
+def training_module(run_dir):
+    """scripts.train (belote à 2) ou scripts.train_coinche (Coinche à 4, config avec total_deals)."""
+    try:
+        with open(os.path.join(run_dir, "config.json")) as f:
+            return "scripts.train_coinche" if "total_deals" in json.load(f) else "scripts.train"
+    except (OSError, ValueError):
+        return "scripts.train"
+
+
 def relaunch(run_dir, session, threads):
     command = (
         f"cd {REPO} && PYTHONPATH={REPO} OMP_NUM_THREADS={threads} MKL_NUM_THREADS={threads} "
-        f"{sys.executable} -u -m scripts.train --resume --out-dir {run_dir} 2>&1 | tee -a {run_dir}/train.log"
+        f"{sys.executable} -u -m {training_module(run_dir)} --resume --out-dir {run_dir} 2>&1 | tee -a {run_dir}/train.log"
     )
     subprocess.run(["tmux", "new-session", "-d", "-s", session, command], check=True)
 

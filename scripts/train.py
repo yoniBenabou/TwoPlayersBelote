@@ -38,7 +38,7 @@ NAN_DUMP_FILE = "nan_dump.pt"
 # Paramètres de train() enregistrés dans config.json (et relus par --resume).
 CONFIG_KEYS = ("total_games", "rollout_episodes", "eval_every_n_games", "lr", "entropy_coef", "win_bonus",
                "vs_heuristics", "seed", "belief", "bidding", "init_from", "dedans",
-               "league", "league_init", "self_play_share", "league_max", "exploit")
+               "league", "league_init", "self_play_share", "league_max", "exploit", "hidden_size")
 
 
 class NonFiniteTrainingError(RuntimeError):
@@ -120,6 +120,7 @@ def train(
     self_play_share: float = 0.5,
     league_max: int = 20,
     exploit: str | None = None,
+    hidden_size: int = 128,
 ):
     """vs_heuristics : au lieu du self-play, chaque manche d'entraînement
     oppose l'agent à un adversaire tiré au hasard parmi les heuristiques
@@ -143,6 +144,8 @@ def train(
     d'entraînement l'opposent à cet agent figé, qui joue comme en partie
     réelle (son coup le plus probable) ; chaque évaluation mesure aussi
     l'écart contre lui.
+    hidden_size : taille des deux couches cachées du réseau (128 par défaut ;
+    plus grand = réseau plus gros, cf. expérience "réseau plus grand").
     resume : reprend là où RESUME_FILE s'est arrêté (poids, optimiseur,
     compteurs, générateurs aléatoires) ; config.json n'est pas réécrit."""
     if seed is not None:
@@ -158,6 +161,7 @@ def train(
         "win_bonus": win_bonus, "vs_heuristics": vs_heuristics, "seed": seed, "belief": belief, "bidding": bidding, "init_from": init_from,
         "dedans": dedans, "league": league, "league_init": league_init,
         "self_play_share": self_play_share, "league_max": league_max, "exploit": exploit,
+        "hidden_size": hidden_size,
     }
     if not resume:
         with open("config.json", "w") as f:
@@ -173,7 +177,7 @@ def train(
         target_network.eval()
         target = PPOAgent(target_network, deterministic=True)
         opponents = [target]
-    network = ActorCriticNetwork(obs_size=env.obs_size, num_actions=env.num_actions)
+    network = ActorCriticNetwork(obs_size=env.obs_size, num_actions=env.num_actions, hidden_size=hidden_size)
     if init_from and not resume:
         network.init_from(init_from)
     agent = PPOAgent(network)
@@ -263,6 +267,8 @@ if __name__ == "__main__":
                         help="avec --league : nombre de versions récentes de ce run gardées dans la ligue")
     parser.add_argument("--exploit", metavar="MODELE",
                         help="entraîner uniquement contre ce modèle figé, pour trouver ses failles (exploitabilité)")
+    parser.add_argument("--hidden-size", type=int, default=128,
+                        help="taille des deux couches cachées du réseau (128 par défaut)")
     parser.add_argument("--init-from", help="modèle .pt de départ (démarrage à chaud)")
     parser.add_argument("--out-dir", default=".", help="dossier où écrire checkpoints/, runs/ et config.json")
     parser.add_argument("--resume", action="store_true",
@@ -302,4 +308,5 @@ if __name__ == "__main__":
         self_play_share=args.self_play_share,
         league_max=args.league_max,
         exploit=exploit,
+        hidden_size=args.hidden_size,
     )

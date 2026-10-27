@@ -47,10 +47,14 @@ class PPOAgent:
             action = masked_logits.argmax() if self.deterministic else Categorical(logits=masked_logits).sample()
         return int(action.item())
 
-    def act_and_evaluate(self, obs, legal_mask):
+    def act_and_evaluate(self, obs, legal_mask, batch=False):
+        """batch=True : obs et legal_mask sont des lots (n, ...) ; retourne des
+        tenseurs (n,) d'actions, log_probs, values, entropies."""
         masked_logits, value = self._masked_logits_and_value(obs, legal_mask)
         dist = Categorical(logits=masked_logits)
         action = dist.sample()
+        if batch:
+            return action, dist.log_prob(action), value, dist.entropy()
         return int(action.item()), dist.log_prob(action), value, dist.entropy()
 
     def evaluate_actions(self, obs, legal_mask, actions):

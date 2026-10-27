@@ -93,6 +93,15 @@ Options: `--total-games`, `--eval-every`, `--lr`, `--entropy-coef`, `--win-bonus
 python -m scripts.train --bidding --init-from models/ppo_CA_3M.pt --out-dir experiments/bidding --seed 1
 ```
 
+**Training a four-player AI**: [belote/coinche/rl_env.py](belote/coinche/rl_env.py) wraps the Coinche engine for learning (one deal per episode, each seat sees the table from its own position, with the cards each other player can still hold deduced from the rules; reward at the end of the deal = the team's score minus the other team's, with the real scoring). One network plays all four seats in self-play. By default the bots do the bidding and the network learns the card play; `--bidding` makes the network bid too (75 actions); `--vs-bots-share 0.25` plays a quarter of the deals against a team of bots. Every 50,000 deals it is evaluated against a team of bots, on duplicate deals (each deal played twice, the AI on one side then the other) and in full 1,500-point games. Tests: `python -m tests.test_coinche_env`.
+
+```bash
+python -m scripts.train_coinche --out-dir experiments/coinche_play --seed 1 --total-deals 4000000
+python -m scripts.train_coinche --out-dir experiments/coinche_bid --seed 1 --total-deals 4000000 --bidding
+```
+
+**Larger network (`--hidden-size`)**: size of the two hidden layers (128 by default, as for every model so far). Saved models record their size, so every script reloads them unchanged.
+
 **League of past versions (`--league`)**: instead of pure self-play, half of the rounds (`--self-play-share`) are played against a frozen past version drawn at random from a league: the models given with `--league-init`, then every checkpoint of the run (the 20 most recent, `--league-max`). Past versions sample their moves, as in self-play. It works with `--resume`: the league is rebuilt from the run's checkpoints.
 
 ```bash
