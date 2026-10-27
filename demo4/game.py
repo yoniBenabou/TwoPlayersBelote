@@ -17,7 +17,7 @@ from belote.rl.env import CARD_INDEX, INDEX_CARD
 from demo.game import SUIT_INFO, card_json
 
 HUMAN = 0
-SEAT_KEYS = ("south", "east", "north", "west")
+SEAT_KEYS = ("south", "west", "north", "east")  # sens des aiguilles d'une montre
 TEAM_NAMES = ("You & North", "East & West")
 
 

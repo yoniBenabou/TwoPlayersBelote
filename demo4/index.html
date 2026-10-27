@@ -237,7 +237,7 @@ const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Temps d'affichage de chaque événement (ms).
 const DELAY = { bid: 1100, yourBid: 500, card: 1000, yourCard: 450, announce: 1800, trick: 1700, message: 1400 };
-const SEATS = ["south", "east", "north", "west"];
+const SEATS = ["south", "west", "north", "east"];
 const NAMES = { south: "You", east: "East", north: "North", west: "West" };
 let view = null, busy = false, selectedValue = null;
 

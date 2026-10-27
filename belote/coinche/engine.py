@@ -1,8 +1,8 @@
 """Coinche à 4 joueurs : moteur de règles (annonces, cartes jouables, plis, score).
 
-Places : 0 = Sud, 1 = Est, 2 = Nord, 3 = Ouest. Le jeu tourne dans le sens
-inverse des aiguilles d'une montre, comme en France (Sud, puis Est à sa
-droite, Nord, Ouest). Équipes : Sud-Nord (0, 2) contre Est-Ouest (1, 3).
+Places : 0 = Sud, 1 = Ouest, 2 = Nord, 3 = Est. Le jeu tourne dans le sens
+des aiguilles d'une montre (Sud, puis Ouest à sa gauche, Nord, Est).
+Équipes : Sud-Nord (0, 2) contre Est-Ouest (1, 3).
 
 Règles retenues (cf. RULES, affichées aussi dans la page web) :
 - 32 cartes, 8 par joueur ; le joueur après le donneur parle en premier et
@@ -41,15 +41,15 @@ import random
 
 from ..core.cards import Card, Rank, Suit, build_deck
 
-SEAT_NAMES = ("South", "East", "North", "West")
+SEAT_NAMES = ("South", "West", "North", "East")
 SUITS = list(Suit)
 CONTRACTS = list(range(80, 170, 10)) + [250]  # 250 = capot
 CAPOT = 250
 DEFAULT_TARGET = 1500
 
 RULES = [
-    "4 players, 2 teams: South-North against East-West. 32 cards, 8 each. Play goes counter-clockwise "
-    "(South, East, North, West).",
+    "4 players, 2 teams: South-North against East-West. 32 cards, 8 each. Play goes clockwise "
+    "(South, West, North, East).",
     "The player after the dealer speaks first and leads the first trick. The dealer changes every deal.",
     "Bidding: a contract from 80 to 160 (in steps of 10) or capot (250, all the tricks), with a trump suit. "
     "Each bid must be higher than the previous one.",
