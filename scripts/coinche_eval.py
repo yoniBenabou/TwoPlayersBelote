@@ -1,7 +1,8 @@
 """Coinche à 4 : match entre deux équipes, avec statistiques d'annonces.
 
-Chaque équipe est un modèle .pt (scripts/train_coinche.py) ou "bots"
-(CoincheBot). Un modèle entraîné avec --bidding annonce pour ses places ; un
+Chaque équipe est un modèle .pt (scripts/train_coinche.py), "bots"
+(CoincheBot) ou "random" (cartes au hasard parmi les cartes jouables ; ses
+annonces sont faites par CoincheBot, des annonces au hasard n'ayant pas de sens). Un modèle entraîné avec --bidding annonce pour ses places ; un
 modèle "cartes seulement" laisse les annonces de ses places à CoincheBot.
 
 Donnes dupliquées : chaque donne (mains, donneur) est jouée deux fois, l'équipe
@@ -30,13 +31,16 @@ class Side:
         self.name = spec
         self.agent = None
         self.bids = False
-        if spec != "bots":
+        self.rng = random.Random(1)
+        if spec not in ("bots", "random"):
             network = ActorCriticNetwork.from_checkpoint(spec)
             network.eval()
             self.agent = PPOAgent(network, deterministic=True)
             self.bids = network.num_actions == NUM_ACTIONS_BIDDING
 
     def act(self, env, obs):
+        if self.name == "random" and env.phase == "play":
+            return self.rng.choice([i for i, ok in enumerate(env.legal_mask()) if ok])
         if self.agent is None or (env.phase == "bidding" and not self.bids):
             return env.play_bot()
         mask = env.legal_mask()
