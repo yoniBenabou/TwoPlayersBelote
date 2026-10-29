@@ -30,8 +30,9 @@ Réponses (une fois, puis relances prévues par le document) :
   par As ; rien sans complément ; le 9 sec ne se signale pas au premier tour,
   au second tour seulement (+10) avec un As à côté ou si l'équipe est très en
   retard (500 points) ;
-- sur 100 : +10 par As hors atout ; capot avec quatre plis maîtres, si l'ouvreur ou un adversaire a
-  la partance (sinon il faut en plus un atout pour rendre la main à l'ouvreur). 100 -> 110/120/130 :
+- sur 100 : +10 par As hors atout (jamais l'As d'atout). Avec quatre plis maîtres hors atout : si
+  l'ouvreur a la partance, capot ; si c'est moi, capot avec au moins un atout, 140 sans atout ; si
+  c'est un adversaire, capot avec un atout et les trois As hors atout, sinon +10 par As. 100 -> 110/120/130 :
   si l'équipe a les trois As hors atout (ceux du partenaire et les miens), l'ouvreur remonte de +10
   pour demander les autres plis maîtres ; le partenaire ajoute +10 par pli maître après les As (son
   As compris dans la couleur ne compte pas, et derrière l'As de l'ouvreur son 10 est maître) ; sans
@@ -254,8 +255,10 @@ class AsRBot(CoincheBot):
                 return ("bid", game.contract["value"] + 10, suit)  # 9 sec signalé au second tour
             return None
         if level == 100:
-            if master_tricks(hand, suit) >= 4 and self._capot_reachable(game, seat, suit):
-                return ("bid", CAPOT, suit)
+            if master_tricks(hand, suit) >= 4:
+                action = self._four_masters_on_100(game, seat, suit)
+                if action is not None:
+                    return action
             inc = 10 * side_aces(hand, suit)
         elif level == 110:
             inc = 10 * sum(has(hand, s, Rank.ACE) for s in opposite(suit))
@@ -270,11 +273,19 @@ class AsRBot(CoincheBot):
         return ("bid", value + inc, suit) if inc else None
 
     @staticmethod
-    def _capot_reachable(game, seat, trump):
-        """Capot sur 100 : valable si l'ouvreur ou un adversaire a la partance ; si c'est moi qui entame
-        le premier pli, il me faut un atout pour donner la main à l'ouvreur."""
+    def _four_masters_on_100(game, seat, trump):
+        """Réponse au 100 du partenaire avec quatre plis maîtres hors atout, selon qui a la partance.
+        None : on répond normalement, +10 par As hors atout."""
+        hand = game.hands[seat]
         leader = (game.dealer + 1) % 4
-        return leader != seat or any(c.suit == trump for c in game.hands[seat])
+        has_trump = any(c.suit == trump for c in hand)
+        if leader == partner_of(seat):
+            return ("bid", CAPOT, trump)
+        if leader == seat:
+            return ("bid", CAPOT, trump) if has_trump else ("bid", 140, trump)
+        if has_trump and side_aces(hand, trump) == 3:  # un adversaire a la partance
+            return ("bid", CAPOT, trump)
+        return None
 
     @staticmethod
     def _extra_masters(hand, trump):

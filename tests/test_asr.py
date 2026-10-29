@@ -130,18 +130,24 @@ def check_100_dialogue():
 
 
 def check_capot_on_100():
-    # Nord a quatre plis maîtres : capot sur 100, sauf s'il a la partance sans atout
-    north = hand(D="A 10 K", C="A", S="Q 8", H="7 8")
-    for dealer, nh, want in [(3, north, ("bid", CAPOT, H)),
-                             (1, hand(D="A 10 K", C="A 8", S="Q 8 7"), ("bid", 120, H)),   # Nord entame, sans atout
-                             (1, north, ("bid", CAPOT, H))]:                                # Nord entame, avec un atout
-        g = table([hand(H="J 9 A Q"), hand(S="9 J"), nh], dealer=dealer)
+    # Nord a quatre plis maîtres sur le 100 de Sud ; la réponse dépend de qui a la partance
+    # (donneur 3 : Sud entame ; donneur 1 : Nord entame ; donneur 0 : Ouest, un adversaire, entame)
+    with_trump = hand(D="A 10 K", C="A", S="Q 8", H="7 8")           # deux As hors atout, un atout
+    no_trump = hand(D="A 10 K", C="A 8", S="Q 8 7")                   # deux As hors atout, sans atout
+    three_aces = hand(D="A 10", C="A", S="A 8", H="7 8 Q")           # trois As hors atout, un atout
+    for dealer, nh, want in [(3, no_trump, ("bid", CAPOT, H)),        # le partenaire a la partance
+                             (1, with_trump, ("bid", CAPOT, H)),      # j'ai la partance, avec un atout
+                             (1, no_trump, ("bid", 140, H)),          # j'ai la partance, sans atout
+                             (0, no_trump, ("bid", 120, H)),          # adversaire, sans atout : +10 par As
+                             (0, with_trump, ("bid", 120, H)),        # adversaire, un atout, deux As : +10 par As
+                             (0, three_aces, ("bid", CAPOT, H))]:     # adversaire, un atout, trois As : capot
+        g = table([hand(H="J 9 A K"), hand(S="9 J"), nh], dealer=dealer)
         while g.current != 0:
             g.bid(g.current, P)
         g.bid(0, ("bid", 100, H))
         while g.current != 2:
             g.bid(g.current, P)
-        assert bot.bid(g, 2) == want, (dealer, bot.bid(g, 2))
+        assert bot.bid(g, 2) == want, (dealer, nh, bot.bid(g, 2))
 
 
 def check_collage():
