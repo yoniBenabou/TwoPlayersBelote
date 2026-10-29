@@ -53,6 +53,8 @@ Coinche : même règle que CoincheBot. Pas de surcoinche.
 
 Jeu :
 - contrée (coinchée ou surcoinchée), l'équipe qui a pris n'entame pas atout (sauf au capot) ;
+- preneur très faible à l'atout (2 atouts dont le Valet, 3 dont le 9, ou moins) que le partenaire n'a
+  pas soutenu dans l'atout : il n'entame pas atout, il garde ses atouts pour la fin ;
 - quand le partenaire a montré le Valet et le 9 (100), j'entame atout dès que j'ai la main, avec mon plus
   petit : il fait tomber les atouts adverses, puis me rend la main dans la couleur de mon appel ;
 - sinon, l'équipe qui a pris joue atout tant que les adversaires peuvent en avoir, en
@@ -560,6 +562,8 @@ class AsRBot(CoincheBot):
             return min(trumps, key=lambda c: c.strength(trump))
         if contract["mult"] > 1 and side and contract["value"] != CAPOT:
             trumps = []  # contrés : on n'entame pas atout, on garde ses atouts
+        if side and self._weak_alone(game, seat):
+            trumps = []  # très faible à l'atout, sans soutien : on garde ses atouts pour la fin
         if trumps and self._opponents_may_have_trumps(game, seat):
             choice = self._trump_lead(game, seat, trumps)
             if choice is not None:
@@ -608,6 +612,17 @@ class AsRBot(CoincheBot):
         if side:
             return self._from_longest(side, trump, gone, hand)
         return min(legal, key=lambda c: c.strength(trump))
+
+    def _weak_alone(self, game, seat):
+        """Preneur très faible à l'atout (au plus 2 atouts, ou 3 sans le Valet, au départ) dont le
+        partenaire n'a pas surenchéri dans l'atout (il n'a pas le Valet ou le 9 qui manque)."""
+        trump, contract = game.trump, game.contract
+        if contract["seat"] != seat:
+            return False
+        if any(s == partner_of(seat) and a[0] == "bid" and a[2] == trump for s, a in game.bids):
+            return False
+        r = ranks_in(list(game.hands[seat]) + list(game.played[seat]), trump)
+        return len(r) <= 2 or (len(r) == 3 and Rank.JACK not in r)
 
     def _trump_lead(self, game, seat, trumps):
         trump = game.trump

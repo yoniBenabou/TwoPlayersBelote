@@ -171,6 +171,23 @@ def check_capot_play():
     assert all(w in (0, 2) for _t, w in g.tricks), [(t, w) for t, w in g.tricks]
 
 
+def check_weak_taker():
+    # 80 cœur avec Valet-10 seulement, personne ne surenchérit : Sud n'entame pas atout, il garde ses atouts
+    for mine in (hand(H="J 10", S="A 8 7", D="A K", C="7"), hand(H="9 10 8", S="A 8 7", D="A K")):
+        g = table([mine, hand(H="7"), hand(H="Q")])
+        g.bid(0, ("bid", 80, H))
+        while g.phase == "bidding":
+            g.bid(g.current, P)
+        assert bot.play(g, 0).suit != H, mine
+    # le partenaire a surenchéri dans l'atout : on joue atout normalement
+    g = table([hand(H="J 10", S="A 8 7", D="A K", C="7"), hand(H="7"), hand(H="9 A")])
+    g.bid(0, ("bid", 80, H)); g.bid(1, P); g.bid(2, ("bid", 100, H))
+    while g.phase == "bidding":
+        g.bid(g.current, P)
+    g.contract["seat"] = 0  # même situation, mais c'est Sud qui entame comme preneur
+    assert bot.play(g, 0).suit == H
+
+
 def check_collage():
     # un adversaire dit 90 ; j'ai une main de 90 : je colle à 100 ; mon partenaire ne répond que le complément
     g = deal([hand(S="J 9 7", D="A"), hand(H="J 7 8", C="A", D="7", S="Q")], [("bid", 90, S)])
@@ -194,7 +211,7 @@ def check_play():
     assert AsRBot._call_discard(hand(D="A 10 K 7", H="8 9"), hand(D="A 10 K 7", H="8 9"), S) == Card(D, Rank.ACE)
     assert AsRBot._call_discard(hand(D="A 10 7", H="8 9"), hand(D="A 10 7", H="8 9"), S) != Card(D, Rank.ACE)
     # 9 sans le Valet : petit atout d'abord
-    g = deal([hand(S="9 7 8", H="A 10", D="K", C="8")], [("bid", 90, S), P, P, P])
+    g = deal([hand(S="9 7 8 Q", H="A 10", D="K", C="8")], [("bid", 90, S), P, P, P])  # 9 quatrième
     assert bot.play(g, 0) == Card(S, Rank.SEVEN)
     # contrés : on n'entame pas atout (Sud a pris 100 pique, Ouest a coinché)
     g = deal([hand(S="J 9 A 8", H="A 10", D="K", C="8")], [("bid", 100, S), ("coinche",), P, P, P])
@@ -284,11 +301,12 @@ def main():
     check_100_dialogue()
     check_capot_on_100()
     check_capot_play()
+    check_weak_taker()
     check_collage()
     check_play()
     check_keep_nine()
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, collage, jeu, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, collage, jeu, parties) : OK")
 
 
 if __name__ == "__main__":
