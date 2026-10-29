@@ -52,11 +52,11 @@ partenaire reste prudent : il passe) ; sur un 100 adverse, une vraie main de
 Coinche : même règle que CoincheBot. Pas de surcoinche.
 
 Jeu :
-- quand mon partenaire a annoncé l'atout à 100 ou plus (maîtrise) et que nous avons pris, si j'entame le
-  premier pli avec de l'atout (sans le Valet ni le 9), j'entame toujours atout (mon plus petit) : je lui
-  donne la main, il fait tomber les atouts adverses avant que nos As soient joués ;
-- contrée (coinchée ou surcoinchée), l'équipe qui a pris n'entame pas atout (sauf au capot, et sauf
-  la règle précédente) ;
+- quand mon partenaire a annoncé l'atout le premier, à 100 ou plus (maîtrise), et que nous avons pris
+  (lui, ou moi qui lui ai répondu, par exemple 100 -> 110), si j'entame le premier pli avec de l'atout
+  (sans le Valet ni le 9), j'entame petit atout : je lui donne la main, il fait tomber les atouts
+  adverses avant que nos As soient joués ; pas si c'est contré ;
+- contrée (coinchée ou surcoinchée), l'équipe qui a pris n'entame pas atout (sauf au capot) ;
 - preneur très faible à l'atout (2 atouts dont le Valet, 3 dont le 9, ou moins) que le partenaire n'a
   pas soutenu dans l'atout : il n'entame pas atout, il garde ses atouts pour la fin, et surtout le
   plus fort (le Valet) pour être sûr de faire le dernier pli : s'il doit jouer atout, il met le plus petit ;
@@ -586,7 +586,8 @@ class AsRBot(CoincheBot):
         if not attacking:
             return self.defence_lead(game, seat, legal)
         trumps = [c for c in legal if c.suit == trump]
-        if trumps and not game.tricks and self._partner_announced(game, seat) and not ranks_in(hand, trump) & {Rank.JACK, Rank.NINE}:
+        if (trumps and not game.tricks and contract["mult"] == 1 and self._partner_announced(game, seat)
+                and not ranks_in(hand, trump) & {Rank.JACK, Rank.NINE}):
             # j'entame le premier pli et mon partenaire a annoncé l'atout : je lui donne la main en atout ;
             # il fait tomber les atouts adverses et mes As ne risquent plus d'être coupés
             return min(trumps, key=lambda c: c.strength(trump))

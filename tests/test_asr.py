@@ -216,7 +216,7 @@ def check_last_trump():
 
 def check_lead_to_taker():
     # Est ouvre 110 carreau, Ouest a la partance et un seul atout : il entame atout, pas ses As
-    # (même après un 90 adverse, même coinché)
+    # (même après un 90 adverse) ; coinché : pas d'entame atout
     for bids, coinche in [([P, P], False), ([P, ("bid", 90, H)], False), ([P, P], True)]:
         g = table([None, hand(D="7", S="A 8", H="A 9", C="A 8 9"), None, hand(D="J 9 A K", C="10", S="K Q")],
                   dealer=0)
@@ -227,7 +227,13 @@ def check_lead_to_taker():
             g.bid(0, ("coinche",))
         while g.phase == "bidding":
             g.bid(g.current, P)
-        assert bot.play(g, 1) == Card(D, Rank.SEVEN), (bids, coinche, bot.play(g, 1))
+        assert (bot.play(g, 1).suit == D) != coinche, (bids, coinche, bot.play(g, 1))
+    # Est dit 100 carreau, Ouest répond 110 et a la partance : il entame petit atout
+    g = table([None, hand(D="7 8", S="A 8", H="A 9", C="A 8"), None, hand(D="J 9 K Q", C="10", S="K Q")], dealer=0)
+    g.bid(1, P); g.bid(2, P); g.bid(3, ("bid", 100, D)); g.bid(0, P); g.bid(1, ("bid", 120, D))
+    while g.phase == "bidding":
+        g.bid(g.current, P)
+    assert g.contract["seat"] == 1 and bot.play(g, 1) == Card(D, Rank.SEVEN), (g.contract, bot.play(g, 1))
 
 
 def check_collage():
