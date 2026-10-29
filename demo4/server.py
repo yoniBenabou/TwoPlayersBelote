@@ -4,6 +4,7 @@ contre Est et Ouest (robots simples).
     python -m demo4.server                  # puis ouvrir http://localhost:8100
     python -m demo4.server --bots petitjeu  # robots qui annoncent au petit jeu
     python -m demo4.server --bots papirobert  # robots au jeu aux As de Papi Robert
+    python -m demo4.server --bots asr  # robots aux conventions AsR
 
 Chaque navigateur a sa propre table (cookie coinche_sid). Bouton "Show all
 hands" pour vérifier les règles, bouton "Rules" pour les règles appliquées.
@@ -107,7 +108,7 @@ def main():
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--target", type=int, default=DEFAULT_TARGET)
     parser.add_argument("--bots", choices=sorted(BOT_KINDS), default="simple",
-                        help="règles des robots : simple, petitjeu (convention du petit jeu) ou papirobert (jeu aux As de Papi Robert)")
+                        help="règles des robots : simple, petitjeu (convention du petit jeu) papirobert (jeu aux As de Papi Robert) ou asr (conventions AsR)")
     args = parser.parse_args()
     tables = Tables(args.target, args.bots)
     for port in range(args.port, args.port + 50):

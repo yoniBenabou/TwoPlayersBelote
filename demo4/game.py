@@ -9,6 +9,7 @@ robots jusqu'à son tour (ou la fin de la donne) et renvoie la liste des
 import random
 
 from belote.coinche.bots import CoincheBot
+from belote.coinche.asr import AsRBot
 from belote.coinche.papi_robert import PapiRobertBot
 from belote.coinche.petit_jeu import PetitJeuBot
 from belote.coinche.engine import (
@@ -23,7 +24,7 @@ SEAT_KEYS = ("south", "west", "north", "east")  # sens des aiguilles d'une montr
 TEAM_NAMES = ("You & North", "East & West")
 
 
-BOT_KINDS = {"simple": CoincheBot, "petitjeu": PetitJeuBot, "papirobert": PapiRobertBot}
+BOT_KINDS = {"simple": CoincheBot, "petitjeu": PetitJeuBot, "papirobert": PapiRobertBot, "asr": AsRBot}
 
 
 class IllegalMove(Exception):
@@ -53,7 +54,8 @@ def bid_label(action):
 class Table:
     def __init__(self, target=DEFAULT_TARGET, seed=None, bots="simple"):
         """bots : règles des trois robots ("simple" : CoincheBot ; "petitjeu" : convention du petit jeu ;
-        "papirobert" : jeu aux As de Papi Robert)."""
+        "papirobert" : jeu aux As de Papi Robert ;
+        "asr" : conventions AsR)."""
         self.rng = random.Random(seed)
         self.target = target
         self.bot = BOT_KINDS[bots]()
