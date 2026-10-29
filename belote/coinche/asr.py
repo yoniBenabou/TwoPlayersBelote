@@ -1,7 +1,7 @@
 """Robot "AsR" pour la Coinche à 4 : conventions du document "Belote —
 conventions d'annonces et stratégie de jeu" (version consolidée).
 
-Familles : rouge = cœur et carreau, noir = pique et trèfle. La "couleur sœur"
+Familles : rouge = cœur et carreau, noir = pique et trèfle. La "couleur sœur".
 d'une couleur est l'autre couleur de sa famille ; la "famille opposée" à
 l'atout, ce sont les deux couleurs de l'autre famille. Majeures = Valet et 9
 d'atout.
