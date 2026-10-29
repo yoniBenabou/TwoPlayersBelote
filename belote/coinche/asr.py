@@ -75,6 +75,9 @@ Jeu :
   (appel indirect) ; jeter l'As lui-même annonce la longue maîtresse (au moins
   As-10-Roi, pas au capot) ; le partenaire rejoue la couleur demandée (petite carte) avant
   d'encaisser ses As ; seulement dans l'équipe qui a pris ;
+- on garde son dernier atout pour le dernier pli (pas d'entame de son dernier atout) ; s'il ne reste
+  qu'un atout dehors, chez un adversaire, on ne le fait pas tomber avec un atout : on joue une petite
+  carte d'une couleur que cet adversaire n'a plus, pour le faire couper (sauf au capot) ;
 - ensuite : les cartes maîtresses (As, 10, Roi...), le Roi d'un Roi-10 quand
   l'As n'est pas tombé, puis la couleur la plus longue ;
 - défense (pas d'appels en défense) : contre 140 ou plus, d'abord les cartes
@@ -589,6 +592,11 @@ class AsRBot(CoincheBot):
             trumps = []  # contrés : on n'entame pas atout, on garde ses atouts
         if side and self._weak_alone(game, seat):
             trumps = []  # très faible à l'atout, sans soutien : on garde ses atouts pour la fin
+        last_one = self._last_opponent_trump(game, seat)
+        if side and contract["value"] != CAPOT and (len(trumps) == 1 or last_one):
+            # mon dernier atout reste pour le dernier pli ; le dernier atout adverse, on ne le fait pas
+            # tomber avec un atout, on essaie de le faire couper
+            trumps = []
         if trumps and self._opponents_may_have_trumps(game, seat):
             choice = self._trump_lead(game, seat, trumps)
             if choice is not None:
@@ -596,6 +604,10 @@ class AsRBot(CoincheBot):
         called = [c for c in side if c.suit in self._called_suits(game, seat)]
         if called:
             return min(called, key=lambda c: c.strength(trump))  # donner la main au partenaire qui a appelé
+        if last_one:
+            ruff = self._force_ruff(game, seat, side)
+            if ruff is not None:
+                return ruff
         if masters:
             return masters[0]
         for suit in {c.suit for c in side}:
@@ -637,6 +649,29 @@ class AsRBot(CoincheBot):
         if side:
             return self._from_longest(side, trump, gone, hand)
         return min(legal, key=lambda c: c.strength(trump))
+
+    def _last_opponent_trump(self, game, seat):
+        """Il ne reste qu'un atout dehors, et il peut être chez un adversaire."""
+        from .papi_robert import PapiRobertBot
+        trump, hand = game.trump, game.hands[seat]
+        gone = {c for cards in game.played for c in cards} | {c for _, c in game.trick}
+        unseen = [c for c in self._all_trumps(trump) if c not in gone and c not in hand]
+        if len(unseen) != 1:
+            return False
+        voids = PapiRobertBot._shown_voids(game)
+        return any(trump not in voids[s] for s in range(4) if team_of(s) != team_of(seat))
+
+    def _force_ruff(self, game, seat, side):
+        """Faire couper le dernier atout adverse : petite carte d'une couleur que l'adversaire qui peut
+        encore avoir de l'atout n'a plus."""
+        from .papi_robert import PapiRobertBot
+        trump = game.trump
+        voids = PapiRobertBot._shown_voids(game)
+        target = {s for o in range(4) if team_of(o) != team_of(seat) and trump not in voids[o] for s in voids[o]}
+        cards = [c for c in side if c.suit in target]
+        if not cards:
+            return None
+        return min(cards, key=lambda c: (c.points(trump), c.strength(trump)))
 
     def _weak_alone(self, game, seat):
         """Preneur très faible à l'atout (au plus 2 atouts, ou 3 sans le Valet, au départ) dont le

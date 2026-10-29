@@ -195,6 +195,25 @@ def check_weak_taker():
     assert bot.play(g, 0).suit == H
 
 
+def check_last_trump():
+    # Sud a pris 100 pique ; les atouts sont tombés sauf un, chez Ouest, qui n'a plus de carreau :
+    # Sud ne fait pas tomber cet atout avec le sien, il joue un petit carreau pour faire couper Ouest
+    g = deal([hand(S="J 9 A 8 10")], [("bid", 100, S), P, P, P])
+    played = [Card(S, r) for r in (Rank.SEVEN, Rank.QUEEN, Rank.EIGHT, Rank.ACE, Rank.TEN)]  # Roi de pique dehors
+    g.tricks = [([(0, Card(D, Rank.SEVEN)), (1, Card(C, Rank.SEVEN)), (2, Card(D, Rank.EIGHT)),
+                  (3, Card(D, Rank.NINE))], 3)]
+    g.played[0] += [Card(D, Rank.SEVEN)]; g.played[1] += [Card(C, Rank.SEVEN)]
+    g.played[2] += [Card(D, Rank.EIGHT)]; g.played[3] += [Card(D, Rank.NINE)]
+    g.played[2] += played
+    g.hands[0] = hand(S="J 9", D="Q", H="A 10", C="A")
+    g.current = 0
+    assert bot.play(g, 0) == Card(D, Rank.QUEEN), bot.play(g, 0)
+    # mon dernier atout : je le garde pour le dernier pli
+    g.hands[0] = hand(S="J", H="A 10 7", C="A 8")
+    g.tricks = []
+    assert bot.play(g, 0).suit != S
+
+
 def check_collage():
     # un adversaire dit 90 ; j'ai une main de 90 : je colle à 100 ; mon partenaire ne répond que le complément
     g = deal([hand(S="J 9 7", D="A"), hand(H="J 7 8", C="A", D="7", S="Q")], [("bid", 90, S)])
@@ -320,11 +339,12 @@ def main():
     check_capot_on_100()
     check_capot_play()
     check_weak_taker()
+    check_last_trump()
     check_collage()
     check_play()
     check_keep_nine()
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, collage, jeu, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, collage, jeu, parties) : OK")
 
 
 if __name__ == "__main__":
