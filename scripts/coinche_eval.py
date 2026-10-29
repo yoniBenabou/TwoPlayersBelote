@@ -1,8 +1,9 @@
 """Coinche à 4 : match entre deux équipes, avec statistiques d'annonces.
 
-Chaque équipe est un modèle .pt (scripts/train_coinche.py), "bots"
-(CoincheBot) ou "random" (cartes au hasard parmi les cartes jouables ; ses
-annonces sont faites par CoincheBot, des annonces au hasard n'ayant pas de sens). Un modèle entraîné avec --bidding annonce pour ses places ; un
+Chaque équipe est un modèle .pt (scripts/train_coinche.py), un robot ("bots" :
+CoincheBot ; "petitjeu" : PetitJeuBot, convention du petit jeu) ou "random"
+(cartes au hasard parmi les cartes jouables ; ses annonces sont faites par
+CoincheBot, des annonces au hasard n'ayant pas de sens). Un modèle entraîné avec --bidding annonce pour ses places ; un
 modèle "cartes seulement" laisse les annonces de ses places à CoincheBot.
 
 Donnes dupliquées : chaque donne (mains, donneur) est jouée deux fois, l'équipe
@@ -17,32 +18,43 @@ from collections import Counter, defaultdict
 
 import torch
 
+from belote.coinche.bots import CoincheBot
+from belote.coinche.petit_jeu import PetitJeuBot
 from belote.coinche.engine import CAPOT, DEFAULT_TARGET, SEAT_NAMES, team_of
-from belote.coinche.rl_env import NUM_ACTIONS_BIDDING, NUM_ACTIONS_PLAY, CoincheEnv
+from belote.coinche.rl_env import CARD_INDEX, NUM_ACTIONS_BIDDING, NUM_ACTIONS_PLAY, CoincheEnv, bid_to_action
 from belote.rl.networks import ActorCriticNetwork
 from belote.rl.ppo_agent import PPOAgent
 from scripts.train_coinche import mean_ci
 
 
+BOTS = {"bots": CoincheBot, "petitjeu": PetitJeuBot, "random": CoincheBot}
+
+
 class Side:
-    """Une équipe : réseau (coup le plus probable) ou robots."""
+    """Une équipe : réseau (coup le plus probable), robot ou hasard."""
 
     def __init__(self, spec):
         self.name = spec
         self.agent = None
-        self.bids = False
+        self.bot = None
         self.rng = random.Random(1)
-        if spec not in ("bots", "random"):
+        if spec in BOTS:
+            self.bot = BOTS[spec]()
+            self.bids = True  # les robots annoncent eux-mêmes (avec leurs propres règles)
+        else:
             network = ActorCriticNetwork.from_checkpoint(spec)
             network.eval()
             self.agent = PPOAgent(network, deterministic=True)
             self.bids = network.num_actions == NUM_ACTIONS_BIDDING
 
     def act(self, env, obs):
-        if self.name == "random" and env.phase == "play":
-            return self.rng.choice([i for i, ok in enumerate(env.legal_mask()) if ok])
-        if self.agent is None or (env.phase == "bidding" and not self.bids):
-            return env.play_bot()
+        game = env.game
+        if self.bot is not None:
+            if game.phase == "bidding":
+                return bid_to_action(self.bot.bid(game, game.current))
+            if self.name == "random":
+                return self.rng.choice([i for i, ok in enumerate(env.legal_mask()) if ok])
+            return CARD_INDEX[self.bot.play(game, game.current)]
         mask = env.legal_mask()
         if not self.bids:
             mask = mask[:NUM_ACTIONS_PLAY]
@@ -70,7 +82,7 @@ def main():
     args = parser.parse_args()
     torch.set_num_threads(1)
     a, b = Side(args.a), Side(args.b)
-    env = CoincheEnv(bidding=a.bids or b.bids, seed=args.seed)
+    env = CoincheEnv(bidding=True, seed=args.seed)
     # stats par équipe ("A" / "B")
     takes, made, coinched, capots = Counter(), Counter(), Counter(), Counter()
     by_value = defaultdict(lambda: [0, 0])  # (équipe, valeur) -> [pris, réussis]
@@ -120,7 +132,7 @@ def main():
         print(line)
 
     wins = []
-    game_env = CoincheEnv(bidding=a.bids or b.bids, seed=args.seed + 1)
+    game_env = CoincheEnv(bidding=True, seed=args.seed + 1)
     for g in range(args.games):
         a_team = g % 2
         sides = [a, b] if a_team == 0 else [b, a]

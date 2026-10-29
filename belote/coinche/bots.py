@@ -20,6 +20,14 @@ def hand_estimate(hand, trump):
     return estimate
 
 
+def wants_coinche(hand, contract):
+    """Coinche : des atouts forts dans leur couleur + un As, contre un contrat déjà haut."""
+    trump = contract["suit"]
+    mine = {c.rank for c in hand if c.suit == trump}
+    aces = sum(c.rank == Rank.ACE and c.suit != trump for c in hand)
+    return contract["value"] >= 90 and (Rank.JACK in mine or Rank.NINE in mine) and len(mine) >= 2 and aces >= 1
+
+
 class CoincheBot:
     def bid(self, game, seat):
         legal = game.legal_bids(seat)
@@ -27,13 +35,8 @@ class CoincheBot:
         contract = game.contract
         if ("surcoinche",) in legal:
             return ("pass",)
-        if ("coinche",) in legal:
-            trump = contract["suit"]
-            mine = {c.rank for c in hand if c.suit == trump}
-            aces = sum(c.rank == Rank.ACE and c.suit != trump for c in hand)
-            # coinche : des atouts forts dans leur couleur + un As, contre un contrat déjà haut
-            if contract["value"] >= 90 and (Rank.JACK in mine or Rank.NINE in mine) and len(mine) >= 2 and aces >= 1:
-                return ("coinche",)
+        if ("coinche",) in legal and wants_coinche(hand, contract):
+            return ("coinche",)
         best = max(SUITS, key=lambda s: hand_estimate(hand, s))
         estimate = hand_estimate(hand, best)
         # estimation -> contrat : 55 -> 80, puis +10 par tranche de 10
@@ -55,18 +58,7 @@ class CoincheBot:
         trump, trick = game.trump, game.trick
         strength = lambda c: (c.suit == trump, c.strength(trump))
         if not trick:
-            attacking = team_of(game.contract["seat"]) == team_of(seat)
-            trumps = [c for c in legal if c.suit == trump]
-            gone = {c for cards in game.played for c in cards}
-            outstanding = [c for c in self._all_trumps(trump) if c not in gone and c not in game.hands[seat]]
-            if attacking and trumps and outstanding:
-                top = max(trumps, key=strength)
-                if all(top.strength(trump) > c.strength(trump) for c in outstanding):
-                    return top  # atout maître : on fait tomber les atouts
-            aces = [c for c in legal if c.rank == Rank.ACE and c.suit != trump]
-            if aces:
-                return aces[0]
-            return min(legal, key=lambda c: (c.points(trump), strength(c)))
+            return self.lead(game, seat, legal)
         winning = trick[trick_winner(trick, trump)]
         if winning[0] == partner_of(seat):
             # partenaire maître : on lui donne des points si son pli semble sûr, sinon petite carte
@@ -77,6 +69,23 @@ class CoincheBot:
         winners = [c for c in legal if trick_winner(trick + [(seat, c)], trump) == len(trick)]
         if winners:
             return min(winners, key=strength)
+        return min(legal, key=lambda c: (c.points(trump), strength(c)))
+
+    def lead(self, game, seat, legal):
+        """Entame : atout maître si on attaque, sinon un As, sinon la plus petite carte."""
+        trump = game.trump
+        strength = lambda c: (c.suit == trump, c.strength(trump))
+        attacking = team_of(game.contract["seat"]) == team_of(seat)
+        trumps = [c for c in legal if c.suit == trump]
+        gone = {c for cards in game.played for c in cards}
+        outstanding = [c for c in self._all_trumps(trump) if c not in gone and c not in game.hands[seat]]
+        if attacking and trumps and outstanding:
+            top = max(trumps, key=strength)
+            if all(top.strength(trump) > c.strength(trump) for c in outstanding):
+                return top  # atout maître : on fait tomber les atouts
+        aces = [c for c in legal if c.rank == Rank.ACE and c.suit != trump]
+        if aces:
+            return aces[0]
         return min(legal, key=lambda c: (c.points(trump), strength(c)))
 
     @staticmethod

@@ -1,7 +1,8 @@
 """Coinche à 4 dans le navigateur : tu joues Sud, avec Nord comme partenaire,
 contre Est et Ouest (robots simples).
 
-    python -m demo4.server            # puis ouvrir http://localhost:8100
+    python -m demo4.server                  # puis ouvrir http://localhost:8100
+    python -m demo4.server --bots petitjeu  # robots qui annoncent au petit jeu
 
 Chaque navigateur a sa propre table (cookie coinche_sid). Bouton "Show all
 hands" pour vérifier les règles, bouton "Rules" pour les règles appliquées.
@@ -18,7 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from belote.coinche.engine import DEFAULT_TARGET
-from demo4.game import IllegalMove, Table
+from demo4.game import BOT_KINDS, IllegalMove, Table
 
 INDEX_HTML = Path(__file__).with_name("index.html")
 COOKIE = "coinche_sid"
@@ -26,8 +27,9 @@ MAX_TABLES = 200
 
 
 class Tables:
-    def __init__(self, target):
+    def __init__(self, target, bots="simple"):
         self.target = target
+        self.bots = bots
         self.tables = {}  # sid -> [Table, verrou, dernier accès]
         self.lock = threading.Lock()
 
@@ -37,7 +39,7 @@ class Tables:
                 if len(self.tables) >= MAX_TABLES:
                     del self.tables[min(self.tables, key=lambda k: self.tables[k][2])]
                 sid = secrets.token_urlsafe(16)
-                self.tables[sid] = [Table(target=self.target), threading.Lock(), time.time()]
+                self.tables[sid] = [Table(target=self.target, bots=self.bots), threading.Lock(), time.time()]
             entry = self.tables[sid]
             entry[2] = time.time()
             return sid, entry[0], entry[1]
@@ -103,8 +105,10 @@ def main():
     parser.add_argument("--port", type=int, default=8100)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--target", type=int, default=DEFAULT_TARGET)
+    parser.add_argument("--bots", choices=sorted(BOT_KINDS), default="simple",
+                        help="règles des robots : simple, ou petitjeu (convention du petit jeu)")
     args = parser.parse_args()
-    tables = Tables(args.target)
+    tables = Tables(args.target, args.bots)
     for port in range(args.port, args.port + 50):
         try:
             server = ThreadingHTTPServer((args.host, port), make_handler(tables))
