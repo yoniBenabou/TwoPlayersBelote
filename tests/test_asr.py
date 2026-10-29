@@ -158,8 +158,13 @@ def check_play():
                    (0, Card(C, Rank.KING))], 1)]
     g2.played[1].append(Card(C, Rank.ACE))
     g2.current = 1
-    g2.hands[1] = hand(C="10 7", S="7 8 9 K Q")                         # pique plus long, mais il rejoue trèfle
-    assert bot.play(g2, 1).suit == C, bot.play(g2, 1)
+    g2.hands[1] = hand(C="10 7", S="7 8 9 K Q")                         # pique plus long, mais il rejoue trèfle,
+    assert bot.play(g2, 1) == Card(C, Rank.TEN), bot.play(g2, 1)       # avec sa plus grosse carte
+    # premier pli, la défense entame : un As hors atout d'abord
+    g3 = deal([hand(D="J 9 7 8")], [("bid", 90, D), P, P, P])
+    g3.current = 1
+    g3.hands[1] = hand(C="A 7", S="7 8 9 K Q", H="8")
+    assert bot.play(g3, 1) == Card(C, Rank.ACE)
     g.hands[0] = hand(D="A", H="K Q", C="7 8 9")                       # seul carreau : l'As, sacrifié pour le faire couper
     assert bot.play(g, 0) == Card(D, Rank.ACE)
 

@@ -66,8 +66,9 @@ Jeu :
 - défense (pas d'appels en défense) : contre 140 ou plus, d'abord les cartes
   maîtresses ; sinon faire couper le preneur en jouant notre couleur la plus
   longue (celle qu'il n'a plus s'il l'a déjà montré, même au prix d'un As ou
-  d'un 10) ; après avoir gagné un pli que j'ai entamé, je rejoue la même
-  couleur (petite carte) ; pas d'entame atout sauf s'il ne reste que ça ;
+  d'un 10) ; au premier pli, d'abord un As hors atout ; après avoir gagné un
+  pli que j'ai entamé, je rejoue la même couleur avec ma plus grosse carte ;
+  pas d'entame atout sauf s'il ne reste que ça ;
 - on ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas
   le choix ;
 - partenaire maître : on ne donne pas un 10 accompagné (il peut faire un pli),
@@ -484,7 +485,8 @@ class AsRBot(CoincheBot):
         return min(legal, key=lambda c: c.strength(trump))
 
     def defence_lead(self, game, seat, legal):
-        """Entame en défense (pas d'appels en défense) : contre 140 ou plus, les cartes maîtresses ;
+        """Entame en défense (pas d'appels en défense) : au premier pli, un As hors atout ; contre 140 ou
+        plus, les cartes maîtresses ;
         sinon faire couper le preneur : la couleur qu'il n'a plus (la plus longue si plusieurs), sinon
         la couleur du pli que je viens de gagner en l'entamant, sinon notre couleur la plus longue ;
         atout seulement s'il ne reste que ça."""
@@ -493,6 +495,10 @@ class AsRBot(CoincheBot):
         gone = {c for cards in game.played for c in cards}
         hand = game.hands[seat]
         masters = sorted((c for c in side if self._is_master(c, trump, gone, hand)), key=lambda c: -c.points(trump))
+        aces = [c for c in side if c.rank == Rank.ACE]
+        if not game.tricks and aces:
+            # première entame de la défense : un As (hors atout), dans la couleur la plus longue
+            return max(aces, key=lambda c: (sum(d.suit == c.suit for d in side), c.suit.value))
         if game.contract["value"] >= 140 and masters:
             return masters[0]
         ruff = self._ruff_lead(game, side)
@@ -503,8 +509,9 @@ class AsRBot(CoincheBot):
             again = [c for c in side if c.suit == last[0][1].suit]
             if last[0][0] == seat and winner == seat and last[0][1].suit != trump and again:
                 # j'ai gagné le pli que j'avais entamé : je rejoue la couleur (faire couper le preneur, ou
-                # mieux, faire couper mon partenaire)
-                return min(again, key=lambda c: (c.points(trump), c.strength(trump)))
+                # mieux, faire couper mon partenaire), avec ma plus grosse carte : le joueur suivant ne
+                # passe pas au-dessus, et son partenaire doit couper au lieu de le laisser maître
+                return max(again, key=lambda c: c.strength(trump))
         if side:
             return self._from_longest(side, trump, gone, hand)
         return min(legal, key=lambda c: c.strength(trump))
