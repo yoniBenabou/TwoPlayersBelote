@@ -54,6 +54,7 @@ def check_answers_to_90():
         assert bot.bid(g, 2) == want, (north, bot.bid(g, 2))
     opener = hand(H="J 7 8", S="A", D="7", C="7 Q 8")
     for north, want in [(hand(H="9 10", S="Q", D="A Q", C="9 K"), ("bid", 110, H)),
+                        (hand(H="9 A", S="Q", D="K Q", C="9 K"), ("bid", 100, H)),   # l'As d'atout ne compte pas
                         (hand(H="9", S="Q K", D="A Q", C="9 K 10"), P)]:
         g = deal([opener, hand(S="7 8", D="K", C="J"), north], [("bid", 90, H), P])
         assert bot.bid(g, 2) == want, (north, bot.bid(g, 2))

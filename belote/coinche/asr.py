@@ -1,35 +1,36 @@
 """Robot "AsR" pour la Coinche à 4 : conventions du document "Belote —
 conventions d'annonces et stratégie de jeu" (version consolidée).
 
-Familles : rouge = cœur et carreau, noir = pique et trèfle. La "couleur sœur".
+Familles : rouge = cœur et carreau, noir = pique et trèfle. La "couleur sœur"
 d'une couleur est l'autre couleur de sa famille ; la "famille opposée" à
 l'atout, ce sont les deux couleurs de l'autre famille. Majeures = Valet et 9
 d'atout.
 
 Ouvertures (couleur choisie : la plus forte structure d'atout, puis la plus
-forte couleur) :
-- maîtrise forte (Valet + 9 et 5 atouts, ou Valet + 9 + As et 4 atouts) : on
-  annonce directement sa force, sous forme de demande : 110 (As de la famille
-  opposée) s'il en manque un, sinon 120 (As de la couleur sœur), sinon 130
-  (10 de la famille opposée), sinon 140 (10 de la couleur sœur) ;
-- avec au moins deux As (atout compris) : 80, pour les signaler, même sans
-  atout ; on surenchérira à 100 avec une vraie main de 100 ;
-- maîtrise (Valet + 9 + As, ou Valet + 9 quatrièmes) : 100, qui demande des As rouges et noirs (il me
-  manque l'As de la couleur sœur et au moins un As de la famille opposée) ; si je ne cherche des As que
-  dans une famille, j'annonce directement la demande, comme la maîtrise forte : 110 s'il ne me manque
-  que des As de la famille opposée, 120 s'il ne me manque que l'As sœur (130/140 s'il ne manque aucun As) ;
-- Valet au moins troisième ou 9 au moins quatrième, avec au moins un As
-  (d'atout ou à côté) : 90 ; jamais 90 sans As.
-Réponses (une fois, puis relances prévues par le document) :
+forte couleur), dans cet ordre :
+1. maîtrise forte (Valet + 9 et 5 atouts, ou Valet + 9 + As et 4 atouts) : on
+   annonce directement sa force, sous forme de demande : 110 (As de la famille
+   opposée) s'il en manque un, sinon 120 (As de la couleur sœur), sinon 130
+   (10 de la famille opposée), sinon 140 (10 de la couleur sœur) ;
+2. maîtrise (Valet + 9 + As, ou Valet + 9 quatrièmes) qui ne cherche des As que dans une famille :
+   la demande directe, comme la maîtrise forte : 110 s'il ne me manque que des As de la famille
+   opposée, 120 s'il ne me manque que l'As sœur (130/140 s'il ne manque aucun As) ;
+3. avec au moins deux As (atout compris) : 80, pour les signaler, même sans
+   atout ; on surenchérira à 100 avec une vraie main de 100 ;
+4. maîtrise qui cherche des As rouges et noirs (il me manque l'As de la couleur sœur et au moins un
+   As de la famille opposée) : 100 ;
+5. Valet au moins troisième ou 9 au moins quatrième, avec au moins un As
+   (d'atout ou à côté) : 90 ; jamais 90 sans As.
+Réponses (une fois, puis relances prévues par le document). Dans toutes les réponses, "+10 par As"
+compte seulement les As hors atout, jamais l'As d'atout :
 - sur 80, même couleur : 90 avec le Valet ou le 9 au moins second (même sans As : seule l'ouverture à
-  90 en exige un),
-  100 avec les deux, +10 par As hors atout ; autre couleur : 100 avec une
+  90 en exige un), 100 avec les deux, +10 par As hors atout ; autre couleur : 100 avec une
   maîtrise, 110 avec une maîtrise forte. L'ouvreur à 80 : sur 90 dans sa
   couleur, s'il a le complément, 100, +10 si ses deux As (déjà annoncés
   par le 80) sont hors atout, +10 par As hors atout en plus ; sur 100 dans
   une autre couleur, +10 avec deux As hors de cet atout, +10 par As en plus ;
-  sur 110 dans une autre couleur, +10 par As ; sans réponse, 100 s'il a une
-  vraie main de 100 ;
+  sur 110 dans une autre couleur, +10 par As ; sur 90 dans une autre couleur, avec le complément,
+  100, +10 par As ; sans réponse, 100 s'il a une vraie main de 100 ;
 - sur 90 : +10 pour le complément (le Valet, ou le 9 au moins second) et +10
   par As ; rien sans complément ; le 9 sec ne se signale pas au premier tour,
   au second tour seulement (+10) avec un As à côté ou si l'équipe est très en
@@ -42,7 +43,7 @@ Réponses (une fois, puis relances prévues par le document) :
   As compris dans la couleur ne compte pas, et derrière l'As de l'ouvreur son 10 est maître) ; sans
   les trois As, l'ouvreur ne remonte pas (ce serait une fausse information) ;
 - sur 110 : +10 par As de la famille opposée ; 110 -> 120 -> 130 : l'ouvreur
-  qui a l'autre As noir dit 130, le partenaire ajoute +10 par pli
+  qui a l'autre As de la famille opposée dit 130, le partenaire ajoute +10 par pli
   supplémentaire dans la famille opposée (sans recompter son As) ;
 - sur 120 : +10 avec l'As de la couleur sœur ; sur 130 (demande initiale) :
   +10 par 10 de la famille opposée ; sur 140 : +10 avec le 10 sœur.
@@ -65,7 +66,8 @@ Jeu :
   pas soutenu dans l'atout : il n'entame pas atout, il garde ses atouts pour la fin, et surtout le
   plus fort (le Valet) pour être sûr de faire le dernier pli : s'il doit jouer atout, il met le plus petit ;
 - quand le partenaire a montré le Valet et le 9 (100), j'entame atout dès que j'ai la main, avec mon plus
-  petit : il fait tomber les atouts adverses, puis me rend la main dans la couleur de mon appel ;
+  petit (pas si c'est contré, sauf au capot) : il fait tomber les atouts adverses, puis me rend la main
+  dans la couleur de mon appel ;
 - sinon, l'équipe qui a pris joue atout tant que les adversaires peuvent en avoir, en
   séparant le Valet et le 9 de l'équipe : avec le 9 sans le Valet, petit atout
   d'abord (le Valet du partenaire prend, ou celui de l'adversaire tombe) ; avec
@@ -277,7 +279,7 @@ class AsRBot(CoincheBot):
             return self._answer_80(hand, suit)
         if level == 90:
             if self._complement(r):
-                return ("bid", value + 10 + 10 * all_aces(hand), suit)
+                return ("bid", value + 10 + 10 * side_aces(hand, suit), suit)
             if r == {Rank.NINE} and passed_since and (side_aces(hand, suit) >= 1 or self._behind(game, seat)):
                 return ("bid", game.contract["value"] + 10, suit)  # 9 sec signalé au second tour
             return None
@@ -399,7 +401,7 @@ class AsRBot(CoincheBot):
                 return ("bid", 110 + 10 * k, suit) if k else None
             if suit != first_suit and value == 90:
                 r = ranks_in(hand, suit)
-                return ("bid", 100 + 10 * all_aces(hand), suit) if self._complement(r) else None
+                return ("bid", 100 + 10 * side_aces(hand, suit), suit) if self._complement(r) else None
             return None
         if suit != first_suit:
             return None
