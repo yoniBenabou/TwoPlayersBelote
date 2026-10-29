@@ -155,18 +155,61 @@
   .overlay th { color: var(--muted); font-weight: normal; } .overlay td:first-child, .overlay th:first-child { text-align: left; }
   .overlay ol { padding-left: 20px; margin: 0 0 16px; } .overlay li { margin-bottom: 8px; line-height: 1.45; font-size: 14px; }
   .center-btn { text-align: center; }
+
+  /* confiance de l'IA */
+  .slot .conf { position: absolute; bottom: -10px; z-index: 6; font: bold 11px "Courier New", monospace; color: var(--text);
+                background: rgba(10,14,19,.85); border: 1px solid var(--gold); border-radius: 999px; padding: 1px 7px; }
+  .chip.kind { background: transparent; border: 1px solid var(--gold); color: var(--gold); }
+
+  /* écran d'accueil */
+  .welcome { position: fixed; inset: 0; z-index: 50; display: none; overflow-y: auto;
+             background: radial-gradient(ellipse at 50% 0%, #1a4d3d 0%, #0d241d 45%, var(--bg) 100%); }
+  .welcome.show { display: block; }
+  .welcome .floaters { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .welcome .floaters span { position: absolute; font-size: 64px; opacity: .08; animation: drift 18s linear infinite; }
+  @keyframes drift { from { transform: translateY(110vh) rotate(0deg); } to { transform: translateY(-20vh) rotate(360deg); } }
+  .welcome .wrap { position: relative; max-width: 980px; margin: 0 auto; padding: 48px 20px 60px; }
+  .welcome .hero { text-align: center; margin-bottom: 34px; }
+  .welcome .hero .fan { display: flex; justify-content: center; margin-bottom: 18px; height: 120px; }
+  .welcome .hero .fan .card { margin: 0 -16px; transform-origin: 50% 120%; animation: fanin .8s cubic-bezier(.2,.9,.3,1.2) both; }
+  @keyframes fanin { from { transform: rotate(0deg) translateY(30px); opacity: 0; } }
+  .welcome h2.title { font-size: clamp(38px, 7vw, 72px); margin: 0; letter-spacing: .06em;
+                      background: linear-gradient(90deg, var(--accent), var(--gold)); -webkit-background-clip: text;
+                      background-clip: text; color: transparent; }
+  .welcome .sub { color: var(--muted); margin-top: 8px; font-size: 15px; }
+  .welcome .step { margin: 0 0 26px; }
+  .welcome .step h4 { margin: 0 0 4px; font-size: 13px; color: var(--accent); letter-spacing: .12em; }
+  .welcome .step .hint { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .welcome input { width: 100%; max-width: 360px; font-size: 20px; padding: 12px 16px; border-radius: 12px;
+                   border: 1px solid var(--line); background: var(--panel); color: var(--text); outline: none; }
+  .welcome input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(45,226,166,.2); }
+  .choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+  .choice { text-align: left; border: 1px solid var(--line); background: var(--panel); border-radius: 14px; padding: 14px;
+            cursor: pointer; transition: transform .15s, border-color .15s, box-shadow .15s; display: flex; flex-direction: column; gap: 6px; }
+  .choice:hover { transform: translateY(-3px); border-color: var(--accent); }
+  .choice.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 10px 24px rgba(0,0,0,.4);
+                background: linear-gradient(160deg, #163a2f, var(--panel)); }
+  .choice .t { font-weight: bold; font-size: 17px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .choice .stars { color: var(--gold); font-size: 13px; letter-spacing: 1px; white-space: nowrap; }
+  .choice .d { color: var(--muted); font-size: 12px; line-height: 1.4; }
+  .choice.ai .t { color: var(--gold); }
+  .welcome .versus { text-align: center; font-size: 18px; margin: 30px 0 16px; }
+  .welcome .versus b { color: var(--accent); } .welcome .versus i { color: var(--gold); font-style: normal; font-weight: bold; }
+  .welcome .go { font-size: 20px; padding: 14px 36px; border-radius: 999px; }
+  .welcome .go:hover { transform: scale(1.04); }
   .error { color: #f2545b; font-size: 13px; min-height: 16px; }
 </style>
 </head>
 <body>
 <header>
   <div>
-    <div class="kicker mono">COINCHE · 4 PLAYERS · TEST TABLE · BOTS: <span id="bots-name">–</span></div>
-    <h1>You and North against East and West</h1>
+    <div class="kicker mono">COINCHE · 4 PLAYERS · <span id="bots-name">–</span></div>
+    <h1 id="title">You and North against East and West</h1>
   </div>
   <div class="spacer"></div>
   <div class="badge">Deal <b id="deal">–</b></div>
   <div class="badge">Contract <b id="contract">–</b></div>
+  <button id="setup-btn">Players</button>
   <button id="rules">Rules</button>
   <button id="reveal">Show all hands</button>
   <button id="new-game">New game</button>
@@ -175,11 +218,11 @@
 <main>
   <section class="table" id="table">
     <div class="seat north" id="seat-north">
-      <div class="seat-label"><span class="name">North</span><span class="chip team mono">PARTNER</span><span class="chip dealer mono" id="dealer-north"></span><span class="chip taker mono" id="taker-north"></span><span class="chip bid mono" id="bid-north"></span></div>
+      <div class="seat-label"><span class="name" id="name-north">North</span><span class="chip team mono">PARTNER</span><span class="chip kind mono" id="kind-north"></span><span class="chip dealer mono" id="dealer-north"></span><span class="chip taker mono" id="taker-north"></span><span class="chip bid mono" id="bid-north"></span></div>
       <div class="mini-hand" id="hand-north"></div>
     </div>
     <div class="seat west" id="seat-west">
-      <div class="seat-label"><span class="name">West</span><span class="chip dealer mono" id="dealer-west"></span><span class="chip taker mono" id="taker-west"></span><span class="chip bid mono" id="bid-west"></span></div>
+      <div class="seat-label"><span class="name" id="name-west">West</span><span class="chip kind mono" id="kind-west"></span><span class="chip dealer mono" id="dealer-west"></span><span class="chip taker mono" id="taker-west"></span><span class="chip bid mono" id="bid-west"></span></div>
       <div class="mini-hand" id="hand-west"></div>
     </div>
     <div class="center">
@@ -198,11 +241,11 @@
       <div class="error" id="error"></div>
     </div>
     <div class="seat east" id="seat-east">
-      <div class="seat-label"><span class="name">East</span><span class="chip dealer mono" id="dealer-east"></span><span class="chip taker mono" id="taker-east"></span><span class="chip bid mono" id="bid-east"></span></div>
+      <div class="seat-label"><span class="name" id="name-east">East</span><span class="chip kind mono" id="kind-east"></span><span class="chip dealer mono" id="dealer-east"></span><span class="chip taker mono" id="taker-east"></span><span class="chip bid mono" id="bid-east"></span></div>
       <div class="mini-hand" id="hand-east"></div>
     </div>
     <div class="seat south" id="seat-south">
-      <div class="seat-label"><span class="name">You (South)</span><span class="chip dealer mono" id="dealer-south"></span><span class="chip taker mono" id="taker-south"></span><span class="chip bid mono" id="bid-south"></span></div>
+      <div class="seat-label"><span class="name" id="name-south">You (South)</span><span class="chip dealer mono" id="dealer-south"></span><span class="chip taker mono" id="taker-south"></span><span class="chip bid mono" id="bid-south"></span></div>
       <div class="hand" id="hand-south"></div>
     </div>
     <div class="overlay" id="overlay"><div class="box" id="overlay-box"></div></div>
@@ -211,9 +254,9 @@
   <aside>
     <div class="panel">
       <h2 class="mono">SCORE · FIRST TO <span id="target">1000</span></h2>
-      <div class="score-row"><span>You &amp; North</span><b id="total-0">0</b></div>
+      <div class="score-row"><span id="team-0">You &amp; North</span><b id="total-0">0</b></div>
       <div class="bar us"><div id="bar-0" style="width:0"></div></div>
-      <div class="score-row"><span>East &amp; West</span><b id="total-1">0</b></div>
+      <div class="score-row"><span id="team-1">East &amp; West</span><b id="total-1">0</b></div>
       <div class="bar"><div id="bar-1" style="width:0"></div></div>
     </div>
     <div class="panel">
@@ -235,6 +278,33 @@
   </aside>
 </main>
 
+<div class="welcome" id="welcome">
+  <div class="floaters" id="floaters"></div>
+  <div class="wrap">
+    <div class="hero">
+      <div class="fan" id="fan"></div>
+      <h2 class="title">COINCHE</h2>
+      <div class="sub">Four players · first to 1,500 · you sit South</div>
+    </div>
+    <div class="step">
+      <h4 class="mono">1 · YOUR NAME</h4>
+      <input id="w-name" maxlength="20" placeholder="Type your name" autocomplete="off">
+    </div>
+    <div class="step">
+      <h4 class="mono">2 · YOUR WAY OF PLAYING</h4>
+      <div class="hint">Your partner North plays it too, so your bids mean the same thing to both of you.</div>
+      <div class="choices" id="w-styles"></div>
+    </div>
+    <div class="step">
+      <h4 class="mono">3 · YOUR OPPONENTS</h4>
+      <div class="hint">East and West. The stars give their strength in our bot-against-bot matches.</div>
+      <div class="choices" id="w-opponents"></div>
+    </div>
+    <div class="versus" id="w-versus"></div>
+    <div class="center-btn"><button class="primary go" id="w-go">Deal the cards ▶</button></div>
+  </div>
+</div>
+
 <script>
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -242,6 +312,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const DELAY = { bid: 1100, yourBid: 500, card: 1000, yourCard: 450, announce: 1800, trick: 1700, message: 1400 };
 const SEATS = ["south", "west", "north", "east"];
 const NAMES = { south: "You", east: "East", north: "North", west: "West" };
+function applyNames(s) {
+  if (!s.names) return;
+  Object.assign(NAMES, s.names);
+  const you = s.names.south === "You";
+  $("name-south").textContent = you ? "You (South)" : `${s.names.south} (South)`;
+  $("title").textContent = `${s.names.south} and North against East and West`;
+  $("team-0").textContent = s.teams[0]; $("team-1").textContent = s.teams[1];
+  $("kind-north").textContent = s.setup.partnerLabel.toUpperCase();
+  for (const seat of ["east", "west"]) $(`kind-${seat}`).textContent = s.setup.opponentsLabel.toUpperCase();
+}
 let view = null, busy = false, selectedValue = null;
 
 function cardEl(c, { small = false, classes = [] } = {}) {
@@ -269,6 +349,7 @@ function renderTrick(trick, winner = null) {
     if (e) {
       slot.append(cardEl(e.card, { classes: ["pop"] }));
       if (e.announce) { const a = document.createElement("span"); a.className = "announce"; a.textContent = e.announce; slot.append(a); }
+      if (e.confidence !== undefined) { const k = document.createElement("span"); k.className = "conf"; k.title = "AI confidence"; k.textContent = `${e.confidence}%`; slot.append(k); }
     }
   }
 }
@@ -316,6 +397,7 @@ function render() {
   const s = view;
   $("deal").textContent = s.dealNo;
   $("bots-name").textContent = (s.bots || "–").toUpperCase();
+  applyNames(s);
   $("contract").innerHTML = s.contract
     ? `<span style="color:${s.contract.suit.color === "red" ? "#f2545b" : "inherit"}">${s.contract.label}</span>${s.contract.mult > 1 ? ` ×${s.contract.mult}` : ""}`
     : "–";
@@ -385,10 +467,10 @@ function renderOverlay() {
   if (r.mult === 1 && r.made) notes.push("Both teams' points are rounded to the nearest 10 (up from 5).");
   if (r.mult > 1) notes.push(`${r.mult === 2 ? "Coinched" : "Surcoinched"}: contract × ${r.mult} + 160 for the ${r.made ? "bidding team" : "defence"}.`);
   if (r.beloteNeeded && r.mult > 1) notes.push("The belote was needed to make the contract, so it scores nothing.");
-  const head = s.gameOver ? (s.totals[0] > s.totals[1] ? "You and North win the game!" : "East and West win the game")
+  const head = s.gameOver ? (s.totals[0] > s.totals[1] ? `${s.teams[0]} win the game!` : "East and West win the game")
                           : `Contract ${r.made ? "made" : "failed"}`;
   box.innerHTML = `<h3>${head}</h3><p>${r.text}</p>
-    <table><tr><th></th><th>You &amp; North</th><th>East &amp; West</th></tr>
+    <table><tr><th></th><th>${s.teams[0]}</th><th>${s.teams[1]}</th></tr>
     ${rows.map((x) => `<tr><td>${x[0]}</td><td>${x[1]}</td><td>${x[2]}</td></tr>`).join("")}</table>
     ${notes.map((n) => `<p>${n}</p>`).join("")}
     ${s.gameOver ? `<p>Final score: ${s.totals[0]} – ${s.totals[1]}</p>` : ""}
@@ -421,7 +503,7 @@ async function replay(state) {
       banner(ev.text); log(ev.text, true); await sleep(DELAY.message);
     } else if (ev.type === "bid") {
       if (view) { view.bids = [...view.bids, { seat: ev.seat, label: ev.label }]; render(); }
-      bubble(ev.seat, ev.label, ev.seat === "south" ? 900 : DELAY.bid + 300);
+      bubble(ev.seat, ev.confidence !== undefined ? `${ev.label} · ${ev.confidence}%` : ev.label, ev.seat === "south" ? 900 : DELAY.bid + 300);
       banner(ev.text); log(ev.text, ev.label !== "Pass");
       await sleep(ev.seat === "south" ? DELAY.yourBid : DELAY.bid);
     } else if (ev.type === "play") {
@@ -433,7 +515,7 @@ async function replay(state) {
         render();
       }
       if (trick.length === 4) trick = [];
-      trick.push({ seat: ev.seat, card: ev.card, announce: ev.announce }); renderTrick(trick);
+      trick.push({ seat: ev.seat, card: ev.card, announce: ev.announce, confidence: ev.confidence }); renderTrick(trick);
       const text = ev.text; banner(text); log(text, !!ev.announce);
       await sleep(ev.announce ? DELAY.announce : ev.seat === "south" ? DELAY.yourCard : DELAY.card);
     } else if (ev.type === "trick") {
@@ -462,6 +544,66 @@ const play = (id) => act("/api/play", { card: id });
 const nextDeal = () => { $("overlay").classList.remove("show"); return act("/api/next", {}); };
 const newGame = () => { $("overlay").classList.remove("show"); $("log").innerHTML = ""; return act("/api/new", {}); };
 
+// ---------- écran d'accueil ----------
+const choice = { name: "", partner: "asr", opponents: "ai" };
+const store = { get() { try { return JSON.parse(localStorage.getItem("coinche-setup") || "null"); } catch { return null; } },
+                set(v) { try { localStorage.setItem("coinche-setup", JSON.stringify(v)); } catch {} } };
+function renderChoices(id, items, key) {
+  const box = $(id); box.innerHTML = "";
+  for (const it of items) {
+    const b = document.createElement("div");
+    b.className = `choice ${it.key === "ai" ? "ai" : ""} ${choice[key] === it.key ? "sel" : ""}`;
+    b.innerHTML = `<div class="t"><span>${it.label}</span><span class="stars">${"★".repeat(it.stars)}${"☆".repeat(5 - it.stars)}</span></div>
+                   <div class="d">${it.text}</div>`;
+    b.onclick = () => { choice[key] = it.key; renderWelcome(); };
+    box.append(b);
+  }
+}
+function renderWelcome() {
+  const p = view.players;
+  renderChoices("w-styles", p.styles, "partner");
+  renderChoices("w-opponents", p.opponents, "opponents");
+  const label = (list, k) => (list.find((x) => x.key === k) || {}).label || k;
+  const who = ($("w-name").value.trim() || "You");
+  $("w-versus").innerHTML = `<b>${who.replace(/[<>&]/g, "")} & North</b> playing ${label(p.styles, choice.partner)} &nbsp;vs&nbsp; <i>East & West</i> playing ${label(p.opponents, choice.opponents)}`;
+}
+function openWelcome() {
+  const saved = store.get();
+  const s = view.setup;
+  Object.assign(choice, { name: s.name === "You" ? "" : s.name, partner: s.partner, opponents: s.opponents });
+  if (!view.configured && saved) Object.assign(choice, saved);
+  if (!view.players.opponents.some((x) => x.key === choice.opponents)) choice.opponents = view.players.opponents[0].key;
+  $("w-name").value = choice.name || "";
+  const fan = $("fan"); fan.innerHTML = "";
+  const demo = [["A", "♠", "black"], ["10", "♥", "red"], ["J", "♣", "black"], ["9", "♦", "red"], ["K", "♥", "red"]];
+  demo.forEach(([rank, suit, color], i) => {
+    const el = cardEl({ rank, suit, color, label: `${rank}${suit}` });
+    el.style.transform = `rotate(${(i - 2) * 9}deg)`; el.style.animationDelay = `${i * 0.08}s`; fan.append(el);
+  });
+  const fl = $("floaters"); fl.innerHTML = "";
+  for (let i = 0; i < 14; i++) {
+    const sp = document.createElement("span"); sp.textContent = "♠♥♣♦"[i % 4];
+    sp.style.left = `${(i * 73) % 100}%`; sp.style.animationDelay = `${-i * 1.3}s`; sp.style.animationDuration = `${14 + (i % 5) * 3}s`;
+    if (i % 2) sp.style.color = "#f2545b"; fl.append(sp);
+  }
+  renderWelcome();
+  $("welcome").classList.add("show");
+  setTimeout(() => $("w-name").focus(), 50);
+}
+$("w-name").oninput = renderWelcome;
+$("w-name").onkeydown = (e) => { if (e.key === "Enter") $("w-go").click(); };
+$("w-go").onclick = async () => {
+  if (busy) return;
+  const body = { name: $("w-name").value.trim(), partner: choice.partner, opponents: choice.opponents };
+  store.set(body);
+  $("welcome").classList.remove("show"); $("overlay").classList.remove("show"); $("log").innerHTML = "";
+  view = null;
+  busy = true;
+  try { const s = await api("/api/setup", body); view = { ...s, bids: [], trick: [] }; render(); await replay(s); }
+  catch { busy = false; if (view) render(); }
+};
+$("setup-btn").onclick = () => { if (!busy && view) openWelcome(); };
+
 $("new-game").onclick = newGame;
 $("rules").onclick = () => { if (view) showRules(); };
 $("reveal").onclick = async () => { if (busy || !view) return; const s = await api("/api/reveal", { on: !view.reveal });
@@ -469,6 +611,7 @@ $("reveal").onclick = async () => { if (busy || !view) return; const s = await a
 
 (async () => {
   const s = await api("/api/state");
+  if (!s.configured) { view = s; render(); renderTrick(s.trick); banner("Choose your players"); openWelcome(); return; }
   if (s.phase === "bidding" && s.bids.length) {
     // donne déjà distribuée par le serveur : on rejoue les annonces des robots une par une
     view = { ...s, bids: [] }; render(); renderTrick(s.trick);

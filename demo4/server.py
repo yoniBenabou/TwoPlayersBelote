@@ -1,7 +1,9 @@
 """Coinche à 4 dans le navigateur : tu joues Sud, avec Nord comme partenaire,
-contre Est et Ouest (robots simples).
+contre Est et Ouest. Écran d'accueil : ton nom, ta convention (jouée aussi par
+ton partenaire) et tes adversaires (une convention, ou l'IA entraînée).
 
     python -m demo4.server                  # puis ouvrir http://localhost:8100
+    python -m demo4.server --model chemin/ppo.pt   # modèle de l'IA (par défaut : DEFAULT_MODEL)
     python -m demo4.server --bots petitjeu  # robots qui annoncent au petit jeu
     python -m demo4.server --bots papirobert  # robots au jeu aux As de Papi Robert
     python -m demo4.server --bots asr  # robots aux conventions AsR
@@ -21,17 +23,19 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from belote.coinche.engine import DEFAULT_TARGET
-from demo4.game import BOT_KINDS, IllegalMove, Table
+from demo4.game import BOT_KINDS, IllegalMove, Table, load_network
 
 INDEX_HTML = Path(__file__).with_name("index.html")
 COOKIE = "coinche_sid"
 MAX_TABLES = 200
+DEFAULT_MODEL = "/ugproj/crml-prj10880/experiments/coinche_bid_mix25_seed1/checkpoints/ppo_04000000.pt"
 
 
 class Tables:
-    def __init__(self, target, bots="simple"):
+    def __init__(self, target, bots="simple", network=None):
         self.target = target
         self.bots = bots
+        self.network = network
         self.tables = {}  # sid -> [Table, verrou, dernier accès]
         self.lock = threading.Lock()
 
@@ -41,7 +45,8 @@ class Tables:
                 if len(self.tables) >= MAX_TABLES:
                     del self.tables[min(self.tables, key=lambda k: self.tables[k][2])]
                 sid = secrets.token_urlsafe(16)
-                self.tables[sid] = [Table(target=self.target, bots=self.bots), threading.Lock(), time.time()]
+                self.tables[sid] = [Table(target=self.target, bots=self.bots, network=self.network),
+                                    threading.Lock(), time.time()]
             entry = self.tables[sid]
             entry[2] = time.time()
             return sid, entry[0], entry[1]
@@ -83,6 +88,7 @@ def make_handler(tables):
             sid, table, lock = self._table()
             actions = {
                 "/api/new": lambda: table.new_game(),
+                "/api/setup": lambda: table.setup(payload),
                 "/api/bid": lambda: table.bid_human(payload),
                 "/api/play": lambda: table.play_human(payload.get("card")),
                 "/api/next": lambda: table.next_deal(),
@@ -108,9 +114,13 @@ def main():
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--target", type=int, default=DEFAULT_TARGET)
     parser.add_argument("--bots", choices=sorted(BOT_KINDS), default="simple",
-                        help="règles des robots : simple, petitjeu (convention du petit jeu) papirobert (jeu aux As de Papi Robert) ou asr (conventions AsR)")
+                        help="robots de la table avant l'écran d'accueil : simple, petitjeu, papirobert ou asr")
+    parser.add_argument("--model", default=DEFAULT_MODEL, help="modèle .pt de l'IA (Coinche à 4, avec annonces)")
     args = parser.parse_args()
-    tables = Tables(args.target, args.bots)
+    network = load_network(args.model)
+    print(f"AI model: {args.model}" if network is not None else f"AI model not found ({args.model}): AI disabled",
+          flush=True)
+    tables = Tables(args.target, args.bots, network)
     for port in range(args.port, args.port + 50):
         try:
             server = ThreadingHTTPServer((args.host, port), make_handler(tables))
