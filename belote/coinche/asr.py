@@ -18,7 +18,8 @@ forte couleur) :
 - Valet au moins troisième ou 9 au moins quatrième, avec au moins un As
   (d'atout ou à côté) : 90 ; jamais 90 sans As.
 Réponses (une fois, puis relances prévues par le document) :
-- sur 80, même couleur : 90 avec le Valet ou le 9 (et au moins un As),
+- sur 80, même couleur : 90 avec le Valet ou le 9 au moins second (même sans As : seule l'ouverture à
+  90 en exige un),
   100 avec les deux, +10 par As hors atout ; autre couleur : 100 avec une
   maîtrise, 110 avec une maîtrise forte. L'ouvreur à 80 : sur 90 dans sa
   couleur, s'il a le complément, 100, +10 si ses deux As (déjà annoncés
@@ -45,7 +46,7 @@ Réponses (une fois, puis relances prévues par le document) :
 Capot de l'ouvreur : après 100 et +30 avec 5 atouts ; après 100, les trois As et les plis maîtres
 annoncés, si ses plis attendus font 8 ; après les réponses sur
 110, si ses plis attendus (atouts, As, plis signalés) font 8.
-Collage : sur un 90 adverse, une main de 90 dit 100 (le partenaire la lit
+Collage : sur un 90 adverse, une main de 90 (donc avec un As) dit 100 (le partenaire la lit
 comme un 90 et ne répond que le complément) ; une main de 100 saute à 110 (le
 partenaire reste prudent : il passe) ; sur un 100 adverse, une vraie main de
 100 dit 110 (lue comme un 100).
@@ -330,7 +331,8 @@ class AsRBot(CoincheBot):
             return ("bid", 110, other)
         if kind == "100":
             return ("bid", 100, other)
-        if (Rank.JACK in r or Rank.NINE in r) and all_aces(hand) >= 1:
+        if Rank.JACK in r or (Rank.NINE in r and len(r) >= 2):
+            # le Valet, ou le 9 au moins second ; en réponse, pas besoin d'As (seule l'ouverture à 90 en exige un)
             return ("bid", 90, suit)
         return None
 

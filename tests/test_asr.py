@@ -53,6 +53,19 @@ def check_answers_to_90():
         assert bot.bid(g, 2) == want, (north, bot.bid(g, 2))
 
 
+def check_answer_80_without_ace():
+    # sur 80 cœur : 9 second sans As -> 90 ; Valet sec sans As -> 90 ; 9 sec -> rien
+    for north, want in [(hand(H="9 8", S="K Q", D="K Q", C="10 J"), ("bid", 90, H)),
+                        (hand(H="J", S="K Q 8", D="K Q", C="10 J"), ("bid", 90, H)),
+                        (hand(H="9", S="K Q 8", D="K Q", C="10 J"), P)]:
+        g = deal([hand(H="J 7", S="A", D="A", C="7 8 Q K"), hand(S="9 10", D="9 10", C="9"), north], [("bid", 80, H), P])
+        assert bot.bid(g, 2) == want, (north, bot.bid(g, 2))
+    # collage : une main de 90 sans As ne colle pas à 100 sur un 90 adverse ; avec un As, si
+    for mine, want in [(hand(H="J 7 8", C="K", D="7", S="Q"), P), (hand(H="J 7 8", C="A", D="7", S="Q"), ("bid", 100, H))]:
+        g = deal([hand(S="J 9 7", D="A"), mine], [("bid", 90, S)])
+        assert bot.bid(g, 1) == want, (mine, bot.bid(g, 1))
+
+
 def check_answers_to_80():
     # 80 cœur, partenaire 90 (Valet ou 9) ; j'ai le complément et deux As hors cœur : 110 (les deux As
     # sont déjà annoncés par le 80 : +10 pour le complément, +10 parce qu'ils sont hors atout)
@@ -356,6 +369,7 @@ def main():
     check_openings()
     check_answers_to_90()
     check_answers_to_80()
+    check_answer_80_without_ace()
     check_110_dialogue()
     check_100_dialogue()
     check_capot_on_100()
