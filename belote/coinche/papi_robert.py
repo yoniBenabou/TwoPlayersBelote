@@ -5,9 +5,9 @@ ceux des couleurs autres que l'atout.
 Ouvertures (on choisit d'abord la couleur avec le plus de majeures) :
 - 80, "jeu aux As" : 2 ou 3 atouts dont le Valet ou le 9 (ou la belote), et
   2 As ; on choisit la couleur la plus forte (points des atouts, belote, As) ;
-- 90 : 3 atouts dont une majeure et un As ; ou 4 atouts (au moins) dont une
-  majeure ; ou les deux majeures en 3 atouts avec un As mais un jeu "light" à
-  côté (rien à côté avec l'As d'atout ; un seul As et pas de 10 sinon) ;
+- 90 (toujours avec un As, d'atout ou à côté) : Valet troisième, ou 9 (ou
+  Valet) quatrième ; ou les deux majeures en 3 atouts avec un As mais un jeu "light"
+  à côté (rien à côté avec l'As d'atout ; un seul As et pas de 10 sinon) ;
 - 100 : 3 atouts dont les deux majeures et un As (l'As d'atout ou un As à
   côté) ; ou maître à l'atout : 4 atouts dont les deux majeures et un As, ou
   5 atouts dont les deux majeures (Valet, 9, 10, Roi, Dame) ; jamais 100 sans
@@ -71,16 +71,16 @@ def opening_value(hand, suit):
         if n == 3 and (aces >= 1 or trump_ace):
             tens = sum(c.rank == Rank.TEN and c.suit != suit for c in hand)
             return 90 if aces + tens <= (0 if trump_ace else 1) else 100  # jeu light à côté : on reste à 90
-        if n >= 4:
-            return 90
         if n == 2 and aces >= 2:
             return 80
-        return None
+        return None  # Valet et 9 sans aucun As : 90 oblige d'avoir un As
     if m == 1:
-        if n >= 4:
-            return 90
-        if n == 3 and aces == 1:
-            return 90
+        jack = any(c.suit == suit and c.rank == Rank.JACK for c in hand)
+        any_ace = aces >= 1 or any(c.suit == suit and c.rank == Rank.ACE for c in hand)
+        if n >= 4 and any_ace:
+            return 90  # Valet ou 9 quatrième et un As (d'atout ou à côté)
+        if n == 3 and jack and any_ace and aces < 2:
+            return 90  # Valet troisième et un As (d'atout ou à côté)
         if n in (2, 3) and aces >= 2:
             return 80
     if m == 0 and n in (2, 3) and aces >= 2 and has_belote(hand, suit):

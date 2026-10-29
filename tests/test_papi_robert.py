@@ -15,7 +15,11 @@ def check_openings():
     assert opening_value(hand(S="9 8 7", H="A", D="A", C="7 8 10"), S) == 80         # 3 atouts + 2 As
     assert opening_value(hand(S="J 8 7", H="A 8", D="7 8", C="7"), S) == 90          # 3 atouts + 1 As
     assert opening_value(hand(S="J 8 7", H="K 8", D="7 8", C="7"), S) is None        # pas d'As
-    assert opening_value(hand(S="9 8 7 K", H="K 8", D="7 8"), S) == 90               # 4 atouts dont une majeure
+    assert opening_value(hand(S="9 8 7 K", H="A 8", D="7 8"), S) == 90               # 9 quatrième et un As
+    assert opening_value(hand(S="9 8 7 K", H="K 8", D="7 8"), S) is None             # 90 oblige d'avoir un As
+    assert opening_value(hand(S="9 8 7", H="A 8", D="7 8", C="K"), S) is None        # 9 troisième : pas 90
+    assert opening_value(hand(S="J A 7", H="K 8", D="7 8", C="K"), S) == 90          # Valet troisième, As d'atout
+    assert opening_value(hand(S="9 A 7 8", H="K 8", D="7 8"), S) == 90               # 9 quatrième, As d'atout
     assert opening_value(hand(S="J 9 7", H="A 10", D="7 8", C="7"), S) == 100        # les deux majeures + As
     assert opening_value(hand(S="J 9 7", H="A 8", D="7 8", C="7"), S) == 90          # jeu light à côté
     assert opening_value(hand(S="J 9 7 8", H="A", D="7 8", C="7"), S) == 100         # 4 atouts, 4 couleurs
@@ -26,7 +30,7 @@ def check_openings():
     assert opening_value(hand(S="J 9 A 8", H="8 7", D="7", C="7"), S) == 100         # maître avec l'As d'atout
     assert opening_value(hand(S="J 9 A", H="8 10", D="7 8", C="7"), S) == 100        # J 9 A + un 10 à côté
     assert opening_value(hand(S="J 9 A", H="8 7", D="7 8", C="7"), S) == 90          # J 9 A, rien à côté : light
-    assert opening_value(hand(S="J 9 7 8", H="8 7", D="7 K"), S) == 90               # 4 atouts sans As : pas maître
+    assert opening_value(hand(S="J 9 7 8", H="8 7", D="7 K"), S) is None             # sans As : ni maître ni 90
     assert opening_value(hand(S="J A K Q 8", H="A 7 8"), S) == 90                    # jamais 100 sans les 2 majeures
     # exemple de Noa : 9 et As de trèfle, As de cœur, Roi-Dame de carreau, 7 de pique : 80 carreau
     # (belote et 2 As à côté) plutôt que trèfle
