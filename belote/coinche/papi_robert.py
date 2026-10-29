@@ -34,8 +34,9 @@ Jeu :
 - l'équipe qui a pris joue atout quand elle a la main, tant que les
   adversaires peuvent en avoir, en commençant fort (le plus gros) ; puis ses As, puis la couleur que le partenaire a appelée, puis la
   plus petite carte ;
-- en défense : la couleur appelée par le partenaire, puis les As, puis la plus
-  petite carte ;
+- en défense : jamais d'entame atout (c'est l'équipe qui a pris qui décide de
+  jouer atout), sauf s'il ne reste que des atouts : la couleur appelée par le
+  partenaire, puis les As, puis la plus petite carte ;
 - appel indirect : quand le partenaire entame atout et que je n'en ai plus, je
   défausse une petite carte dans la couleur sœur (même teinte) de celle de mon
   As ; le partenaire rejoue ensuite la couleur de l'As.
@@ -218,7 +219,9 @@ class PapiRobertBot(CoincheBot):
         called = [c for c in legal if c.suit in self._called_suits(game, seat)]
         called_lead = min(called, key=lambda c: c.strength(trump)) if called else None
         if not attacking:
-            return called_lead or super().lead(game, seat, legal)
+            # c'est l'équipe qui a pris qui décide de jouer atout : la défense n'entame pas atout
+            side = [c for c in legal if c.suit != trump] or legal
+            return called_lead or super().lead(game, seat, side)
         trumps = [c for c in legal if c.suit == trump]
         if trumps and self._opponents_may_have_trumps(game, seat):
             # on a pris : atout tant que les adversaires en ont, en commençant fort

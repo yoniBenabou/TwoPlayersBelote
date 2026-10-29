@@ -130,6 +130,19 @@ def check_discards():
     assert PapiRobertBot._allowed_discards(game, 2, game.legal_cards(2)) == game.legal_cards(2)
 
 
+def check_defence_no_trump_lead():
+    bot = PapiRobertBot()
+    # Ouest a pris à pique ; Sud (défense) a la main avec le 7 de pique et des cartes à points : pas d'atout
+    game = table([None, hand(S="J 9 A 8")])
+    game.bid(0, ("pass",))
+    game.bid(1, ("bid", 100, S))
+    game.bid(2, ("pass",)); game.bid(3, ("pass",)); game.bid(0, ("pass",))
+    game.hands[0] = hand(S="7", H="K Q", D="K 10", C="Q K 10")
+    assert bot.play(game, 0).suit != S
+    game.hands[0] = hand(S="7 8")                      # que des atouts : pas le choix
+    assert bot.play(game, 0).suit == S
+
+
 def check_trump_until_void():
     bot = PapiRobertBot()
     # Sud a pris ; les adversaires n'ont plus d'atout (ils n'ont pas fourni) : il garde ses atouts et joue son As
@@ -167,6 +180,7 @@ def main():
     check_play()
     check_discards()
     check_trump_until_void()
+    check_defence_no_trump_lead()
     check_full_games()
     print("OK")
 
