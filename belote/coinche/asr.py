@@ -106,8 +106,9 @@ Jeu :
 - on ne défausse jamais un As, et on ne le charge jamais sur le pli du partenaire (même dans la
   couleur demandée), sans une carte maîtresse derrière lui dans sa couleur (le 10, ou la suivante si
   le 10 est tombé), sauf si on n'a pas le choix ;
-- partenaire maître : on lui donne en priorité son 10 sec (sinon l'As adverse le prendrait) ; jamais un
-  10 accompagné (il peut faire un pli) ; en troisième, avec l'As et une plus petite carte qui prend,
+- partenaire maître : s'il est sûr de faire le pli (je joue en dernier, ou sa carte est maîtresse et
+  l'adversaire qui joue après moi ne peut pas couper), on lui donne en priorité son 10 sec (sinon l'As
+  adverse le prendrait) ; jamais un 10 accompagné (il peut faire un pli) ; en troisième, avec l'As et une plus petite carte qui prend,
   on joue l'As si le 10 peut être derrière (on capture un 10 sec).
 Le reste du jeu est celui de CoincheBot.
 """
@@ -548,15 +549,35 @@ class AsRBot(CoincheBot):
             if ace in winners and len(winners) > 1 and ten not in gone and ten not in hand:
                 return ace
         if winning[0] == partner:
-            # partenaire maître : d'abord mon 10 sec (il serait pris par l'As) ; jamais un 10 accompagné
+            # partenaire sûr de prendre le pli : d'abord mon 10 sec (il serait pris par l'As) ; jamais un 10 accompagné
             dry = [c for c in legal if c.rank == Rank.TEN and c.suit != trump
                    and sum(d.suit == c.suit for d in hand) == 1]
-            if dry:
+            sure = self._partner_sure(game, seat)
+            if dry and sure:
                 return dry[0]
+            # pli pas assuré : aucun 10 ; assuré : pas de 10 accompagné
             keep = [c for c in legal if not (c.rank == Rank.TEN and c.suit != trump
-                                             and sum(d.suit == c.suit for d in hand) > 1)]
+                                             and (not sure or sum(d.suit == c.suit for d in hand) > 1))]
             return super().play(game, seat, keep or legal)
         return super().play(game, seat, legal)
+
+    def _partner_sure(self, game, seat):
+        """Le pli du partenaire est assuré : je joue en dernier, ou sa carte est maîtresse et l'adversaire
+        qui joue après moi ne peut pas couper (il n'a plus d'atout, ou il n'en reste plus dehors)."""
+        from .papi_robert import PapiRobertBot
+        trick, trump, hand = game.trick, game.trump, game.hands[seat]
+        if len(trick) == 3:
+            return True
+        best = trick[trick_winner(trick, trump)][1]
+        seen = {c for cards in game.played for c in cards} | {c for _s, c in trick} | set(hand)
+        unseen = [Card(best.suit, r) for r in Rank if Card(best.suit, r) not in seen]
+        if any(c.strength(trump) > best.strength(trump) for c in unseen):
+            return False
+        if best.suit == trump:
+            return True
+        last = (seat + 1) % 4
+        no_trump_left = all(c in seen for c in self._all_trumps(trump))
+        return no_trump_left or trump in PapiRobertBot._shown_voids(game)[last]
 
     def _sure_trump(self, game, seat, legal):
         """Sur l'entame atout du partenaire : le plus petit atout qui bat tous ceux qui peuvent encore

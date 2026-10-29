@@ -336,9 +336,17 @@ def check_play():
     g.played[1].remove(Card(H, Rank.TEN))
     g.hands[3] = hand(H="A", C="A")                                   # que des As : pas le choix
     assert bot._keep_aces(g, 3, g.legal_cards(3)) == g.legal_cards(3)
-    # partenaire maître : je lui donne mon 10 sec en priorité (pas le 10 accompagné de cœur)
+    # partenaire maître, je joue en dernier : je lui donne mon 10 sec en priorité (pas le 10 accompagné)
+    g.trick = [(0, Card(D, Rank.EIGHT)), (1, Card(D, Rank.ACE)), (2, Card(D, Rank.SEVEN))]
     g.hands[3] = hand(H="10 K 7", C="10", S="7 8")
     assert bot.play(g, 3) == Card(C, Rank.TEN)
+    # en troisième : seulement si le dernier joueur ne peut pas couper
+    g2 = deal([None, None, hand(S="J 9 A 8")], [P, P, ("bid", 100, S), P, P, P])
+    g2.trick = [(3, Card(D, Rank.ACE)), (0, Card(D, Rank.SEVEN))]      # Est entame l'As, Sud fournit
+    g2.current = 1
+    g2.hands[1] = hand(H="10 K 7", C="10", S="7")
+    assert bot._partner_sure(g2, 1) is False                            # Nord peut couper à pique
+    assert bot.play(g2, 1) != Card(C, Rank.TEN)
     # partie de Noa : atout pique, Ouest coupe le cœur ; Est a As-7 de cœur : il fournit le 7, pas l'As
     # (le 10 de cœur adverse deviendrait maître)
     g = deal([hand(H="8 9 10"), hand(S="J 9 A 8")], [P, ("bid", 100, S), P, P, P])
