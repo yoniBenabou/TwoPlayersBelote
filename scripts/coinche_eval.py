@@ -1,7 +1,8 @@
 """Coinche à 4 : match entre deux équipes, avec statistiques d'annonces.
 
 Chaque équipe est un modèle .pt (scripts/train_coinche.py), un robot ("bots" :
-CoincheBot ; "petitjeu" : PetitJeuBot, convention du petit jeu) ou "random"
+CoincheBot ; "petitjeu" : PetitJeuBot, convention du petit jeu ;
+"papirobert" : PapiRobertBot, jeu aux As de Papi Robert) ou "random"
 (cartes au hasard parmi les cartes jouables ; ses annonces sont faites par
 CoincheBot, des annonces au hasard n'ayant pas de sens). Un modèle entraîné avec --bidding annonce pour ses places ; un
 modèle "cartes seulement" laisse les annonces de ses places à CoincheBot.
@@ -19,6 +20,7 @@ from collections import Counter, defaultdict
 import torch
 
 from belote.coinche.bots import CoincheBot
+from belote.coinche.papi_robert import PapiRobertBot
 from belote.coinche.petit_jeu import PetitJeuBot
 from belote.coinche.engine import CAPOT, DEFAULT_TARGET, SEAT_NAMES, team_of
 from belote.coinche.rl_env import CARD_INDEX, NUM_ACTIONS_BIDDING, NUM_ACTIONS_PLAY, CoincheEnv, bid_to_action
@@ -27,7 +29,7 @@ from belote.rl.ppo_agent import PPOAgent
 from scripts.train_coinche import mean_ci
 
 
-BOTS = {"bots": CoincheBot, "petitjeu": PetitJeuBot, "random": CoincheBot}
+BOTS = {"bots": CoincheBot, "petitjeu": PetitJeuBot, "papirobert": PapiRobertBot, "random": CoincheBot}
 
 
 class Side:
