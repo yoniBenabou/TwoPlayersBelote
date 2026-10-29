@@ -130,7 +130,7 @@ class CoincheEnv:
             game.dealer = dealer
             game.current = (dealer + 1) % 4
         self.voids = [set() for _ in range(4)]
-        self.trump_cap = [None] * 4  # force maximale possible de leur atout (sous-coupe forcée)
+        self.trump_cap = [None] * 4  # force maximale possible de leur atout (n'a pas pu monter)
         self.belote_seen = None
 
     def random_deal(self):
@@ -214,10 +214,11 @@ class CoincheEnv:
         partner_winning = trick[trick_winner(trick, trump)][0] == partner_of(seat)
         if partner_winning:
             return
-        if card.suit != trump:
-            self.voids[seat].add(trump)
-        elif best is not None and card.strength(trump) < best.strength(trump):
-            self._cap(seat, best.strength(trump))
+        if best is None:
+            if card.suit != trump:
+                self.voids[seat].add(trump)  # adversaire maître sans atout dans le pli : couper obligatoire
+        elif card.suit != trump or card.strength(trump) < best.strength(trump):
+            self._cap(seat, best.strength(trump))  # pas pu monter (pas d'obligation de sous-couper)
 
     def _cap(self, seat, strength):
         cap = self.trump_cap[seat]

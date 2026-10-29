@@ -42,10 +42,10 @@ def check_legal_cards():
     # 5. un adversaire a coupé : monter sur son atout si possible...
     trick = [(1, Card(D, Rank.ACE)), (2, Card(D, Rank.SEVEN)), (3, Card(C, Rank.TEN))]
     assert legal_cards(hand, trick, trump, 0) == [Card(C, Rank.JACK)]
-    # ... sinon sous-couper (un atout plus petit reste obligatoire)
+    # ... sinon carte libre : pas d'obligation de sous-couper
     low = cards("7 A", H) + cards("8 10", C) + cards("K", S)
     trick = [(1, Card(D, Rank.ACE)), (2, Card(D, Rank.SEVEN)), (3, Card(C, Rank.JACK))]
-    assert set(legal_cards(low, trick, trump, 0)) == set(cards("8 10", C))
+    assert set(legal_cards(low, trick, trump, 0)) == set(low)
     # 6. le partenaire a coupé et il est maître : carte libre
     trick = [(1, Card(D, Rank.ACE)), (2, Card(C, Rank.SEVEN)), (3, Card(D, Rank.KING))]
     assert set(legal_cards(hand, trick, trump, 0)) == set(hand)
@@ -163,7 +163,7 @@ def main():
     check_trick_winner()
     print("Gagnant du pli (couleur, atout, ordre des atouts) : OK")
     check_legal_cards()
-    print("Cartes jouables (fournir, monter à l'atout, partenaire maître, couper, sous-couper) : OK")
+    print("Cartes jouables (fournir, monter à l'atout, partenaire maître, couper, pas d'obligation de sous-couper) : OK")
     check_scoring()
     print("Barème (arrondi, chute, belote utile ou non, coinche x2, surcoinche x3, capot) : OK")
     check_bidding_flow()

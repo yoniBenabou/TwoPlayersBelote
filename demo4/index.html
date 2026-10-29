@@ -54,6 +54,9 @@
   .chip { font: bold 10px "Courier New", monospace; letter-spacing: .08em; border-radius: 4px; padding: 2px 6px; }
   .chip.dealer { background: #2a3442; color: var(--text); }
   .chip.taker { background: var(--accent); color: #062b1f; }
+  .chip.bid { background: rgba(10,14,19,.75); border: 1px solid var(--accent); color: var(--text); font-size: 11px; }
+  .chip.bid.pass { border-color: var(--line); color: var(--muted); }
+  .chip.bid.fresh { animation: pop .3s ease; }
   .chip.team { background: transparent; border: 1px solid var(--line); color: var(--muted); }
   .bubble { position: absolute; z-index: 5; background: var(--panel); border: 1px solid var(--accent); color: var(--text);
             border-radius: 999px; padding: 3px 10px; font-size: 13px; white-space: nowrap; animation: pop .3s ease; }
@@ -172,11 +175,11 @@
 <main>
   <section class="table" id="table">
     <div class="seat north" id="seat-north">
-      <div class="seat-label"><span class="name">North</span><span class="chip team mono">PARTNER</span><span class="chip dealer mono" id="dealer-north"></span><span class="chip taker mono" id="taker-north"></span></div>
+      <div class="seat-label"><span class="name">North</span><span class="chip team mono">PARTNER</span><span class="chip dealer mono" id="dealer-north"></span><span class="chip taker mono" id="taker-north"></span><span class="chip bid mono" id="bid-north"></span></div>
       <div class="mini-hand" id="hand-north"></div>
     </div>
     <div class="seat west" id="seat-west">
-      <div class="seat-label"><span class="name">West</span><span class="chip dealer mono" id="dealer-west"></span><span class="chip taker mono" id="taker-west"></span></div>
+      <div class="seat-label"><span class="name">West</span><span class="chip dealer mono" id="dealer-west"></span><span class="chip taker mono" id="taker-west"></span><span class="chip bid mono" id="bid-west"></span></div>
       <div class="mini-hand" id="hand-west"></div>
     </div>
     <div class="center">
@@ -195,11 +198,11 @@
       <div class="error" id="error"></div>
     </div>
     <div class="seat east" id="seat-east">
-      <div class="seat-label"><span class="name">East</span><span class="chip dealer mono" id="dealer-east"></span><span class="chip taker mono" id="taker-east"></span></div>
+      <div class="seat-label"><span class="name">East</span><span class="chip dealer mono" id="dealer-east"></span><span class="chip taker mono" id="taker-east"></span><span class="chip bid mono" id="bid-east"></span></div>
       <div class="mini-hand" id="hand-east"></div>
     </div>
     <div class="seat south" id="seat-south">
-      <div class="seat-label"><span class="name">You (South)</span><span class="chip dealer mono" id="dealer-south"></span><span class="chip taker mono" id="taker-south"></span></div>
+      <div class="seat-label"><span class="name">You (South)</span><span class="chip dealer mono" id="dealer-south"></span><span class="chip taker mono" id="taker-south"></span><span class="chip bid mono" id="bid-south"></span></div>
       <div class="hand" id="hand-south"></div>
     </div>
     <div class="overlay" id="overlay"><div class="box" id="overlay-box"></div></div>
@@ -327,6 +330,12 @@ function render() {
     $(`dealer-${seat}`).style.display = s.dealer === seat ? "" : "none";
     const taker = s.contract && s.contract.by === seat && s.phase !== "bidding";
     $(`taker-${seat}`).textContent = taker ? "TAKER" : ""; $(`taker-${seat}`).style.display = taker ? "" : "none";
+    // pendant les annonces : la dernière annonce de chaque joueur reste affichée à côté de son nom
+    const said = s.phase === "bidding" ? [...s.bids].reverse().find((b) => b.seat === seat) : null;
+    const tag = $(`bid-${seat}`);
+    if (tag.textContent !== (said ? said.label : "")) tag.classList.remove("fresh"), void tag.offsetWidth, tag.classList.add("fresh");
+    tag.textContent = said ? said.label : ""; tag.style.display = said ? "" : "none";
+    tag.classList.toggle("pass", !!said && said.label === "Pass");
     $(`seat-${seat}`).classList.toggle("turn", s.current === seat && !busy);
     if (seat === "south") continue;
     const h = $(`hand-${seat}`); h.innerHTML = ""; h.classList.toggle("open", s.reveal);
@@ -459,6 +468,13 @@ $("reveal").onclick = async () => { if (busy || !view) return; const s = await a
 
 (async () => {
   const s = await api("/api/state");
+  if (s.phase === "bidding" && s.bids.length) {
+    // donne déjà distribuée par le serveur : on rejoue les annonces des robots une par une
+    view = { ...s, bids: [] }; render(); renderTrick(s.trick);
+    const events = s.bids.map((b) => ({ type: "bid", seat: b.seat, label: b.label, text: `${NAMES[b.seat]}: ${b.label}` }));
+    await replay({ ...s, events });
+    return;
+  }
   view = s; render(); renderTrick(s.trick);
   banner(s.yourBid ? "Your bid" : s.yourTurn ? "Your turn" : "Click “New game” to start");
   for (const b of s.bids) log(`${NAMES[b.seat]}: ${b.label}`);

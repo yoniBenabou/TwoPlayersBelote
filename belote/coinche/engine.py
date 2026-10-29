@@ -15,9 +15,9 @@ Règles retenues (cf. RULES, affichées aussi dans la page web) :
   surcoinche) ; 4 passes sans annonce : on redistribue.
 - Jeu : fournir à la couleur demandée ; à l'atout, toujours monter si on peut
   (même sur son partenaire). Sans la couleur demandée : si le partenaire est
-  maître du pli, carte libre ; sinon couper, en montant sur l'atout déjà posé
-  si possible, sinon en mettant quand même un atout (sous-couper) ; sans
-  atout, carte libre.
+  maître du pli, carte libre ; sinon couper ; si un adversaire a déjà coupé,
+  monter sur son atout si possible, sinon carte libre (pas d'obligation de
+  sous-couper) ; sans atout, carte libre.
 - Points : 152 dans les cartes + 10 de der = 162 ; capot (tous les plis) =
   250 au lieu de 162 ; belote-rebelote (Roi + Dame d'atout dans la même
   main) = 20, toujours marquée par l'équipe qui l'a.
@@ -59,7 +59,8 @@ RULES = [
     "without bidding, the cards are redealt.",
     "Follow suit if you can. When trump is led, you must play a higher trump if you can, even over your partner.",
     "If you cannot follow suit: when your partner is winning the trick, you may play any card. Otherwise you "
-    "must trump, higher than a trump already played if you can, or a lower trump if you cannot (undertrump). "
+    "must trump. If an opponent has already trumped, you must play a higher trump if you can; if you cannot, "
+    "you may play any card (no obligation to undertrump). "
     "With no trump, any card.",
     "Trump order: J, 9, A, 10, K, Q, 8, 7 (J 20, 9 14, A 11, 10 10, K 4, Q 3). Other suits: A, 10, K, Q, J, 9, 8, 7 "
     "(A 11, 10 10, K 4, Q 3, J 2).",
@@ -124,7 +125,7 @@ def legal_cards(hand, trick, trump, seat):
         return list(hand)
     if best_trump is not None:
         higher = [c for c in my_trumps if c.strength(trump) > best_trump.strength(trump)]
-        return higher or my_trumps  # monter sur l'atout, sinon sous-couper
+        return higher or list(hand)  # monter sur l'atout si possible ; pas d'obligation de sous-couper
     return my_trumps
 
 
