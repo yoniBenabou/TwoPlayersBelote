@@ -3,9 +3,11 @@
 Self-play : un seul réseau joue les 4 places (chacune vue de sa position).
 Étape 1 (par défaut) : les annonces sont faites par les robots CoincheBot,
 le réseau apprend à jouer les cartes. --bidding : le réseau fait aussi les
-annonces. Évaluation régulière contre une équipe de robots, en donnes
-dupliquées (chaque donne jouée deux fois, l'IA d'un côté puis de l'autre)
-et en parties complètes en 1 500 points.
+annonces. --vs-bots-share : part des donnes jouées contre une équipe de
+robots ; --bots : les conventions de ces robots (tirées au hasard à chaque
+donne), par ex. petitjeu,papirobert,asr. Évaluation régulière contre chaque
+convention, en donnes dupliquées (chaque donne jouée deux fois, l'IA d'un
+côté puis de l'autre) et en parties complètes en 1 500 points.
 
     python -m scripts.train_coinche --out-dir /chemin/run --total-deals 5000000
     python -m scripts.train_coinche --out-dir /chemin/run --resume
@@ -22,7 +24,11 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+from belote.coinche.asr import AsRBot
+from belote.coinche.bots import CoincheBot
 from belote.coinche.engine import DEFAULT_TARGET, team_of
+from belote.coinche.papi_robert import PapiRobertBot
+from belote.coinche.petit_jeu import PetitJeuBot
 from belote.coinche.rl_env import CoincheEnv
 from belote.rl.gae import compute_gae
 from belote.rl.networks import ActorCriticNetwork
@@ -35,7 +41,9 @@ RESUME_FILE = os.path.join(CHECKPOINT_DIR, "resume_state.pt")
 FINISHED_MARKER = "=== Entraînement terminé ==="
 N_ENVS = 32  # donnes jouées en parallèle pendant la collecte
 CONFIG_KEYS = ("total_deals", "rollout_deals", "eval_every", "lr", "entropy_coef", "seed", "bidding",
-               "hidden_size", "vs_bots_share", "init_from")
+               "hidden_size", "vs_bots_share", "init_from", "bots")
+BOT_KINDS = {"simple": CoincheBot, "petitjeu": PetitJeuBot, "papirobert": PapiRobertBot, "asr": AsRBot}
+DEFAULT_BOT = CoincheBot()  # annonces des places non jouées par le réseau en self-play (mode sans annonces)
 
 
 # ---------- collecte ----------
@@ -64,7 +72,7 @@ def collect_deal(env, agent, learner_seats):
     return buffer
 
 
-def collect_rollout(envs, agent, n_deals, vs_bots_share):
+def collect_rollout(envs, agent, n_deals, vs_bots_share, bots=(DEFAULT_BOT,)):
     """n_deals donnes jouées en parallèle sur les environnements envs : à
     chaque pas, un seul passage du réseau pour toutes les places qui attendent
     une décision (beaucoup plus rapide que donne par donne). Même résultat
@@ -80,8 +88,10 @@ def collect_rollout(envs, agent, n_deals, vs_bots_share):
         if vs_bots_share and random.random() < vs_bots_share:
             team = started % 2
             seats = {team, team + 2}
+            env.bot = random.choice(bots)
         else:
             seats = {0, 1, 2, 3}
+            env.bot = DEFAULT_BOT
         started += 1
         obs = env.reset(bid_seats=seats if env.bidding else None)
         return {"trans": [], "last": {}, "seats": seats, "obs": obs}
@@ -154,11 +164,12 @@ def play_deal(env, agent, ai_team, deal=None):
     return env.game.result["scores"], env.game.result
 
 
-def evaluate(agent, bidding, n_deals=1000, n_games=100, seed=12345):
+def evaluate(agent, bidding, n_deals=1000, n_games=100, seed=12345, bot=DEFAULT_BOT):
     """Donnes dupliquées : la même donne (mains, donneur) jouée avec l'IA en
-    Sud-Nord puis en Est-Ouest ; écart moyen par donne (IA - robots). Puis
+    Sud-Nord puis en Est-Ouest ; écart moyen par donne (IA - robots bot). Puis
     parties complètes en 1 500 points (IA en Sud-Nord une partie sur deux)."""
     env = CoincheEnv(bidding=bidding, seed=seed)
+    env.bot = bot
     diffs, ai_taken, ai_made = [], 0, 0
     played = 0
     while played < n_deals:
@@ -187,6 +198,7 @@ def evaluate(agent, bidding, n_deals=1000, n_games=100, seed=12345):
 
     wins = []
     game_env = CoincheEnv(bidding=bidding, seed=seed + 1)
+    game_env.bot = bot
     for g in range(n_games):
         ai_team = g % 2
         totals = [0, 0]
@@ -210,7 +222,7 @@ def save_resume(network, optimizer, deals, next_eval):
 
 
 def train(total_deals=5_000_000, rollout_deals=128, eval_every=50_000, lr=3e-4, entropy_coef=0.01, seed=None,
-          bidding=False, hidden_size=256, vs_bots_share=0.0, init_from=None, resume=False):
+          bidding=False, hidden_size=256, vs_bots_share=0.0, init_from=None, resume=False, bots="simple"):
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
@@ -220,6 +232,8 @@ def train(total_deals=5_000_000, rollout_deals=128, eval_every=50_000, lr=3e-4, 
     if not resume:
         with open("config.json", "w") as f:
             json.dump(config, f, indent=2)
+    bot_names = bots.split(",")
+    bot_list = [BOT_KINDS[name]() for name in bot_names]
     envs = [CoincheEnv(bidding=bidding, seed=None if seed is None else seed * 1000 + i) for i in range(N_ENVS)]
     env = envs[0]
     network = ActorCriticNetwork(obs_size=env.obs_size, num_actions=env.num_actions, hidden_size=hidden_size)
@@ -252,19 +266,22 @@ def train(total_deals=5_000_000, rollout_deals=128, eval_every=50_000, lr=3e-4, 
     t0 = time.time()
     while True:
         if deals >= next_eval:
-            r = evaluate(eval_agent, bidding)
-            print(f"\n--- Évaluation à {deals} donnes ({(time.time() - t0) / 60:.0f} min) ---\n"
-                  f"  Contre les robots : écart {r['deal_diff']:+6.1f} pts/donne (±{r['deal_diff_ci95']:.1f}) | "
-                  f"parties gagnées {100 * r['game_win_rate']:5.1f}% (±{100 * r['game_win_rate_ci95']:.1f}) | "
-                  f"l'IA prend {100 * r['ai_takes']:.0f}% des donnes, réussit {100 * r['ai_made']:.0f}%", flush=True)
-            for k, v in r.items():
-                writer.add_scalar(f"eval/{k}", v, deals)
+            print(f"\n--- Évaluation à {deals} donnes ({(time.time() - t0) / 60:.0f} min) ---", flush=True)
+            for i, (name, bot) in enumerate(zip(bot_names, bot_list)):
+                r = evaluate(eval_agent, bidding, bot=bot)
+                print(f"  Contre {name:10s} : écart {r['deal_diff']:+6.1f} pts/donne (±{r['deal_diff_ci95']:.1f}) | "
+                      f"parties gagnées {100 * r['game_win_rate']:5.1f}% (±{100 * r['game_win_rate_ci95']:.1f}) | "
+                      f"l'IA prend {100 * r['ai_takes']:.0f}% des donnes, réussit {100 * r['ai_made']:.0f}%", flush=True)
+                for k, v in r.items():
+                    writer.add_scalar(f"eval/{k}" if i == 0 else f"eval_{name}/{k}", v, deals)
+                    if i == 0 and name != "simple":
+                        writer.add_scalar(f"eval_{name}/{k}", v, deals)
             torch.save(network.state_dict(), os.path.join(CHECKPOINT_DIR, f"ppo_{deals:08d}.pt"))
             next_eval += eval_every
             save_resume(network, optimizer, deals, next_eval)
         if deals >= total_deals:
             break
-        buffer = collect_rollout(envs, agent, rollout_deals, vs_bots_share)
+        buffer = collect_rollout(envs, agent, rollout_deals, vs_bots_share, bot_list)
         if not buffer:
             continue
         metrics = ppo_update(agent, optimizer, buffer, entropy_coef=entropy_coef)
@@ -290,9 +307,14 @@ def main():
     parser.add_argument("--hidden-size", type=int, default=256)
     parser.add_argument("--vs-bots-share", type=float, default=0.0,
                         help="part des donnes jouées contre une équipe de robots (le reste en self-play)")
+    parser.add_argument("--bots", default="simple",
+                        help="conventions des robots adverses, séparées par des virgules : simple, petitjeu, papirobert, asr")
     parser.add_argument("--init-from", help="modèle .pt de départ (ex. étape 1 pour l'étape 2)")
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
+    unknown = [b for b in args.bots.split(",") if b not in BOT_KINDS]
+    if unknown:
+        parser.error(f"robots inconnus : {unknown} (choix : {sorted(BOT_KINDS)})")
     init_from = os.path.abspath(args.init_from) if args.init_from else None
     os.makedirs(args.out_dir, exist_ok=True)
     os.chdir(args.out_dir)
@@ -303,7 +325,7 @@ def main():
         return
     train(total_deals=args.total_deals, rollout_deals=args.rollout_deals, eval_every=args.eval_every, lr=args.lr,
           entropy_coef=args.entropy_coef, seed=args.seed, bidding=args.bidding, hidden_size=args.hidden_size,
-          vs_bots_share=args.vs_bots_share, init_from=init_from)
+          vs_bots_share=args.vs_bots_share, init_from=init_from, bots=args.bots)
 
 
 if __name__ == "__main__":
