@@ -3,7 +3,8 @@
 ceux des couleurs autres que l'atout.
 
 Ouvertures (on choisit d'abord la couleur avec le plus de majeures) :
-- 80, "jeu aux As" : 2 ou 3 atouts dont le Valet ou le 9, et 2 As ;
+- 80, "jeu aux As" : 2 ou 3 atouts dont le Valet ou le 9 (ou la belote), et
+  2 As ; on choisit la couleur la plus forte (points des atouts, belote, As) ;
 - 90 : 3 atouts dont une majeure et un As ; ou 4 atouts (au moins) dont une
   majeure ; ou les deux majeures en 3 atouts avec un As mais un jeu "light" à
   côté (rien à côté avec l'As d'atout ; un seul As et pas de 10 sinon) ;
@@ -29,15 +30,16 @@ Coinche : même règle que CoincheBot. Pas de surcoinche. La fiche ne dit rien
 des adversaires : si l'annonce n'est plus possible, on passe.
 
 Jeu :
-- l'équipe qui a pris enlève d'abord les atouts des adversaires, en
-  commençant fort (le plus gros atout), puis joue ses As, puis la couleur que
-  le partenaire a appelée, puis la plus petite carte ;
+- l'équipe qui a pris joue atout quand elle a la main, tant que les
+  adversaires peuvent en avoir, en commençant fort (le plus gros) ; puis ses As, puis la couleur que le partenaire a appelée, puis la
+  plus petite carte ;
 - en défense : la couleur appelée par le partenaire, puis les As, puis la plus
   petite carte ;
 - appel indirect : quand le partenaire entame atout et que je n'en ai plus, je
   défausse une petite carte dans la couleur sœur (même teinte) de celle de mon
   As ; le partenaire rejoue ensuite la couleur de l'As.
-Le reste du jeu en second, troisième ou quatrième est celui de CoincheBot.
+On ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas
+le choix. Le reste du jeu en second, troisième ou quatrième est celui de CoincheBot.
 """
 from ..core.cards import Rank, Suit
 from .bots import CoincheBot, wants_coinche
@@ -81,20 +83,33 @@ def opening_value(hand, suit):
             return 90
         if n in (2, 3) and aces >= 2:
             return 80
+    if m == 0 and n in (2, 3) and aces >= 2 and has_belote(hand, suit):
+        return 80  # jeu aux As : la belote à l'atout et 2 As à côté
     return None
 
 
+def has_belote(hand, suit):
+    return all(any(c.suit == suit and c.rank == r for c in hand) for r in (Rank.KING, Rank.QUEEN))
+
+
+def strength_score(hand, suit):
+    """Force d'une couleur d'atout : points des atouts, belote (20) et As à côté."""
+    return (sum(c.points(suit) for c in hand if c.suit == suit) + 20 * has_belote(hand, suit)
+            + 11 * side_aces(hand, suit))
+
+
 def best_opening(hand):
-    """(valeur, couleur) : la couleur avec le plus de majeures, puis la plus haute annonce."""
+    """(valeur, couleur) : la plus haute annonce ; à égalité, la couleur avec le plus
+    de majeures (à 80, jeu aux As : la couleur la plus forte, belote comprise)."""
     options = []
     for suit in SUITS:
         value = opening_value(hand, suit)
         if value is not None:
-            trumps = [c for c in hand if c.suit == suit]
-            options.append((majors(hand, suit), value, len(trumps), sum(c.strength(suit) for c in trumps), suit))
+            m = majors(hand, suit) if value > 80 else 0
+            options.append((value, m, strength_score(hand, suit), sum(c.suit == suit for c in hand), suit))
     if not options:
         return None
-    _m, value, _n, _s, suit = max(options, key=lambda o: o[:4])
+    value, _m, _s, _n, suit = max(options, key=lambda o: o[:4])
     return value, suit
 
 
@@ -168,7 +183,22 @@ class PapiRobertBot(CoincheBot):
             call = self._indirect_call(game.hands[seat], legal, trump)
             if call is not None:
                 return call
-        return super().play(game, seat)
+        return super().play(game, seat, self._allowed_discards(game, seat, legal))
+
+    @staticmethod
+    def _allowed_discards(game, seat, legal):
+        """Jamais défausser un As sans le 10 et le Roi derrière, sauf si on n'a pas le choix."""
+        trick, trump = game.trick, game.trump
+        if not trick:
+            return legal
+        led = trick[0][1].suit
+        hand = game.hands[seat]
+
+        def protected(c):
+            return all(any(d.suit == c.suit and d.rank == r for d in hand) for r in (Rank.TEN, Rank.KING))
+
+        allowed = [c for c in legal if not (c.rank == Rank.ACE and c.suit not in (led, trump) and not protected(c))]
+        return allowed or legal
 
     @staticmethod
     def _indirect_call(hand, legal, trump):
@@ -188,7 +218,8 @@ class PapiRobertBot(CoincheBot):
             return called_lead or super().lead(game, seat, legal)
         trumps = [c for c in legal if c.suit == trump]
         if trumps and self._opponents_may_have_trumps(game, seat):
-            return max(trumps, key=lambda c: c.strength(trump))  # commencer fort
+            # on a pris : atout tant que les adversaires en ont, en commençant fort
+            return max(trumps, key=lambda c: c.strength(trump))
         aces = [c for c in legal if c.rank == Rank.ACE and c.suit != trump]
         if aces:
             return aces[0]

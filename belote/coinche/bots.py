@@ -53,8 +53,8 @@ class CoincheBot:
         action = ("bid", value, best)
         return action if action in legal else ("pass",)
 
-    def play(self, game, seat):
-        legal = game.legal_cards(seat)
+    def play(self, game, seat, legal=None):
+        legal = game.legal_cards(seat) if legal is None else legal
         trump, trick = game.trump, game.trick
         strength = lambda c: (c.suit == trump, c.strength(trump))
         if not trick:

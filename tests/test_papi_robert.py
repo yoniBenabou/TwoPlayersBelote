@@ -28,6 +28,9 @@ def check_openings():
     assert opening_value(hand(S="J 9 A", H="8 7", D="7 8", C="7"), S) == 90          # J 9 A, rien à côté : light
     assert opening_value(hand(S="J 9 7 8", H="8 7", D="7 K"), S) == 90               # 4 atouts sans As : pas maître
     assert opening_value(hand(S="J A K Q 8", H="A 7 8"), S) == 90                    # jamais 100 sans les 2 majeures
+    # exemple de Noa : 9 et As de trèfle, As de cœur, Roi-Dame de carreau, 7 de pique : 80 carreau
+    # (belote et 2 As à côté) plutôt que trèfle
+    assert best_opening(hand(C="9 A", H="A 7", D="K Q", S="7 8")) == (80, D)
     # le plus de majeures d'abord : 90 à cœur (2 majeures, light) plutôt que 90 à pique (une majeure, 4 atouts)
     assert best_opening(hand(S="J 8 7 K", H="J 9 7", D="A")) == (90, H)
 
@@ -97,6 +100,43 @@ def check_play():
     assert PapiRobertBot._called_suits(game, 0) == {H}
 
 
+def check_discards():
+    bot = PapiRobertBot()
+    # Sud prend à pique ; Ouest entame carreau, Nord (partenaire de Sud) n'a plus de carreau ni d'atout :
+    # il garde son As de cœur (sans 10 et Roi derrière) et défausse une autre carte
+    game = table([hand(S="J 9 7 8"), None, None, None])
+    game.bid(0, ("bid", 90, S))
+    for seat in (1, 2, 3):
+        game.bid(seat, ("pass",))
+    game.trick = [(1, Card(D, Rank.SEVEN))]
+    game.current = 2
+    game.hands[2] = hand(H="A 7 8", C="A 8 9 Q K")
+    legal = game.legal_cards(2)
+    allowed = PapiRobertBot._allowed_discards(game, 2, legal)
+    assert Card(H, Rank.ACE) not in allowed and Card(C, Rank.ACE) not in allowed
+    assert bot.play(game, 2).rank != Rank.ACE
+    # As protégé (10 et Roi derrière) : il peut le défausser
+    game.hands[2] = hand(H="A 10 K", C="7 8 9 Q K")
+    assert Card(H, Rank.ACE) in PapiRobertBot._allowed_discards(game, 2, game.legal_cards(2))
+    # pas le choix : il ne reste que deux As
+    game.hands[2] = hand(H="A", C="A")
+    assert PapiRobertBot._allowed_discards(game, 2, game.legal_cards(2)) == game.legal_cards(2)
+
+
+def check_trump_until_void():
+    bot = PapiRobertBot()
+    # Sud a pris ; les adversaires n'ont plus d'atout (ils n'ont pas fourni) : il garde ses atouts et joue son As
+    game = table([hand(S="J 9 7 8", H="A 10", D="K", C="8"), None, None, None])
+    game.bid(0, ("bid", 90, S))
+    for seat in (1, 2, 3):
+        game.bid(seat, ("pass",))
+    game.tricks = [([(0, Card(S, Rank.ACE)), (1, Card(H, Rank.SEVEN)), (2, Card(S, Rank.TEN)),
+                     (3, Card(D, Rank.SEVEN))], 0)]
+    for c in (Card(S, Rank.KING), Card(S, Rank.QUEEN)):
+        game.played[2].append(c)
+    assert bot.play(game, 0) == Card(H, Rank.ACE)
+
+
 def check_full_games(n=100):
     bot = PapiRobertBot()
     rng = random.Random(0)
@@ -118,6 +158,8 @@ def main():
     check_responses()
     check_auctions()
     check_play()
+    check_discards()
+    check_trump_until_void()
     check_full_games()
     print("OK")
 
