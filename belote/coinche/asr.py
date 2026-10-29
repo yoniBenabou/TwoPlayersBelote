@@ -57,13 +57,15 @@ Jeu :
 - appels : quand le partenaire joue atout et que je n'en ai plus, je défausse
   pour demander la couleur de mon As : une carte de cette couleur si elle est
   de la famille de l'atout (appel direct), sinon une carte de sa couleur sœur
-  (appel indirect) ; le partenaire rejoue la couleur demandée (petite carte)
-  avant d'encaisser ses As ;
+  (appel indirect) ; jeter l'As lui-même annonce la longue maîtresse (au moins
+  As-10-Roi) ; le partenaire rejoue la couleur demandée (petite carte) avant
+  d'encaisser ses As ; seulement dans l'équipe qui a pris ;
 - ensuite : les cartes maîtresses (As, 10, Roi...), le Roi d'un Roi-10 quand
   l'As n'est pas tombé, puis la couleur la plus longue ;
-- défense : faire couper le preneur (la couleur qu'il n'a plus, s'il peut avoir
-  de l'atout), sinon la couleur la plus longue ; contre 150 ou plus, d'abord
-  les cartes maîtresses ; pas d'entame atout sauf s'il ne reste que ça ;
+- défense (pas d'appels en défense) : contre 140 ou plus, d'abord les cartes
+  maîtresses ; sinon faire couper le preneur (la couleur qu'il n'a plus, s'il
+  peut avoir de l'atout) quand ça ne coûte ni As ni 10, sinon la couleur la
+  plus longue ; pas d'entame atout sauf s'il ne reste que ça ;
 - on ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas
   le choix ;
 - partenaire maître : on ne donne pas un 10 accompagné (il peut faire un pli),
@@ -369,7 +371,8 @@ class AsRBot(CoincheBot):
         partner = partner_of(seat)
         legal = self._keep_aces(game, seat, legal)
         # appel par défausse quand le partenaire joue atout et que je n'en ai plus
-        if trick[0][0] == partner and led == trump and not any(c.suit == trump for c in hand):
+        attacking = team_of(game.contract["seat"]) == team_of(seat)
+        if attacking and trick[0][0] == partner and led == trump and not any(c.suit == trump for c in hand):
             call = self._call_discard(hand, legal, trump)
             if call is not None:
                 return call
@@ -404,7 +407,11 @@ class AsRBot(CoincheBot):
 
     @staticmethod
     def _call_discard(hand, legal, trump):
-        """Appel direct (couleur de la famille de l'atout) ou indirect (couleur sœur) vers un de mes As."""
+        """Appel direct (couleur de la famille de l'atout) ou indirect (couleur sœur) vers un de mes As.
+        Jeter l'As lui-même = j'ai la longue maîtresse dans cette couleur (au moins As-10-Roi)."""
+        for ace in (c for c in legal if c.rank == Rank.ACE and c.suit != trump):
+            if has(hand, ace.suit, Rank.TEN) and has(hand, ace.suit, Rank.KING):
+                return ace
         for ace in (c for c in hand if c.rank == Rank.ACE and c.suit != trump):
             target = ace.suit if ace.suit == SISTER[trump] else SISTER[ace.suit]
             small = [c for c in legal if c.suit == target and c.rank not in (Rank.ACE, Rank.TEN)]
@@ -452,14 +459,7 @@ class AsRBot(CoincheBot):
         hand = game.hands[seat]
         masters = sorted((c for c in side if self._is_master(c, trump, gone, hand)), key=lambda c: -c.points(trump))
         if not attacking:
-            if contract["value"] >= 150 and masters:
-                return masters[0]
-            ruff = self._ruff_lead(game, side)
-            if ruff is not None:
-                return ruff
-            if side:
-                return self._from_longest(side, trump, gone, hand)
-            return min(legal, key=lambda c: c.strength(trump))
+            return self.defence_lead(game, seat, legal)
         trumps = [c for c in legal if c.suit == trump]
         if contract["mult"] > 1 and side:
             trumps = []  # contrés : on n'entame pas atout, on garde ses atouts
@@ -476,6 +476,24 @@ class AsRBot(CoincheBot):
             ace = Card(suit, Rank.ACE)
             if ace not in gone and ace not in hand and Card(suit, Rank.KING) in hand and Card(suit, Rank.TEN) in hand:
                 return Card(suit, Rank.KING)  # faire tomber l'As pour rendre le 10 maître
+        if side:
+            return self._from_longest(side, trump, gone, hand)
+        return min(legal, key=lambda c: c.strength(trump))
+
+    def defence_lead(self, game, seat, legal):
+        """Entame en défense (pas d'appels en défense) : contre 140 ou plus, les cartes maîtresses ;
+        sinon faire couper le preneur si ça ne coûte pas un As ou un 10 ; sinon la couleur la plus longue ;
+        atout seulement s'il ne reste que ça."""
+        trump = game.trump
+        side = [c for c in legal if c.suit != trump]
+        gone = {c for cards in game.played for c in cards}
+        hand = game.hands[seat]
+        masters = sorted((c for c in side if self._is_master(c, trump, gone, hand)), key=lambda c: -c.points(trump))
+        if game.contract["value"] >= 140 and masters:
+            return masters[0]
+        ruff = self._ruff_lead(game, side)
+        if ruff is not None:
+            return ruff
         if side:
             return self._from_longest(side, trump, gone, hand)
         return min(legal, key=lambda c: c.strength(trump))
@@ -557,7 +575,7 @@ class AsRBot(CoincheBot):
         taker = game.contract["seat"]
         if game.trump in voids[taker]:
             return None
-        cards = [c for c in side if c.suit in voids[taker]]
+        cards = [c for c in side if c.suit in voids[taker] and c.rank not in (Rank.ACE, Rank.TEN)]
         return min(cards, key=lambda c: (c.points(game.trump), c.strength(game.trump))) if cards else None
 
     @staticmethod

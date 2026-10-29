@@ -153,9 +153,9 @@ def check_coinched():
         game.bid(game.current, ("pass",))
     assert game.phase == "play" and game.contract["mult"] == 2 and game.current == 0, (game.phase, game.current)
     assert bot.play(game, 0) == Card(H, Rank.ACE)
-    # défense : Nord (attaquant) n'a plus de carreau : Ouest joue petit carreau pour le faire couper
-    game.tricks = [([(0, Card(D, Rank.SEVEN)), (1, Card(D, Rank.EIGHT)), (2, Card(H, Rank.SEVEN)),
-                     (3, Card(D, Rank.NINE))], 3)]
+    # défense : Sud (le preneur) n'a plus de carreau : Ouest joue petit carreau pour le faire couper
+    game.tricks = [([(3, Card(D, Rank.SEVEN)), (0, Card(H, Rank.SEVEN)), (1, Card(D, Rank.EIGHT)),
+                     (2, Card(D, Rank.NINE))], 2)]
     game.current = 1
     game.hands[1] = hand(D="Q 10", H="K Q", C="A K 7")
     assert bot.play(game, 1) == Card(D, Rank.QUEEN)

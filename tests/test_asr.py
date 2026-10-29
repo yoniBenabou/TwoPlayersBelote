@@ -107,6 +107,15 @@ def check_play():
     # appels : atout carreau, je veux pique (famille opposée) -> je défausse trèfle ; je veux cœur -> cœur
     assert AsRBot._call_discard(hand(S="A 7", C="8 9"), hand(S="A 7", C="8 9"), D).suit == C
     assert AsRBot._call_discard(hand(H="A 7", C="8 9"), hand(H="A 7", C="8 9"), D).suit == H
+    # exemples de Noa : atout cœur, appel à carreau -> carreau (direct), appel à pique -> trèfle (indirect)
+    assert AsRBot._call_discard(hand(D="A 7", C="8 9"), hand(D="A 7", C="8 9"), H).suit == D
+    assert AsRBot._call_discard(hand(S="A 7", C="8 9", D="8"), hand(S="A 7", C="8 9", D="8"), H).suit == C
+    # atout pique, appel à trèfle -> trèfle ; appel à carreau -> cœur
+    assert AsRBot._call_discard(hand(C="A 7", H="8 9"), hand(C="A 7", H="8 9"), S).suit == C
+    assert AsRBot._call_discard(hand(D="A 7", H="8 9"), hand(D="A 7", H="8 9"), S).suit == H
+    # jeter l'As = la longue maîtresse : seulement avec As-10-Roi
+    assert AsRBot._call_discard(hand(D="A 10 K 7", H="8 9"), hand(D="A 10 K 7", H="8 9"), S) == Card(D, Rank.ACE)
+    assert AsRBot._call_discard(hand(D="A 10 7", H="8 9"), hand(D="A 10 7", H="8 9"), S) != Card(D, Rank.ACE)
     # 9 sans le Valet : petit atout d'abord
     g = deal([hand(S="9 7 8", H="A 10", D="K", C="8")], [("bid", 90, S), P, P, P])
     assert bot.play(g, 0) == Card(S, Rank.SEVEN)

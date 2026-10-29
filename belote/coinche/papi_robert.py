@@ -34,19 +34,22 @@ Jeu :
 - l'équipe qui a pris joue atout quand elle a la main, tant que les
   adversaires peuvent en avoir, en commençant fort (le plus gros) ; puis ses As, puis la couleur que le partenaire a appelée, puis la
   plus petite carte ;
-- en défense : jamais d'entame atout (c'est l'équipe qui a pris qui décide de
-  jouer atout), sauf s'il ne reste que des atouts : la couleur appelée par le
-  partenaire, puis les As, puis la plus petite carte ;
-- appel indirect : quand le partenaire entame atout et que je n'en ai plus, je
-  défausse une petite carte dans la couleur sœur (même teinte) de celle de mon
-  As ; le partenaire rejoue ensuite la couleur de l'As.
+- en défense : la même règle qu'AsR (pas d'appels en défense, jamais d'entame
+  atout sauf s'il ne reste que ça ; contre 140 ou plus les cartes maîtresses ;
+  faire couper le preneur quand ça ne coûte ni As ni 10 ; la couleur la plus
+  longue) ;
+- appels (seulement dans l'équipe qui a pris) : quand le partenaire entame atout
+  et que je n'en ai plus, je défausse vers la couleur de mon As : appel direct
+  (une carte de cette couleur) si elle est de la famille de l'atout, appel
+  indirect (sa couleur sœur) sinon ; jeter l'As lui-même annonce la longue
+  maîtresse (au moins As-10-Roi) ; le partenaire rejoue la couleur demandée.
 Contrat coinché (ou surcoinché) : l'équipe coinchée garde ses atouts (pas
-d'entame atout) ; la défense non plus, et cherche à faire couper l'attaque au
-maximum (petite carte d'une couleur dont un attaquant n'a plus).
+d'entame atout).
 On ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas
 le choix. Le reste du jeu en second, troisième ou quatrième est celui de CoincheBot.
 """
 from ..core.cards import Rank, Suit
+from .asr import AsRBot
 from .bots import CoincheBot, wants_coinche
 from .engine import CAPOT, SUITS, partner_of, team_of
 
@@ -185,9 +188,10 @@ class PapiRobertBot(CoincheBot):
     def play(self, game, seat):
         legal = game.legal_cards(seat)
         trick, trump = game.trick, game.trump
-        if trick and trick[0][0] == partner_of(seat) and trick[0][1].suit == trump \
+        attacking = trick and team_of(game.contract["seat"]) == team_of(seat)
+        if attacking and trick[0][0] == partner_of(seat) and trick[0][1].suit == trump \
                 and not any(c.suit == trump for c in game.hands[seat]):
-            call = self._indirect_call(game.hands[seat], legal, trump)
+            call = AsRBot._call_discard(game.hands[seat], self._allowed_discards(game, seat, legal), trump)
             if call is not None:
                 return call
         return super().play(game, seat, self._allowed_discards(game, seat, legal))
@@ -207,15 +211,6 @@ class PapiRobertBot(CoincheBot):
         allowed = [c for c in legal if not (c.rank == Rank.ACE and c.suit not in (led, trump) and not protected(c))]
         return allowed or legal
 
-    @staticmethod
-    def _indirect_call(hand, legal, trump):
-        """Petite carte dans la couleur sœur de celle d'un de mes As (sans atout, sur entame atout)."""
-        for ace in (c for c in hand if c.rank == Rank.ACE and c.suit != trump):
-            small = [c for c in legal if c.suit == SISTER[ace.suit] and c.rank in SMALL]
-            if small:
-                return min(small, key=lambda c: c.strength(trump))
-        return None
-
     def lead(self, game, seat, legal):
         trump = game.trump
         attacking = team_of(game.contract["seat"]) == team_of(seat)
@@ -224,12 +219,8 @@ class PapiRobertBot(CoincheBot):
         coinched = game.contract["mult"] > 1
         side = [c for c in legal if c.suit != trump] or legal
         if not attacking:
-            # c'est l'équipe qui a pris qui décide de jouer atout : la défense n'entame pas atout
-            if coinched:
-                ruff = self._ruff_lead(game, seat, side)
-                if ruff is not None:
-                    return ruff
-            return called_lead or super().lead(game, seat, side)
+            # même défense qu'AsR (pas d'appels en défense, pas d'entame atout)
+            return AsRBot().defence_lead(game, seat, legal)
         trumps = [c for c in legal if c.suit == trump]
         if coinched:
             legal = side  # coinché : on garde ses atouts pour couper
@@ -254,28 +245,10 @@ class PapiRobertBot(CoincheBot):
                     voids[s].add(led)
         return voids
 
-    @classmethod
-    def _ruff_lead(cls, game, seat, side):
-        """Contrat coinché, en défense : faire couper l'attaque au maximum (la plus petite carte d'une
-        couleur dont un attaquant n'a plus, s'il peut encore avoir de l'atout)."""
-        voids = cls._shown_voids(game)
-        attackers = [s for s in range(4) if team_of(s) == team_of(game.contract["seat"])]
-        suits = {suit for s in attackers if game.trump not in voids[s] for suit in voids[s]}
-        cards = [c for c in side if c.suit in suits and c.suit != game.trump]
-        return min(cards, key=lambda c: (c.points(game.trump), c.strength(game.trump))) if cards else None
-
     @staticmethod
     def _called_suits(game, seat):
-        """Couleurs que le partenaire m'a demandées par appel indirect sur mes entames atout."""
-        partner = partner_of(seat)
-        calls = set()
-        for trick, _winner in game.tricks:
-            if trick[0][0] != seat or trick[0][1].suit != game.trump:
-                continue
-            card = dict(trick)[partner]
-            if card.suit != game.trump and card.rank in SMALL:
-                calls.add(SISTER[card.suit])
-        return calls
+        """Couleurs que le partenaire m'a demandées en défaussant sur mes entames atout (comme AsR)."""
+        return AsRBot._called_suits(game, seat)
 
     @staticmethod
     def _opponents_may_have_trumps(game, seat):
