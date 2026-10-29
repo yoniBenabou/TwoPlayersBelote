@@ -93,9 +93,21 @@ def check_answers_to_80():
                        (hand(S="A 7", D="Q", H="K Q 7", C="8 7"), P)]:
         g = deal([mine, hand(S="9", D="9", H="9")], [("bid", 80, S), P, ("bid", 100, C), P])
         assert bot.bid(g, 0) == want, (mine, bot.bid(g, 0))
-    # partenaire 110 dans une autre couleur : +10 par As
-    g = deal([hand(S="A 7", D="Q 7", H="K Q 7", C="8"), hand(S="9", D="9", H="9")], [("bid", 80, S), P, ("bid", 110, C), P])
-    assert bot.bid(g, 0) == ("bid", 120, C)
+    # partenaire 110 trèfle (il cherche les As rouges) : +10 par As rouge ; l'As de pique ne compte pas
+    for mine, want in [(hand(S="A 7", D="Q 7", H="A Q 7", C="8"), ("bid", 120, C)),
+                       (hand(S="A 7", D="Q 7", H="K Q 7", C="8"), P)]:
+        g = deal([mine, hand(S="9", D="9", H="9")], [("bid", 80, S), P, ("bid", 110, C), P])
+        assert bot.bid(g, 0) == want, (mine, bot.bid(g, 0))
+    # partenaire 120 trèfle (il cherche l'As de pique) : +10 avec l'As de pique
+    g = deal([hand(S="A 7", D="Q 7", H="A Q 7", C="8"), hand(S="9", D="9", H="9")], [("bid", 80, S), P, ("bid", 120, C), P])
+    assert bot.bid(g, 0) == ("bid", 130, C)
+    # R2 : sur 80 pique, le partenaire a la maîtrise à trèfle (Valet 9 As)
+    for north, want in [(hand(C="J 9 A", H="K Q", D="7 8", S="Q"), ("bid", 100, C)),      # cherche rouge et noir
+                        (hand(C="J 9 A", S="A", H="K Q", D="7 8"), ("bid", 110, C)),      # As de pique : cherche du rouge
+                        (hand(C="J 9 7 8", H="A", D="A", S="Q 8"), ("bid", 120, C))]:   # As rouges : cherche l'As de pique
+        g = deal([hand(S="J 7", H="7", D="9"), hand(S="9 10", D="10", H="8")], [("bid", 80, S), P])
+        g.hands[2] = north
+        assert bot.bid(g, 2) == want, (north, bot.bid(g, 2))
 
 
 def check_110_dialogue():
@@ -256,6 +268,24 @@ def check_lead_to_taker():
     assert g.contract["seat"] == 1 and bot.play(g, 1) == Card(D, Rank.SEVEN), (g.contract, bot.play(g, 1))
 
 
+def check_80_rebid_and_surcoinche():
+    # R3 : 80 cœur, Ouest dit 90 pique, Nord passe : Sud remonte à 100 avec le Valet quatrième et un As
+    # hors atout ; avec le Valet troisième seulement, il passe
+    for mine, want in [(hand(H="J 7 8 Q", S="A", D="A", C="7 8"), ("bid", 100, H)),
+                       (hand(H="J 7 8", S="A", D="A", C="7 8 Q"), P)]:
+        g = deal([mine, hand(S="J 9 10 K")], [("bid", 80, H), ("bid", 90, S), P, P])
+        assert bot.bid(g, 0) == want, (mine, bot.bid(g, 0))
+    # R13 : 100 cœur coinché ; le preneur surcoinche s'il a 80 % des points assurés (ici 80)
+    for mine, want in [(hand(H="J 9 A 10", S="A", D="7 8", C="7"), ("surcoinche",)),
+                       (hand(H="J 9 7 8", S="A", D="7 8", C="7"), P)]:
+        g = deal([mine, hand(S="J 9 10 K", C="A")], [("bid", 100, H), ("coinche",), P, P])
+        assert bot.bid(g, 0) == want, (mine, bot.bid(g, 0))
+    # le partenaire du preneur ne surcoinche pas
+    g = deal([hand(H="J 9 A 10", S="A", D="7 8", C="7"), hand(S="J 9 10 K", C="A"), hand(S="A", D="A")],
+             [("bid", 100, H), ("coinche",)])
+    assert ("surcoinche",) in g.legal_bids(2) and bot.bid(g, 2) == P
+
+
 def check_collage():
     # un adversaire dit 90 ; j'ai une main de 90 : je colle à 100 ; mon partenaire ne répond que le complément
     g = deal([hand(S="J 9 7", D="A"), hand(H="J 7 8", C="A", D="7", S="Q")], [("bid", 90, S)])
@@ -384,11 +414,12 @@ def main():
     check_weak_taker()
     check_last_trump()
     check_lead_to_taker()
+    check_80_rebid_and_surcoinche()
     check_collage()
     check_play()
     check_keep_nine()
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, collage, jeu, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, parties) : OK")
 
 
 if __name__ == "__main__":

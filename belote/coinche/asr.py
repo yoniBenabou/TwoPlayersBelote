@@ -16,21 +16,25 @@ forte couleur), dans cet ordre :
    la demande directe, comme la maîtrise forte : 110 s'il ne me manque que des As de la famille
    opposée, 120 s'il ne me manque que l'As sœur (130/140 s'il ne manque aucun As) ;
 3. avec au moins deux As (atout compris) : 80, pour les signaler, même sans
-   atout ; on surenchérira à 100 avec une vraie main de 100 ;
-4. maîtrise qui cherche des As rouges et noirs (il me manque l'As de la couleur sœur et au moins un
-   As de la famille opposée) : 100 ;
+   atout ;
+4. maîtrise qui cherche au moins un As rouge et au moins un As noir (il me manque l'As de la couleur
+   sœur et au moins un As de la famille opposée, ou les trois As) : 100 ;
 5. Valet au moins troisième ou 9 au moins quatrième, avec au moins un As
    (d'atout ou à côté) : 90 ; jamais 90 sans As.
 Réponses (une fois, puis relances prévues par le document). Dans toutes les réponses, "+10 par As"
 compte seulement les As hors atout, jamais l'As d'atout :
 - sur 80, même couleur : 90 avec le Valet ou le 9 au moins second (même sans As : seule l'ouverture à
-  90 en exige un), 100 avec les deux, +10 par As hors atout ; autre couleur : 100 avec une
-  maîtrise, 110 avec une maîtrise forte. L'ouvreur à 80 : sur 90 dans sa
+  90 en exige un), 100 avec les deux, +10 par As hors atout ; autre couleur, avec la maîtrise dans
+  cette couleur, comme à l'ouverture : 100 si je cherche des As rouges et noirs, sinon la demande
+  directe (110 si je ne cherche que des As de la famille opposée, 120 si je ne cherche que l'As sœur ;
+  avec une maîtrise forte, toujours la demande). L'ouvreur à 80 : sur 90 dans sa
   couleur, s'il a le complément, 100, +10 si ses deux As (déjà annoncés
   par le 80) sont hors atout, +10 par As hors atout en plus ; sur 100 dans
   une autre couleur, +10 avec deux As hors de cet atout, +10 par As en plus ;
-  sur 110 dans une autre couleur, +10 par As ; sur 90 dans une autre couleur, avec le complément,
-  100, +10 par As ; sans réponse, 100 s'il a une vraie main de 100 ;
+  sur 110/120/130/140 dans une autre couleur, il répond à la demande (+10 par As de la famille opposée
+  sur 110, +10 avec l'As sœur sur 120, les 10 sur 130/140) ; sur 90 dans une autre couleur, avec le
+  complément, 100, +10 par As ; sans réponse (un adversaire a parlé), 100 avec au moins le Valet
+  quatrième et un As hors atout (ou une maîtrise) ;
 - sur 90 : +10 pour le complément (le Valet, ou le 9 au moins second) et +10
   par As ; rien sans complément ; le 9 sec ne se signale pas au premier tour,
   au second tour seulement (+10) avec un As à côté ou si l'équipe est très en
@@ -48,13 +52,16 @@ compte seulement les As hors atout, jamais l'As d'atout :
 - sur 120 : +10 avec l'As de la couleur sœur ; sur 130 (demande initiale) :
   +10 par 10 de la famille opposée ; sur 140 : +10 avec le 10 sœur.
 Capot de l'ouvreur : après 100 et +30 avec 5 atouts ; après 100, les trois As et les plis maîtres
-annoncés, si ses plis attendus font 8 ; après les réponses sur
-110, si ses plis attendus (atouts, As, plis signalés) font 8.
+annoncés, si ses plis attendus font au moins 8 (tous les plis) ; après les réponses sur 110, si ses
+plis attendus (atouts, As, plis signalés) font au moins 8.
 Collage : sur un 90 adverse, une main de 90 (donc avec un As) dit 100 (le partenaire la lit
 comme un 90 et ne répond que le complément) ; une main de 100 saute à 110 (le
 partenaire reste prudent : il passe) ; sur un 100 adverse, une vraie main de
 100 dit 110 (lue comme un 100).
-Coinche : même règle que CoincheBot. Pas de surcoinche.
+Coinche : même règle que CoincheBot. Surcoinche : seulement le preneur, quand sa main assure déjà
+80 % des points de l'annonce (plis sûrs : atouts maîtres depuis le Valet, puis dans chaque autre
+couleur les cartes qui se suivent depuis l'As ; chacun compté avec ma carte plus 10 points pour les
+cartes des trois autres ; la belote en plus).
 
 Jeu :
 - quand mon partenaire a annoncé l'atout le premier, à 100 ou plus (maîtrise), et que nous avons pris
@@ -72,7 +79,7 @@ Jeu :
   séparant le Valet et le 9 de l'équipe : avec le 9 sans le Valet, petit atout
   d'abord (le Valet du partenaire prend, ou celui de l'adversaire tombe) ; avec
   le Valet quand le partenaire a montré le 9, le Valet puis un petit atout ;
-  on garde son dernier atout s'il n'en reste qu'un dehors, plus fort ;
+  on garde son dernier atout s'il n'en reste qu'un dehors, quelle que soit sa force ;
 - sur l'entame atout du partenaire (en deuxième ou troisième), je prends avec le plus petit atout
   qui bat tous ceux qui restent dehors ;
 - signal de belote : celui qui a la belote dans l'équipe qui a pris joue le Roi
@@ -211,6 +218,26 @@ def top_tricks(hand, suit, above=()):
     return count
 
 
+TRUMP_TOP = [Rank.JACK, Rank.NINE, Rank.ACE, Rank.TEN, Rank.KING, Rank.QUEEN, Rank.EIGHT, Rank.SEVEN]
+OTHERS_PER_TRICK = 10  # estimation des points que les trois autres jettent sur un pli sûr
+
+
+def sure_points(hand, trump):
+    """Points assurés : les plis sûrs (atouts maîtres depuis le Valet, puis dans chaque autre couleur
+    les cartes qui se suivent depuis l'As), chacun compté avec ma carte plus une estimation des cartes
+    des trois autres ; la belote en plus."""
+    tricks = []
+    for r in TRUMP_TOP:
+        if not has(hand, trump, r):
+            break
+        tricks.append(Card(trump, r))
+    for s in SUITS:
+        if s != trump:
+            tricks += [Card(s, r) for r in ORDER[:top_tricks(hand, s)]]
+    belote = 20 if has(hand, trump, Rank.KING) and has(hand, trump, Rank.QUEEN) else 0
+    return sum(c.points(trump) + OTHERS_PER_TRICK for c in tricks) + belote
+
+
 def master_tricks(hand, trump):
     return sum(top_tricks(hand, s) for s in SUITS if s != trump)
 
@@ -223,7 +250,7 @@ class AsRBot(CoincheBot):
         legal = game.legal_bids(seat)
         hand = game.hands[seat]
         if ("surcoinche",) in legal:
-            return ("pass",)
+            return ("surcoinche",) if self._wants_surcoinche(game, seat) else ("pass",)
         if ("coinche",) in legal and wants_coinche(hand, game.contract):
             return ("coinche",)
         partner = partner_of(seat)
@@ -236,6 +263,15 @@ class AsRBot(CoincheBot):
         if action is not None and action[0] == "bid" and action[1] != CAPOT:
             action = ("bid", min(action[1], MAX_BID), action[2])
         return action if action in legal else ("pass",)
+
+    @staticmethod
+    def _wants_surcoinche(game, seat):
+        """Seul le preneur surcoinche, quand sa main assure déjà 80 % des points de l'annonce."""
+        contract = game.contract
+        if contract["seat"] != seat:
+            return False
+        value = contract["value"]
+        return sure_points(game.hands[seat], contract["suit"]) >= 0.8 * value
 
     @staticmethod
     def _opponent_value(game, seat, before=None):
@@ -340,10 +376,10 @@ class AsRBot(CoincheBot):
             return ("bid", 100 + 10 * side_aces(hand, suit), suit)
         kind, other = max(((trump_type(hand, s), s) for s in SUITS if s != suit),
                           key=lambda o: (TYPE_RANK[o[0]], strength_score(hand, o[1])))
-        if kind == "strong":
-            return ("bid", 110, other)
+        if kind == "strong" or (kind == "100" and not missing_both_families(hand, other)):
+            return ("bid", ask_value(hand, other), other)  # maîtrise : la demande des As qui me manquent
         if kind == "100":
-            return ("bid", 100, other)
+            return ("bid", 100, other)  # je cherche des As rouges et noirs
         if Rank.JACK in r or (Rank.NINE in r and len(r) >= 2):
             # le Valet, ou le 9 au moins second ; en réponse, pas besoin d'As (seule l'ouverture à 90 en exige un)
             return ("bid", 90, suit)
@@ -355,10 +391,14 @@ class AsRBot(CoincheBot):
         last_i = mine[-1][0]
         answer = next(((i, a) for i, a in reversed(theirs) if i > last_i), None)
         if answer is None:
-            # pas de réponse : l'ouvreur à 80 surenchérit avec une vraie main de 100
+            # pas de réponse : l'ouvreur à 80 remonte à 100 avec au moins le Valet quatrième et un As hors atout
             if len(mine) == 1 and first_value == 80:
                 kind, suit = best_suit(hand)
-                if kind in ("100", "strong"):
+                if kind not in ("100", "strong"):
+                    jacks = [s for s in SUITS if has(hand, s, Rank.JACK) and len(ranks_in(hand, s)) >= 4
+                             and side_aces(hand, s) >= 1]
+                    suit = max(jacks, key=lambda s: strength_score(hand, s)) if jacks else None
+                if suit is not None:
                     opp = self._opponent_value(game, seat)
                     return ("bid", 110 if opp == 100 else 100, suit)
             return None
@@ -396,9 +436,13 @@ class AsRBot(CoincheBot):
             if suit != first_suit and value == 100:
                 k = side_aces(hand, suit)
                 return ("bid", 100 + 10 * (k - 1), suit) if k >= 2 else None
-            if suit != first_suit and value == 110:
-                k = side_aces(hand, suit)
-                return ("bid", 110 + 10 * k, suit) if k else None
+            if suit != first_suit and value in (110, 120, 130, 140):
+                # demande du partenaire dans sa couleur : comme une réponse à son ouverture
+                k = {110: sum(has(hand, s, Rank.ACE) for s in opposite(suit)),
+                     120: int(has(hand, SISTER[suit], Rank.ACE)),
+                     130: sum(has(hand, s, Rank.TEN) for s in opposite(suit)),
+                     140: int(has(hand, SISTER[suit], Rank.TEN))}[value]
+                return ("bid", value + 10 * k, suit) if k else None
             if suit != first_suit and value == 90:
                 r = ranks_in(hand, suit)
                 return ("bid", 100 + 10 * side_aces(hand, suit), suit) if self._complement(r) else None
@@ -727,8 +771,8 @@ class AsRBot(CoincheBot):
         strength = lambda c: c.strength(trump)
         top = max(trumps, key=strength)
         top_is_master = all(strength(top) > strength(c) for c in outstanding)
-        # garder son dernier atout s'il n'en reste qu'un dehors, plus fort
-        if len(trumps) == 1 and len(outstanding) == 1 and not top_is_master:
+        # garder son dernier atout s'il n'en reste qu'un dehors, quelle que soit sa force
+        if len(trumps) == 1 and len(outstanding) == 1:
             return None
         if nine in trumps and jack not in trumps and jack not in gone:
             low = [c for c in trumps if c != nine]
