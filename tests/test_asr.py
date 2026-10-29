@@ -224,7 +224,7 @@ def check_play():
     g = deal([hand(S="J 9 A 8", H="A 10", D="K", C="8")], [("bid", 100, S), ("coinche",), P, P, P])
     assert g.phase == "play" and g.contract["mult"] == 2 and g.current == 0, (g.phase, g.bids)
     assert bot.play(g, 0).suit != S
-    # on ne défausse pas un As sans le 10 et le Roi derrière : As-Valet de cœur
+    # on ne défausse pas un As sans carte maîtresse derrière : As-Valet de cœur
     g = deal([None, None, hand(S="J 9 A 8")], [P, P, ("bid", 100, S), P, P, P])
     g.trick = [(1, Card(D, Rank.ACE)), (2, Card(D, Rank.SEVEN))]      # Ouest, partenaire d'Est, est maître
     g.current = 3
@@ -232,12 +232,23 @@ def check_play():
     from belote.coinche.bots import CoincheBot
     assert CoincheBot().play(g, 3) == Card(H, Rank.ACE)               # l'ancien comportement donnait l'As
     assert bot.play(g, 3) != Card(H, Rank.ACE)
-    g.hands[3] = hand(H="A 10", C="7 8 K Q J 9")                     # As-10 seulement : il le garde
+    g.hands[3] = hand(H="A K", C="7 8 10 Q J 9")                     # As-Roi, le 10 dehors : il le garde
     assert Card(H, Rank.ACE) not in bot._keep_aces(g, 3, g.legal_cards(3))
-    g.hands[3] = hand(H="A 10 K", C="7 8 Q J 9")                     # As-10-Roi : il peut le donner
+    g.hands[3] = hand(H="A 10", C="7 8 K Q J 9")                     # As-10 : le 10 est maître derrière
     assert Card(H, Rank.ACE) in bot._keep_aces(g, 3, g.legal_cards(3))
+    g.played[1].append(Card(H, Rank.TEN))                              # le 10 est tombé : As-Roi suffit
+    g.hands[3] = hand(H="A K", C="7 8 Q J 9")
+    assert Card(H, Rank.ACE) in bot._keep_aces(g, 3, g.legal_cards(3))
+    g.played[1].remove(Card(H, Rank.TEN))
     g.hands[3] = hand(H="A", C="A")                                   # que des As : pas le choix
     assert bot._keep_aces(g, 3, g.legal_cards(3)) == g.legal_cards(3)
+    # partie de Noa : atout pique, Ouest coupe le cœur ; Est a As-7 de cœur : il fournit le 7, pas l'As
+    # (le 10 de cœur adverse deviendrait maître)
+    g = deal([hand(H="8 9 10"), hand(S="J 9 A 8")], [P, ("bid", 100, S), P, P, P])
+    g.trick = [(0, Card(H, Rank.EIGHT)), (1, Card(S, Rank.SEVEN)), (2, Card(H, Rank.QUEEN))]
+    g.current = 3
+    g.hands[3] = hand(H="A 7", C="K Q 8", D="Q")
+    assert bot.play(g, 3) == Card(H, Rank.SEVEN)
     # signal de belote : Roi en premier avec un nombre pair d'atouts, Dame avec un nombre impair
     g = deal([hand(S="K Q 7 8", H="A 10", D="K", C="8")], [("bid", 90, S), P, P, P])
     assert bot._belote_signal(g, 0, g.legal_cards(0), Card(S, Rank.QUEEN)) == Card(S, Rank.KING)

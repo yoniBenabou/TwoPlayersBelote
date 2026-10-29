@@ -83,8 +83,9 @@ Jeu :
   d'un 10) ; au premier pli, d'abord un As hors atout ; après avoir gagné un
   pli que j'ai entamé, je rejoue la même couleur avec ma plus grosse carte ;
   pas d'entame atout sauf s'il ne reste que ça ;
-- on ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas
-  le choix ;
+- on ne défausse jamais un As, et on ne le charge jamais sur le pli du partenaire (même dans la
+  couleur demandée), sans une carte maîtresse derrière lui dans sa couleur (le 10, ou la suivante si
+  le 10 est tombé), sauf si on n'a pas le choix ;
 - partenaire maître : on ne donne pas un 10 accompagné (il peut faire un pli),
   un 10 sec oui ; en troisième, avec l'As et une plus petite carte qui prend,
   on joue l'As si le 10 peut être derrière (on capture un 10 sec).
@@ -497,14 +498,25 @@ class AsRBot(CoincheBot):
         return min(sure, key=strength) if sure else None
 
     def _keep_aces(self, game, seat, legal):
-        """On ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas le choix."""
-        trump, led = game.trump, game.trick[0][1].suit
+        """On ne défausse jamais un As, et on ne le charge jamais sur le pli du partenaire dans la couleur
+        demandée, sans avoir derrière lui une carte maîtresse dans sa couleur (sinon on rend maître le 10
+        adverse) ; sauf si on n'a pas le choix."""
+        trump, trick = game.trump, game.trick
+        led = trick[0][1].suit
         hand = game.hands[seat]
+        partner_wins = trick[trick_winner(trick, trump)][0] == partner_of(seat)
+        gone = {c for cards in game.played for c in cards} | {c for _, c in trick}
+
+        def master_after(suit):
+            nxt = next((r for r in ORDER[1:] if Card(suit, r) not in gone), None)
+            return nxt is not None and has(hand, suit, nxt)
 
         def bad(card):
-            if card.rank != Rank.ACE or card.suit in (led, trump):
+            if card.rank != Rank.ACE or card.suit == trump:
                 return False
-            return not (has(hand, card.suit, Rank.TEN) and has(hand, card.suit, Rank.KING))
+            if card.suit == led and not partner_wins:
+                return False
+            return not master_after(card.suit)
 
         keep = [c for c in legal if not bad(c)]
         return keep or legal
