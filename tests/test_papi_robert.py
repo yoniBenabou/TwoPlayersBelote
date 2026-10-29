@@ -48,11 +48,14 @@ def check_responses():
     # sur 90 : la deuxième majeure, +10, puis +10 par As ; pas de réponse sans elle, même avec des As
     assert response(hand(S="9 8", H="A 7", D="7 8", C="7 8"), 90, S) == (110, S)
     assert response(hand(S="8 7", H="A 7", D="A 8", C="7 8"), 90, S) is None
-    # sur 100 et 110 : +10 par As
+    # sur 100 : +10 par As
     assert response(hand(S="8", H="A 7", D="A 8", C="7 8 K"), 100, S) == (120, S)
-    assert response(hand(S="8", H="A 7", D="A 8", C="7 8 K"), 110, S) == (130, S)
+    # sur 110 : rien avec un As, +10 avec deux, +20 avec trois (exemple de Noa : 2 As -> 120)
+    assert response(hand(S="8", H="A 7", D="A 8", C="7 8 K"), 110, S) == (120, S)
+    assert response(hand(S="8", H="A 7", D="K 8", C="7 8 K"), 110, S) is None
+    assert response(hand(S="8", H="A 7", D="A 8", C="A 8 K"), 110, S) == (130, S)
     assert response(hand(S="8", H="K 7", D="Q 8", C="7 8 K"), 100, S) is None
-    # sur 120 : rien avec un As, +10 avec deux, +20 avec les trois ; l'As d'atout ne compte pas
+    # sur 120 comme sur 110 : rien avec un As, +10 avec deux, +20 avec les trois ; l'As d'atout ne compte pas
     assert response(hand(S="8", H="A 7", D="K 8", C="7 8 K"), 120, S) is None
     assert response(hand(S="A", H="A 7", D="K 8", C="7 8 K"), 120, S) is None
     assert response(hand(S="8", H="A 7", D="A 8", C="7 8 K"), 120, S) == (130, S)
@@ -66,9 +69,9 @@ def bid_round(game, bot, n):
 
 def check_auctions():
     bot = PapiRobertBot()
-    # 110 avec 5 atouts ; le partenaire a deux As (+20) : capot
-    game = table([hand(S="J 9 7 8 K", H="A", D="7", C="Q"), hand(H="7 8", D="8", C="8 9"),
-                  hand(H="10", D="A 9", C="A 10"), None])
+    # 110 avec 5 atouts (dont l'As) ; le partenaire a les trois As (+20) : capot
+    game = table([hand(S="J 9 A 8 7", H="Q", D="7", C="Q"), hand(H="7 8", D="8", C="8 9"),
+                  hand(H="A 10", D="A 9", C="A 10"), None])
     bid_round(game, bot, 4)
     assert [a for _, a in game.bids] == [("bid", 110, S), ("pass",), ("bid", 130, S), ("pass",)], game.bids
     assert bot.bid(game, 0) == ("bid", CAPOT, S)
