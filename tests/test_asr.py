@@ -153,6 +153,18 @@ def check_play():
     assert bot.play(g, 0) == Card(D, Rank.ACE)
 
 
+def check_keep_nine():
+    """Sur le Valet d'atout (du partenaire ou d'un adversaire), aucun robot ne donne son 9 maître."""
+    from belote.coinche.bots import CoincheBot
+    from belote.coinche.papi_robert import PapiRobertBot
+    from belote.coinche.petit_jeu import PetitJeuBot
+    for kind in (CoincheBot, PetitJeuBot, PapiRobertBot, AsRBot):
+        for trick in ([(0, Card(S, Rank.JACK))], [(0, Card(S, Rank.EIGHT)), (1, Card(S, Rank.JACK))]):
+            g = deal([hand(S="J 8"), hand(S="7 K"), hand(S="9 A 10", H="7 8")], [("bid", 90, S), P, P, P])
+            g.trick, g.current = list(trick), 2
+            assert kind().play(g, 2) == Card(S, Rank.TEN), kind.__name__
+
+
 def check_full_games(n=100):
     rng = random.Random(0)
     for _ in range(n):
@@ -175,6 +187,7 @@ def main():
     check_110_dialogue()
     check_collage()
     check_play()
+    check_keep_nine()
     check_full_games()
     print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, collage, jeu, parties) : OK")
 
