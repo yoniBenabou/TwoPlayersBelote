@@ -31,7 +31,7 @@ Réponses (une fois, puis relances prévues par le document) :
   au second tour seulement (+10) avec un As à côté ou si l'équipe est très en
   retard (500 points) ;
 - sur 100 : +10 par As hors atout (jamais l'As d'atout). Avec quatre plis maîtres hors atout : si
-  l'ouvreur a la partance, capot ; si c'est moi, capot avec au moins un atout, 140 sans atout ; si
+  l'ouvreur a la partance, capot ; si c'est moi, capot avec au moins un atout, sinon +10 par As ; si
   c'est un adversaire, capot avec un atout et les trois As hors atout, sinon +10 par As. 100 -> 110/120/130 :
   si l'équipe a les trois As hors atout (ceux du partenaire et les miens), l'ouvreur remonte de +10
   pour demander les autres plis maîtres ; le partenaire ajoute +10 par pli maître après les As (son
@@ -282,7 +282,7 @@ class AsRBot(CoincheBot):
         if leader == partner_of(seat):
             return ("bid", CAPOT, trump)
         if leader == seat:
-            return ("bid", CAPOT, trump) if has_trump else ("bid", 140, trump)
+            return ("bid", CAPOT, trump) if has_trump else None
         if has_trump and side_aces(hand, trump) == 3:  # un adversaire a la partance
             return ("bid", CAPOT, trump)
         return None

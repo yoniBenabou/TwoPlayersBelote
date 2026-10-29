@@ -137,7 +137,7 @@ def check_capot_on_100():
     three_aces = hand(D="A 10", C="A", S="A 8", H="7 8 Q")           # trois As hors atout, un atout
     for dealer, nh, want in [(3, no_trump, ("bid", CAPOT, H)),        # le partenaire a la partance
                              (1, with_trump, ("bid", CAPOT, H)),      # j'ai la partance, avec un atout
-                             (1, no_trump, ("bid", 140, H)),          # j'ai la partance, sans atout
+                             (1, no_trump, ("bid", 120, H)),          # j'ai la partance, sans atout : +10 par As
                              (0, no_trump, ("bid", 120, H)),          # adversaire, sans atout : +10 par As
                              (0, with_trump, ("bid", 120, H)),        # adversaire, un atout, deux As : +10 par As
                              (0, three_aces, ("bid", CAPOT, H))]:     # adversaire, un atout, trois As : capot
