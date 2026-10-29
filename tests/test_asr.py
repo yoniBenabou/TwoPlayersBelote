@@ -152,6 +152,14 @@ def check_play():
     g.current = 0
     g.hands[0] = hand(D="Q 10", H="K Q", C="A K 7")
     assert bot.play(g, 0) == Card(D, Rank.QUEEN)
+    # exemple de Noa : contrat 90 carreau ; Ouest (défense) entame l'As de trèfle et gagne le pli : il rejoue trèfle
+    g2 = deal([hand(D="J 9 7 8")], [("bid", 90, D), P, P, P])
+    g2.tricks = [([(1, Card(C, Rank.ACE)), (2, Card(C, Rank.EIGHT)), (3, Card(C, Rank.NINE)),
+                   (0, Card(C, Rank.KING))], 1)]
+    g2.played[1].append(Card(C, Rank.ACE))
+    g2.current = 1
+    g2.hands[1] = hand(C="10 7", S="7 8 9 K Q")                         # pique plus long, mais il rejoue trèfle
+    assert bot.play(g2, 1).suit == C, bot.play(g2, 1)
     g.hands[0] = hand(D="A", H="K Q", C="7 8 9")                       # seul carreau : l'As, sacrifié pour le faire couper
     assert bot.play(g, 0) == Card(D, Rank.ACE)
 

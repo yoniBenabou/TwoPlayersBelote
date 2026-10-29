@@ -66,7 +66,8 @@ Jeu :
 - défense (pas d'appels en défense) : contre 140 ou plus, d'abord les cartes
   maîtresses ; sinon faire couper le preneur en jouant notre couleur la plus
   longue (celle qu'il n'a plus s'il l'a déjà montré, même au prix d'un As ou
-  d'un 10) ; pas d'entame atout sauf s'il ne reste que ça ;
+  d'un 10) ; après avoir gagné un pli que j'ai entamé, je rejoue la même
+  couleur (petite carte) ; pas d'entame atout sauf s'il ne reste que ça ;
 - on ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas
   le choix ;
 - partenaire maître : on ne donne pas un 10 accompagné (il peut faire un pli),
@@ -485,7 +486,8 @@ class AsRBot(CoincheBot):
     def defence_lead(self, game, seat, legal):
         """Entame en défense (pas d'appels en défense) : contre 140 ou plus, les cartes maîtresses ;
         sinon faire couper le preneur : la couleur qu'il n'a plus (la plus longue si plusieurs), sinon
-        notre couleur la plus longue ; atout seulement s'il ne reste que ça."""
+        la couleur du pli que je viens de gagner en l'entamant, sinon notre couleur la plus longue ;
+        atout seulement s'il ne reste que ça."""
         trump = game.trump
         side = [c for c in legal if c.suit != trump]
         gone = {c for cards in game.played for c in cards}
@@ -496,6 +498,13 @@ class AsRBot(CoincheBot):
         ruff = self._ruff_lead(game, side)
         if ruff is not None:
             return ruff
+        if game.tricks:
+            last, winner = game.tricks[-1]
+            again = [c for c in side if c.suit == last[0][1].suit]
+            if last[0][0] == seat and winner == seat and last[0][1].suit != trump and again:
+                # j'ai gagné le pli que j'avais entamé : je rejoue la couleur (faire couper le preneur, ou
+                # mieux, faire couper mon partenaire)
+                return min(again, key=lambda c: (c.points(trump), c.strength(trump)))
         if side:
             return self._from_longest(side, trump, gone, hand)
         return min(legal, key=lambda c: c.strength(trump))
