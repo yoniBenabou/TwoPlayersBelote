@@ -44,7 +44,8 @@ partenaire reste prudent : il passe) ; sur un 100 adverse, une vraie main de
 Coinche : même règle que CoincheBot. Pas de surcoinche.
 
 Jeu :
-- l'équipe qui a pris joue atout tant que les adversaires peuvent en avoir, en
+- contrée (coinchée ou surcoinchée), l'équipe qui a pris n'entame pas atout ;
+- sinon, l'équipe qui a pris joue atout tant que les adversaires peuvent en avoir, en
   séparant le Valet et le 9 de l'équipe : avec le 9 sans le Valet, petit atout
   d'abord (le Valet du partenaire prend, ou celui de l'adversaire tombe) ; avec
   le Valet quand le partenaire a montré le 9, le Valet puis un petit atout ;
@@ -444,6 +445,8 @@ class AsRBot(CoincheBot):
                 return self._from_longest(side, trump, gone, hand)
             return min(legal, key=lambda c: c.strength(trump))
         trumps = [c for c in legal if c.suit == trump]
+        if contract["mult"] > 1 and side:
+            trumps = []  # contrés : on n'entame pas atout, on garde ses atouts
         if trumps and self._opponents_may_have_trumps(game, seat):
             choice = self._trump_lead(game, seat, trumps)
             if choice is not None:

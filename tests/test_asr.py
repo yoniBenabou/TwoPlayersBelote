@@ -110,6 +110,10 @@ def check_play():
     # 9 sans le Valet : petit atout d'abord
     g = deal([hand(S="9 7 8", H="A 10", D="K", C="8")], [("bid", 90, S), P, P, P])
     assert bot.play(g, 0) == Card(S, Rank.SEVEN)
+    # contrés : on n'entame pas atout (Sud a pris 100 pique, Ouest a coinché)
+    g = deal([hand(S="J 9 A 8", H="A 10", D="K", C="8")], [("bid", 100, S), ("coinche",), P, P, P])
+    assert g.phase == "play" and g.contract["mult"] == 2 and g.current == 0, (g.phase, g.bids)
+    assert bot.play(g, 0).suit != S
     # signal de belote : Roi en premier avec un nombre pair d'atouts, Dame avec un nombre impair
     g = deal([hand(S="K Q 7 8", H="A 10", D="K", C="8")], [("bid", 90, S), P, P, P])
     assert bot._belote_signal(g, 0, g.legal_cards(0), Card(S, Rank.QUEEN)) == Card(S, Rank.KING)

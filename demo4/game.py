@@ -32,15 +32,15 @@ SEAT_KEYS = ("south", "west", "north", "east")  # sens des aiguilles d'une montr
 BOT_KINDS = {"simple": CoincheBot, "petitjeu": PetitJeuBot, "papirobert": PapiRobertBot, "asr": AsRBot}
 BOT_LABELS = {"simple": "Simple bots", "petitjeu": "Petit jeu", "papirobert": "Papi Robert", "asr": "AsR",
               "ai": "AI"}
-# présentation dans l'écran d'accueil (force : d'après les matchs de scripts/coinche_eval.py)
+# présentation dans l'écran d'accueil (étoiles choisies par Noa)
 PLAYER_INFO = {
     "ai": {"label": "AI", "stars": 5, "text": "Our trained network: it taught itself by playing millions of deals. "
                                               "Shows its confidence at every move."},
     "asr": {"label": "AsR", "stars": 4, "text": "80 shows two Aces, 90 asks for the other major, 110–140 ask for "
                                                 "precise Aces and 10s, discard calls, belote parity signal."},
-    "papirobert": {"label": "Papi Robert", "stars": 3, "text": "The “jeu aux As”: 80 with two Aces, "
+    "papirobert": {"label": "Papi Robert", "stars": 2, "text": "The “jeu aux As”: 80 with two Aces, "
                                                               "90 looking for the second major, never 100 without both."},
-    "petitjeu": {"label": "Petit jeu", "stars": 3, "text": "80 with the Jack or the 9 and two trumps, 90 with both, "
+    "petitjeu": {"label": "Petit jeu", "stars": 2, "text": "80 with the Jack or the 9 and two trumps, 90 with both, "
                                                           "100 to 120 when master of trump."},
     "simple": {"label": "Simple bots", "stars": 1, "text": "Hand-written test bots: they bid on a point count and "
                                                           "play without conventions."},
