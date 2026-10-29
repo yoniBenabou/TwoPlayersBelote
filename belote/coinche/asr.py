@@ -64,8 +64,8 @@ Jeu :
 - défense : faire couper le preneur (la couleur qu'il n'a plus, s'il peut avoir
   de l'atout), sinon la couleur la plus longue ; contre 150 ou plus, d'abord
   les cartes maîtresses ; pas d'entame atout sauf s'il ne reste que ça ;
-- on ne défausse jamais un As si on n'est pas maître derrière (la carte suivante
-  de la couleur devient maîtresse, par ex. le 10), sauf si on n'a pas le choix ;
+- on ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas
+  le choix ;
 - partenaire maître : on ne donne pas un 10 accompagné (il peut faire un pli),
   un 10 sec oui ; en troisième, avec l'As et une plus petite carte qui prend,
   on joue l'As si le 10 peut être derrière (on capture un 10 sec).
@@ -390,20 +390,14 @@ class AsRBot(CoincheBot):
         return super().play(game, seat, legal)
 
     def _keep_aces(self, game, seat, legal):
-        """On ne défausse jamais un As si on n'est pas maître derrière (la carte suivante de la couleur
-        devient maîtresse, par ex. le 10), sauf si on n'a pas le choix."""
+        """On ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas le choix."""
         trump, led = game.trump, game.trick[0][1].suit
         hand = game.hands[seat]
-        gone = {c for cards in game.played for c in cards}
 
         def bad(card):
             if card.rank != Rank.ACE or card.suit in (led, trump):
                 return False
-            rest = [c for c in hand if c.suit == card.suit and c != card]
-            if not rest:
-                return True  # As sec : rien derrière
-            top = max(rest, key=lambda c: c.strength(trump))
-            return not self._is_master(top, trump, gone | {card}, hand)
+            return not (has(hand, card.suit, Rank.TEN) and has(hand, card.suit, Rank.KING))
 
         keep = [c for c in legal if not bad(c)]
         return keep or legal
