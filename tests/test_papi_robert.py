@@ -22,7 +22,11 @@ def check_openings():
     assert opening_value(hand(S="J 9 7 8", H="A 8", D="7 8"), S) == 110              # tricolore
     assert opening_value(hand(S="J 9 7 8 K", H="A", D="7", C="7"), S) == 110         # 5 atouts
     assert opening_value(hand(S="J 9 7 8", H="A 8 7 K"), S) == 120                   # bicolore
-    assert opening_value(hand(S="J 9 7 8 K Q", H="8 7"), S) == 90                    # 2 majeures mais pas d'As
+    assert opening_value(hand(C="J 9 10 K Q", H="8 7", D="7"), C) == 110             # maître sans As (exemple de Noa)
+    assert opening_value(hand(S="J 9 A 8", H="8 7", D="7", C="7"), S) == 100         # maître avec l'As d'atout
+    assert opening_value(hand(S="J 9 A", H="8 10", D="7 8", C="7"), S) == 100        # J 9 A + un 10 à côté
+    assert opening_value(hand(S="J 9 A", H="8 7", D="7 8", C="7"), S) == 90          # J 9 A, rien à côté : light
+    assert opening_value(hand(S="J 9 7 8", H="8 7", D="7 K"), S) == 90               # 4 atouts sans As : pas maître
     assert opening_value(hand(S="J A K Q 8", H="A 7 8"), S) == 90                    # jamais 100 sans les 2 majeures
     # le plus de majeures d'abord : 90 à cœur (2 majeures, light) plutôt que 90 à pique (une majeure, 4 atouts)
     assert best_opening(hand(S="J 8 7 K", H="J 9 7", D="A")) == (90, H)
@@ -41,8 +45,10 @@ def check_responses():
     assert response(hand(S="8", H="A 7", D="A 8", C="7 8 K"), 100, S) == (120, S)
     assert response(hand(S="8", H="A 7", D="A 8", C="7 8 K"), 110, S) == (130, S)
     assert response(hand(S="8", H="K 7", D="Q 8", C="7 8 K"), 100, S) is None
-    # sur 120 : rien avec deux As, +20 avec les trois
-    assert response(hand(S="8", H="A 7", D="A 8", C="7 8 K"), 120, S) is None
+    # sur 120 : rien avec un As, +10 avec deux, +20 avec les trois ; l'As d'atout ne compte pas
+    assert response(hand(S="8", H="A 7", D="K 8", C="7 8 K"), 120, S) is None
+    assert response(hand(S="A", H="A 7", D="K 8", C="7 8 K"), 120, S) is None
+    assert response(hand(S="8", H="A 7", D="A 8", C="7 8 K"), 120, S) == (130, S)
     assert response(hand(S="8", H="A 7", D="A 8", C="A 8 K"), 120, S) == (140, S)
 
 

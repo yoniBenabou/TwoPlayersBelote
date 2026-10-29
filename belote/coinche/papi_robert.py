@@ -6,11 +6,12 @@ Ouvertures (on choisit d'abord la couleur avec le plus de majeures) :
 - 80, "jeu aux As" : 2 ou 3 atouts dont le Valet ou le 9, et 2 As ;
 - 90 : 3 atouts dont une majeure et un As ; ou 4 atouts (au moins) dont une
   majeure ; ou les deux majeures en 3 atouts avec un As mais un jeu "light" à
-  côté (cet As seul, sans 10) ;
-- 100 : 3 atouts dont les deux majeures et un As ; ou 4 atouts dont les deux
-  majeures et un As ; jamais 100 sans les deux majeures ;
-- 110 : comme 100 avec 4 atouts mais tricolore, ou 5 atouts dont les deux
-  majeures et un As ;
+  côté (rien à côté avec l'As d'atout ; un seul As et pas de 10 sinon) ;
+- 100 : 3 atouts dont les deux majeures et un As (l'As d'atout ou un As à
+  côté) ; ou maître à l'atout : 4 atouts dont les deux majeures et un As, ou
+  5 atouts dont les deux majeures (Valet, 9, 10, Roi, Dame) ; jamais 100 sans
+  les deux majeures ;
+- 110 : maître à l'atout et tricolore, ou 5 atouts dont les deux majeures ;
 - 120 : comme 100 avec 4 atouts (ou plus) mais bicolore.
 
 Réponses du partenaire (une seule fois) :
@@ -20,8 +21,7 @@ Réponses du partenaire (une seule fois) :
 - sur 90 : seulement avec la deuxième majeure (même avec des As) : +10, puis
   +10 par As ;
 - sur 100 et 110 : +10 par As ;
-- sur 120 : rien avec 1 ou 2 As, +20 avec 3 As (la fiche dit "0 ou +10" et
-  "20 ou 30" : on prend la valeur basse).
+- sur 120 : rien avec 1 As, +10 avec 2 As, +20 avec 3 As.
 Relances de l'ouvreur (une fois) : ouvert à 110 avec 5 atouts et le
 partenaire a ajouté 20 ou plus : capot ; ouvert à 90 avec 5 atouts (ou plus)
 et une majeure, le partenaire a montré la deuxième : +10 par As, jusqu'à 130.
@@ -62,12 +62,13 @@ def opening_value(hand, suit):
     m = majors(hand, suit)
     aces = side_aces(hand, suit)
     if m == 2:
-        if n >= 4 and aces >= 1:
+        trump_ace = any(c.suit == suit and c.rank == Rank.ACE for c in hand)
+        if n >= 4 and (aces >= 1 or trump_ace or n >= 5):  # maître à l'atout
             colours = len({c.suit for c in hand})
             return 120 if colours <= 2 else 110 if (colours == 3 or n >= 5) else 100
-        if n == 3 and aces >= 1:
+        if n == 3 and (aces >= 1 or trump_ace):
             tens = sum(c.rank == Rank.TEN and c.suit != suit for c in hand)
-            return 90 if aces == 1 and tens == 0 else 100  # jeu light à côté : on reste à 90
+            return 90 if aces + tens <= (0 if trump_ace else 1) else 100  # jeu light à côté : on reste à 90
         if n >= 4:
             return 90
         if n == 2 and aces >= 2:
@@ -112,7 +113,7 @@ def response(hand, value, suit):
     if value in (100, 110):
         return (value + 10 * aces, suit) if aces else None
     if value == 120:
-        return (140, suit) if aces >= 3 else None
+        return (140, suit) if aces >= 3 else (130, suit) if aces == 2 else None
     return None
 
 
