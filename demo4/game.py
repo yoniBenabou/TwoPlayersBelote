@@ -25,6 +25,7 @@ TEAM_NAMES = ("You & North", "East & West")
 
 
 BOT_KINDS = {"simple": CoincheBot, "petitjeu": PetitJeuBot, "papirobert": PapiRobertBot, "asr": AsRBot}
+BOT_LABELS = {"simple": "simple bots", "petitjeu": "Petit jeu", "papirobert": "Papi Robert", "asr": "AsR"}
 
 
 class IllegalMove(Exception):
@@ -59,6 +60,7 @@ class Table:
         self.rng = random.Random(seed)
         self.target = target
         self.bot = BOT_KINDS[bots]()
+        self.bots = bots
         self.reveal = False
         self.new_game()
 
@@ -239,5 +241,6 @@ class Table:
                          "by": seat_label(h["contract"]["seat"]), "mult": h["contract"]["mult"],
                          "made": h["made"], "scores": h["scores"]} for h in game.history],
             "rules": RULES,
+            "bots": BOT_LABELS[self.bots],
             "contracts": CONTRACTS,
         }

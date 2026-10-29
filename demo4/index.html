@@ -161,7 +161,7 @@
 <body>
 <header>
   <div>
-    <div class="kicker mono">COINCHE · 4 PLAYERS · TEST TABLE</div>
+    <div class="kicker mono">COINCHE · 4 PLAYERS · TEST TABLE · BOTS: <span id="bots-name">–</span></div>
     <h1>You and North against East and West</h1>
   </div>
   <div class="spacer"></div>
@@ -315,6 +315,7 @@ function renderBidding(s) {
 function render() {
   const s = view;
   $("deal").textContent = s.dealNo;
+  $("bots-name").textContent = (s.bots || "–").toUpperCase();
   $("contract").innerHTML = s.contract
     ? `<span style="color:${s.contract.suit.color === "red" ? "#f2545b" : "inherit"}">${s.contract.label}</span>${s.contract.mult > 1 ? ` ×${s.contract.mult}` : ""}`
     : "–";
