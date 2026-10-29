@@ -21,7 +21,8 @@ Réponses (une fois, puis relances prévues par le document) :
 - sur 80, même couleur : 90 avec le Valet ou le 9 (et au moins un As),
   100 avec les deux, +10 par As hors atout ; autre couleur : 100 avec une
   maîtrise, 110 avec une maîtrise forte. L'ouvreur à 80 : sur 90 dans sa
-  couleur, s'il a le complément, 100 + 10 par As hors atout ; sur 100 dans
+  couleur, s'il a le complément, 100, +10 si ses deux As (déjà annoncés
+  par le 80) sont hors atout, +10 par As hors atout en plus ; sur 100 dans
   une autre couleur, +10 avec deux As hors de cet atout, +10 par As en plus ;
   sur 110 dans une autre couleur, +10 par As ; sans réponse, 100 s'il a une
   vraie main de 100 ;
@@ -316,7 +317,8 @@ class AsRBot(CoincheBot):
         n = len(ranks_in(hand, suit))
         if first_value == 80:
             if suit == first_suit and value == 90 and self._complement_of_90(ranks_in(hand, suit)):
-                return ("bid", 100 + 10 * side_aces(hand, suit), suit)
+                # mes deux As sont déjà annoncés par le 80 : +10 s'ils sont hors atout, +10 par As hors atout en plus
+                return ("bid", 100 + 10 * max(0, side_aces(hand, suit) - 1), suit)
             if suit != first_suit and value == 100:
                 k = side_aces(hand, suit)
                 return ("bid", 100 + 10 * (k - 1), suit) if k >= 2 else None

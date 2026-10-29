@@ -54,7 +54,8 @@ def check_answers_to_90():
 
 
 def check_answers_to_80():
-    # 80 cœur, partenaire 90 (Valet ou 9) ; j'ai le complément et deux As hors cœur : 120
+    # 80 cœur, partenaire 90 (Valet ou 9) ; j'ai le complément et deux As hors cœur : 110 (les deux As
+    # sont déjà annoncés par le 80 : +10 pour le complément, +10 parce qu'ils sont hors atout)
     south = hand(H="9 7", S="A", D="A", C="7 8 Q 10")
     north = hand(H="J 8 10", S="7 8", D="7 8", C="A")
     g = deal([south, hand(S="9 10", D="9 10", C="9"), north], [])
@@ -63,6 +64,8 @@ def check_answers_to_80():
     g.bid(1, P)
     assert bot.bid(g, 2) == ("bid", 90, H)
     g.bid(2, ("bid", 90, H)); g.bid(3, P)
+    assert bot.bid(g, 0) == ("bid", 110, H)
+    g.hands[0] = hand(H="9 7", S="A", D="A", C="A 8 Q 10")              # trois As hors atout : 120
     assert bot.bid(g, 0) == ("bid", 120, H)
     # partenaire 100 dans une autre couleur : +10 avec deux As hors de son atout, +20 avec trois
     for mine, want in [(hand(S="A", D="A", C="8 7", H="7 8 Q K"), ("bid", 110, C)),
