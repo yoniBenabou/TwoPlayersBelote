@@ -54,7 +54,8 @@ Coinche : même règle que CoincheBot. Pas de surcoinche.
 Jeu :
 - contrée (coinchée ou surcoinchée), l'équipe qui a pris n'entame pas atout (sauf au capot) ;
 - preneur très faible à l'atout (2 atouts dont le Valet, 3 dont le 9, ou moins) que le partenaire n'a
-  pas soutenu dans l'atout : il n'entame pas atout, il garde ses atouts pour la fin ;
+  pas soutenu dans l'atout : il n'entame pas atout, il garde ses atouts pour la fin, et surtout le
+  plus fort (le Valet) pour être sûr de faire le dernier pli : s'il doit jouer atout, il met le plus petit ;
 - quand le partenaire a montré le Valet et le 9 (100), j'entame atout dès que j'ai la main, avec mon plus
   petit : il fait tomber les atouts adverses, puis me rend la main dans la couleur de mon appel ;
 - sinon, l'équipe qui a pris joue atout tant que les adversaires peuvent en avoir, en
@@ -437,7 +438,19 @@ class AsRBot(CoincheBot):
             card = self.lead(game, seat, legal)
         else:
             card = self._follow(game, seat, legal)
+        card = self._keep_top_trump(game, seat, legal, card)
         return self._belote_signal(game, seat, legal, card)
+
+    def _keep_top_trump(self, game, seat, legal, card):
+        """Preneur très faible à l'atout : son atout le plus fort est gardé pour le dernier pli ; s'il doit
+        jouer atout et qu'il a le choix, il met le plus petit."""
+        trump = game.trump
+        if card.suit != trump or not self._weak_alone(game, seat):
+            return card
+        strength = lambda c: c.strength(trump)
+        top = max((c for c in game.hands[seat] if c.suit == trump), key=strength)
+        lower = [c for c in legal if c.suit == trump and c != top]
+        return min(lower, key=strength) if card == top and lower else card
 
     def _follow(self, game, seat, legal):
         trick, trump = game.trick, game.trump

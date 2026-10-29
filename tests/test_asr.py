@@ -179,6 +179,13 @@ def check_weak_taker():
         while g.phase == "bidding":
             g.bid(g.current, P)
         assert bot.play(g, 0).suit != H, mine
+    # sur une entame atout, il met le 10 et garde le Valet pour le dernier pli
+    g = table([hand(H="J 10", S="A 8 7", D="A K", C="7"), hand(H="7"), hand(H="K Q")])
+    g.bid(0, ("bid", 80, H))
+    while g.phase == "bidding":
+        g.bid(g.current, P)
+    g.trick, g.current = [(2, Card(H, Rank.KING)), (3, Card(C, Rank.EIGHT))], 0
+    assert bot.play(g, 0) == Card(H, Rank.TEN)
     # le partenaire a surenchéri dans l'atout : on joue atout normalement
     g = table([hand(H="J 10", S="A 8 7", D="A K", C="7"), hand(H="7"), hand(H="9 A")])
     g.bid(0, ("bid", 80, H)); g.bid(1, P); g.bid(2, ("bid", 100, H))
