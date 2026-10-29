@@ -154,7 +154,8 @@ def check_play():
 
 
 def check_keep_nine():
-    """Sur le Valet d'atout (du partenaire ou d'un adversaire), aucun robot ne donne son 9 maître."""
+    """Sur le Valet d'atout : 9-As-10 tous maîtres -> le 9 au partenaire (le plus de points), le moins de
+    points à un adversaire (le 10) ; 9 pas accompagné de maîtres -> on garde le 9."""
     from belote.coinche.bots import CoincheBot
     from belote.coinche.papi_robert import PapiRobertBot
     from belote.coinche.petit_jeu import PetitJeuBot
@@ -162,7 +163,12 @@ def check_keep_nine():
         for trick in ([(0, Card(S, Rank.JACK))], [(0, Card(S, Rank.EIGHT)), (1, Card(S, Rank.JACK))]):
             g = deal([hand(S="J 8"), hand(S="7 K"), hand(S="9 A 10", H="7 8")], [("bid", 90, S), P, P, P])
             g.trick, g.current = list(trick), 2
-            assert kind().play(g, 2) == Card(S, Rank.TEN), kind.__name__
+            want = Card(S, Rank.NINE) if len(trick) == 1 else Card(S, Rank.TEN)
+            assert kind().play(g, 2) == want, (kind.__name__, trick)
+        # l'As d'atout est dehors : mes atouts ne sont pas tous maîtres, je garde le 9 sur le Valet du partenaire
+        g = deal([hand(S="J 8"), hand(S="A K"), hand(S="9 10 7", H="7 8")], [("bid", 90, S), P, P, P])
+        g.trick, g.current = [(0, Card(S, Rank.JACK))], 2
+        assert kind().play(g, 2) == Card(S, Rank.SEVEN), kind.__name__
 
 
 def check_full_games(n=100):

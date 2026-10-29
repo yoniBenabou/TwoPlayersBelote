@@ -61,9 +61,19 @@ class CoincheBot:
             return self.lead(game, seat, legal)
         winning = trick[trick_winner(trick, trump)]
         winners = [c for c in legal if trick_winner(trick + [(seat, c)], trump) == len(trick)]
-        if all(c.suit == trump for c in legal) and (winning[0] == partner_of(seat) or not winners):
-            # à l'atout sans pouvoir (ou devoir) prendre : le plus petit atout, on garde le 9 et les maîtres
-            return min(legal, key=lambda c: c.strength(trump))
+        if all(c.suit == trump for c in legal):
+            if winning[0] == partner_of(seat):
+                # pli du partenaire : si tous mes atouts sont maîtres, autant lui donner le plus de points ;
+                # sinon le plus petit atout (on garde le 9 et les gros atouts)
+                gone = {c for cards in game.played for c in cards} | {c for _, c in trick}
+                mine = [c for c in game.hands[seat] if c.suit == trump]
+                outside = [c for c in self._all_trumps(trump) if c not in gone and c not in mine]
+                if all(c.strength(trump) > o.strength(trump) for c in mine for o in outside):
+                    return max(legal, key=lambda c: (c.points(trump), -c.strength(trump)))
+                return min(legal, key=lambda c: c.strength(trump))
+            if not winners:
+                # pli adverse qu'on ne peut pas prendre : le moins de points possible
+                return min(legal, key=lambda c: (c.points(trump), c.strength(trump)))
         if winning[0] == partner_of(seat):
             # partenaire maître : on lui donne des points si son pli semble sûr, sinon petite carte
             safe = winning[1].suit == trump or winning[1].rank == Rank.ACE or len(trick) == 3
