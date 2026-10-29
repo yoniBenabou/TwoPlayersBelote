@@ -10,6 +10,7 @@ autres places jusqu'à son tour (ou la fin de la donne) et renvoie la liste des
 événements à animer et l'état complet de la table (textes en anglais).
 """
 import random
+from itertools import permutations
 
 import torch
 
@@ -22,7 +23,7 @@ from belote.coinche.papi_robert import PapiRobertBot
 from belote.coinche.petit_jeu import PetitJeuBot
 from belote.coinche.pimc import CoinchePIMC
 from belote.coinche.rl_env import NUM_ACTIONS_BIDDING, CoincheEnv, action_to_bid
-from belote.core.cards import sort_hand
+from belote.core.cards import Suit, sort_hand
 from belote.rl.env import CARD_INDEX, INDEX_CARD
 from demo.game import SUIT_INFO, card_json
 
@@ -56,6 +57,28 @@ OPPONENTS = ("ai_search", "ai", "asr", "papirobert", "petitjeu", "simple")
 
 class IllegalMove(Exception):
     pass
+
+
+RED = {Suit.COEUR, Suit.CARREAU}
+DISPLAY_ORDER = [Suit.PIQUE, Suit.COEUR, Suit.TREFLE, Suit.CARREAU]  # noir, rouge, noir, rouge
+
+
+def suit_order(hand, trump=None):
+    """Ordre d'affichage des couleurs de ma main : rouge et noir en alternance (le moins possible de
+    couleurs de même teinte côte à côte), l'atout à gauche s'il est connu."""
+    present = [s for s in DISPLAY_ORDER if any(c.suit == s for c in hand)]
+
+    def key(order):
+        same = sum((a in RED) == (b in RED) for a, b in zip(order, order[1:]))
+        return (trump in present and order[0] != trump, same, [DISPLAY_ORDER.index(s) for s in order])
+
+    best = list(min(permutations(present), key=key)) if present else []
+    return best + [s for s in DISPLAY_ORDER if s not in best]
+
+
+def sort_by_order(hand, order, trump):
+    """Ma main rangée selon l'ordre des couleurs, chaque couleur de la plus faible à la plus forte."""
+    return sorted(hand, key=lambda c: (order.index(c.suit), c.strength(trump)))
 
 
 def suit_json(suit):
@@ -176,6 +199,9 @@ class Table:
         return self.state(events + self._run_bots())
 
     def _reset_deal(self):
+        # ordre des couleurs fixé avant les annonces, puis une seule fois quand l'atout est connu
+        self.order = suit_order(self.game.hands[HUMAN])
+        self.coinche_window = False
         self.last_trick = None
         self.calls = {}
         self.confidence = {}  # carte (index) -> confiance de l'IA, pour le pli affiché
@@ -193,6 +219,28 @@ class Table:
             raise IllegalMove("This bid is not allowed now.")
         events = self._apply_bid(HUMAN, action)
         return self.state(events + self._run_bots())
+
+    def coinche_now(self):
+        """Coinche hors de mon tour, sur l'annonce de West, avant que Nord parle."""
+        game = self.game
+        if not self.coinche_window:
+            raise IllegalMove("Too late to coinche: someone has spoken since.")
+        self.coinche_window = False
+        game.current = HUMAN  # la coinche coupe la parole à Nord ; ensuite, West parle
+        events = self._apply_bid(HUMAN, ("coinche",))
+        return self.state(events + self._run_bots())
+
+    def continue_bidding(self):
+        """Pas de coinche : Nord parle, les annonces continuent."""
+        self.coinche_window = False
+        return self.state(self._run_bots())
+
+    def _opens_coinche_window(self, seat, action):
+        """West vient d'annoncer juste après moi : je peux le coincher avant que Nord parle."""
+        game = self.game
+        return (seat == (HUMAN + 1) % 4 and action[0] == "bid" and game.phase == "bidding"
+                and game.contract["mult"] == 1 and team_of(game.contract["seat"]) != team_of(HUMAN)
+                and game.current != HUMAN)
 
     def play_human(self, card_id):
         card = INDEX_CARD.get(int(card_id))
@@ -224,7 +272,7 @@ class Table:
                 self._reset_deal()
                 events.append(self._deal_event())
                 continue
-            if game.phase not in ("bidding", "play") or game.current == HUMAN:
+            if game.phase not in ("bidding", "play") or game.current == HUMAN or self.coinche_window:
                 return events
             seat = game.current
             player = self.players[seat]
@@ -237,6 +285,8 @@ class Table:
                 move = player.play(game, seat)
             if game.phase == "bidding":
                 events += self._apply_bid(seat, move, confidence)
+                if self._opens_coinche_window(seat, move):
+                    self.coinche_window = True
             else:
                 events += self._apply_card(seat, move, confidence)
 
@@ -250,6 +300,8 @@ class Table:
             event["text"] += f" (confidence {event['confidence']}%)"
         events = [event]
         if game.phase == "play":
+            self.order = suit_order(game.hands[HUMAN], game.trump)
+            event["hand"] = [card_json(c, game.trump) for c in sort_by_order(game.hands[HUMAN], self.order, game.trump)]
             c = game.contract
             mult = {1: "", 2: ", coinched", 3: ", surcoinched"}[c["mult"]]
             events.append({"type": "message", "contract": True,
@@ -294,7 +346,7 @@ class Table:
         return {"type": "message", "deal": True,
                 "text": f"Deal {game.deal_no}: {self.label(game.dealer)} deal{self._s(game.dealer)}, "
                         f"{self.label(first)} speak{self._s(first)} first.",
-                "hand": [card_json(c) for c in sort_hand(game.hands[HUMAN], None)]}
+                "hand": [card_json(c) for c in sort_by_order(game.hands[HUMAN], self.order, None)]}
 
     def _result_text(self):
         r = self.game.result
@@ -323,7 +375,7 @@ class Table:
         legal = {CARD_INDEX[c] for c in game.legal_cards(HUMAN)} if my_turn else set()
         hands = {}
         for seat in range(4):
-            cards = sort_hand(game.hands[seat], trump)
+            cards = sort_by_order(game.hands[seat], self.order, trump) if seat == HUMAN else sort_hand(game.hands[seat], trump)
             if seat == HUMAN or self.reveal:
                 hands[SEAT_KEYS[seat]] = [dict(card_json(c, trump), legal=CARD_INDEX[c] in legal) for c in cards]
             else:
@@ -375,6 +427,7 @@ class Table:
             "tricksWon": game.tricks_won,
             "yourTurn": my_turn,
             "yourBid": game.phase == "bidding" and game.current == HUMAN,
+            "coincheWindow": self.coinche_window,
             "teams": teams,
             "totals": game.totals,
             "target": game.target,

@@ -93,6 +93,8 @@ def make_handler(tables):
                 "/api/play": lambda: table.play_human(payload.get("card")),
                 "/api/next": lambda: table.next_deal(),
                 "/api/reveal": lambda: table.set_reveal(payload.get("on")),
+                "/api/coinche-now": lambda: table.coinche_now(),
+                "/api/continue": lambda: table.continue_bidding(),
             }
             if self.path not in actions:
                 return self._send(404, {"error": "not found"})

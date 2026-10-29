@@ -363,6 +363,7 @@ function renderBidding(s) {
     ? s.bids.map((b) => `<span>${NAMES[b.seat]}: ${b.label}</span>`).join("")
     : '<span>No bid yet</span>';
   const box = $("bid-controls"); box.innerHTML = "";
+  if (s.coincheWindow && !busy) { renderCoincheWindow(s, box); return; }
   const o = s.bidOptions;
   if (!o || busy) { box.innerHTML = `<div class="help mono">WAITING FOR ${(NAMES[s.current] || "").toUpperCase()}…</div>`; return; }
   if (selectedValue !== null && !o.values.some((v) => v.value === selectedValue)) selectedValue = null;
@@ -391,6 +392,33 @@ function renderBidding(s) {
   if (o.coinche) { const b = document.createElement("button"); b.className = "primary"; b.textContent = "Coinche! (×2)"; b.onclick = () => bid({ kind: "coinche" }); acts.append(b); }
   if (o.surcoinche) { const b = document.createElement("button"); b.className = "primary"; b.textContent = "Surcoinche! (×3)"; b.onclick = () => bid({ kind: "surcoinche" }); acts.append(b); }
   box.append(acts);
+}
+
+// ---------- coinche hors tour : West vient d'annoncer, Nord n'a pas encore parlé ----------
+const COINCHE_WINDOW_MS = 3000;
+let coincheTimer = null, coincheDeadline = 0;
+function stopCoincheTimer() { if (coincheTimer) clearInterval(coincheTimer); coincheTimer = null; }
+function startCoincheTimer() {
+  stopCoincheTimer();
+  coincheDeadline = Date.now() + COINCHE_WINDOW_MS;
+  coincheTimer = setInterval(() => {
+    const left = coincheDeadline - Date.now();
+    const el = $("coinche-count");
+    if (el) el.textContent = Math.max(0, Math.ceil(left / 1000));
+    if (left <= 0) { stopCoincheTimer(); act("/api/continue", {}); }
+  }, 100);
+}
+function renderCoincheWindow(s, box) {
+  const last = s.bids[s.bids.length - 1];
+  const help = document.createElement("div"); help.className = "help";
+  help.innerHTML = `${NAMES[last.seat]} bid ${last.label}. Coinche before North speaks? <b id="coinche-count">${Math.max(0, Math.ceil((coincheDeadline - Date.now()) / 1000))}</b>`;
+  box.append(help);
+  const acts = document.createElement("div"); acts.className = "row";
+  const c = document.createElement("button"); c.className = "primary"; c.textContent = "Coinche! (×2)";
+  c.onclick = () => { stopCoincheTimer(); act("/api/coinche-now", {}); };
+  const go = document.createElement("button"); go.textContent = "Continue";
+  go.onclick = () => { stopCoincheTimer(); act("/api/continue", {}); };
+  acts.append(c, go); box.append(acts);
 }
 
 function render() {
@@ -502,7 +530,11 @@ async function replay(state) {
       }
       banner(ev.text); log(ev.text, true); await sleep(DELAY.message);
     } else if (ev.type === "bid") {
-      if (view) { view.bids = [...view.bids, { seat: ev.seat, label: ev.label }]; render(); }
+      if (view) {
+        view.bids = [...view.bids, { seat: ev.seat, label: ev.label }];
+        if (ev.hand) view.hands.south = ev.hand.map((c) => ({ ...c, legal: false }));  // atout connu : nouvel ordre
+        render();
+      }
       bubble(ev.seat, ev.confidence !== undefined ? `${ev.label} · ${ev.confidence}%` : ev.label, ev.seat === "south" ? 900 : DELAY.bid + 300);
       banner(ev.text); log(ev.text, ev.label !== "Pass");
       await sleep(ev.seat === "south" ? DELAY.yourBid : DELAY.bid);
@@ -525,8 +557,11 @@ async function replay(state) {
       banner(ev.text); log(ev.text, true); await sleep(DELAY.message);
     }
   }
-  busy = false; view = state; render(); renderTrick(state.trick);
-  if (state.yourBid) banner("Your bid");
+  busy = false; view = state;
+  if (state.coincheWindow) startCoincheTimer();
+  render(); renderTrick(state.trick);
+  if (state.coincheWindow) banner("Coinche West?");
+  else if (state.yourBid) banner("Your bid");
   else if (state.yourTurn) banner(state.trick.length ? "Your turn" : "Your turn: lead a card");
 }
 
