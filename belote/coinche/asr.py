@@ -63,9 +63,9 @@ Jeu :
 - ensuite : les cartes maîtresses (As, 10, Roi...), le Roi d'un Roi-10 quand
   l'As n'est pas tombé, puis la couleur la plus longue ;
 - défense (pas d'appels en défense) : contre 140 ou plus, d'abord les cartes
-  maîtresses ; sinon faire couper le preneur (la couleur qu'il n'a plus, s'il
-  peut avoir de l'atout) quand ça ne coûte ni As ni 10, sinon la couleur la
-  plus longue ; pas d'entame atout sauf s'il ne reste que ça ;
+  maîtresses ; sinon faire couper le preneur en jouant notre couleur la plus
+  longue (celle qu'il n'a plus s'il l'a déjà montré, même au prix d'un As ou
+  d'un 10) ; pas d'entame atout sauf s'il ne reste que ça ;
 - on ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas
   le choix ;
 - partenaire maître : on ne donne pas un 10 accompagné (il peut faire un pli),
@@ -482,8 +482,8 @@ class AsRBot(CoincheBot):
 
     def defence_lead(self, game, seat, legal):
         """Entame en défense (pas d'appels en défense) : contre 140 ou plus, les cartes maîtresses ;
-        sinon faire couper le preneur si ça ne coûte pas un As ou un 10 ; sinon la couleur la plus longue ;
-        atout seulement s'il ne reste que ça."""
+        sinon faire couper le preneur : la couleur qu'il n'a plus (la plus longue si plusieurs), sinon
+        notre couleur la plus longue ; atout seulement s'il ne reste que ça."""
         trump = game.trump
         side = [c for c in legal if c.suit != trump]
         gone = {c for cards in game.played for c in cards}
@@ -575,8 +575,11 @@ class AsRBot(CoincheBot):
         taker = game.contract["seat"]
         if game.trump in voids[taker]:
             return None
-        cards = [c for c in side if c.suit in voids[taker] and c.rank not in (Rank.ACE, Rank.TEN)]
-        return min(cards, key=lambda c: (c.points(game.trump), c.strength(game.trump))) if cards else None
+        cards = [c for c in side if c.suit in voids[taker]]  # un As ou un 10 peut être sacrifié
+        if not cards:
+            return None
+        longest = max({c.suit for c in cards}, key=lambda s: (sum(c.suit == s for c in side), s.value))
+        return min((c for c in cards if c.suit == longest), key=lambda c: (c.points(game.trump), c.strength(game.trump)))
 
     @staticmethod
     def _is_master(card, trump, gone, hand):

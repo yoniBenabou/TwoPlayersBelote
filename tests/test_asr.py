@@ -149,6 +149,8 @@ def check_play():
     g.current = 0
     g.hands[0] = hand(D="Q 10", H="K Q", C="A K 7")
     assert bot.play(g, 0) == Card(D, Rank.QUEEN)
+    g.hands[0] = hand(D="A", H="K Q", C="7 8 9")                       # seul carreau : l'As, sacrifié pour le faire couper
+    assert bot.play(g, 0) == Card(D, Rank.ACE)
 
 
 def check_full_games(n=100):

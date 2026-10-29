@@ -36,8 +36,8 @@ Jeu :
   plus petite carte ;
 - en défense : la même règle qu'AsR (pas d'appels en défense, jamais d'entame
   atout sauf s'il ne reste que ça ; contre 140 ou plus les cartes maîtresses ;
-  faire couper le preneur quand ça ne coûte ni As ni 10 ; la couleur la plus
-  longue) ;
+  faire couper le preneur en jouant la couleur la plus longue, même au prix
+  d'un As ou d'un 10) ;
 - appels (seulement dans l'équipe qui a pris) : quand le partenaire entame atout
   et que je n'en ai plus, je défausse vers la couleur de mon As : appel direct
   (une carte de cette couleur) si elle est de la famille de l'atout, appel
