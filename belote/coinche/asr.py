@@ -14,7 +14,10 @@ forte couleur) :
   (10 de la famille opposée), sinon 140 (10 de la couleur sœur) ;
 - avec au moins deux As (atout compris) : 80, pour les signaler, même sans
   atout ; on surenchérira à 100 avec une vraie main de 100 ;
-- maîtrise (Valet + 9 + As, ou Valet + 9 quatrièmes) : 100 ;
+- maîtrise (Valet + 9 + As, ou Valet + 9 quatrièmes) : 100, qui demande des As rouges et noirs (il me
+  manque l'As de la couleur sœur et au moins un As de la famille opposée) ; si je ne cherche des As que
+  dans une famille, j'annonce directement la demande, comme la maîtrise forte : 110 s'il ne me manque
+  que des As de la famille opposée, 120 s'il ne me manque que l'As sœur (130/140 s'il ne manque aucun As) ;
 - Valet au moins troisième ou 9 au moins quatrième, avec au moins un As
   (d'atout ou à côté) : 90 ; jamais 90 sans As.
 Réponses (une fois, puis relances prévues par le document) :
@@ -166,6 +169,11 @@ def ask_value(hand, suit):
     return 140
 
 
+def missing_both_families(hand, suit):
+    """Il me manque un As dans chaque famille : l'As sœur et au moins un As de la famille opposée."""
+    return not has(hand, SISTER[suit], Rank.ACE) and not all(has(hand, s, Rank.ACE) for s in opposite(suit))
+
+
 def best_suit(hand):
     """(type, couleur) : la meilleure structure d'atout, puis la couleur la plus forte."""
     return max(((trump_type(hand, s), s) for s in SUITS),
@@ -176,6 +184,9 @@ def natural_opening(hand):
     """(valeur, couleur, type) de l'ouverture AsR, ou None."""
     kind, suit = best_suit(hand)
     if kind == "strong":
+        return ask_value(hand, suit), suit, kind
+    if kind == "100" and not missing_both_families(hand, suit):
+        # maîtrise, mais je ne cherche des As que dans une famille : je le demande directement
         return ask_value(hand, suit), suit, kind
     if all_aces(hand) >= 2:
         return 80, suit, kind

@@ -25,7 +25,13 @@ def check_openings():
     assert opening(H="9 A 7 8", S="K", D="7 8", C="7") == (90, H)          # 9 quatrième, As d'atout
     assert opening(H="J 9 A", S="K", D="7 8", C="7 Q") == (100, H)         # maîtrise
     assert opening(H="J 9 7 8", S="K", D="7 8", C="7") == (100, H)         # Valet + 9 quatrièmes
-    assert opening(H="J 9 A", S="A", D="7 8", C="7 Q") == (80, H)          # deux As : 80 d'abord
+    assert opening(H="J 9 A", S="A", D="7 8", C="7 Q") == (80, H)          # deux As, je cherche rouge et noir : 80
+    # 100 = je cherche des As rouges et noirs ; sinon la demande directe (atout trèfle, sœur pique)
+    assert opening(C="J 9 7 8", S="8", H="K", D="7 8") == (100, C)         # 8 de trèfle, Roi de cœur : rouge et noir
+    assert opening(C="J 9 7 8", H="A", D="7 8", S="K") == (100, C)         # As de cœur : il manque pique et carreau
+    assert opening(C="J 9 7 8", S="A", D="7 8", H="K") == (110, C)         # As de pique : je ne cherche que du rouge
+    assert opening(C="J 9 7 8", H="A", D="A", S="7 8") == (120, C)         # As rouges : je ne cherche que l'As de pique
+    assert opening(C="J 9 A", S="A 8", H="K Q", D="7") == (110, C)         # Valet 9 As + As de pique : 110
 
 
 def deal(hands, bids):
