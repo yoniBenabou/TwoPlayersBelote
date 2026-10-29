@@ -52,7 +52,11 @@ partenaire reste prudent : il passe) ; sur un 100 adverse, une vraie main de
 Coinche : même règle que CoincheBot. Pas de surcoinche.
 
 Jeu :
-- contrée (coinchée ou surcoinchée), l'équipe qui a pris n'entame pas atout (sauf au capot) ;
+- quand mon partenaire a annoncé l'atout à 100 ou plus (maîtrise) et que nous avons pris, si j'entame le
+  premier pli avec de l'atout (sans le Valet ni le 9), j'entame toujours atout (mon plus petit) : je lui
+  donne la main, il fait tomber les atouts adverses avant que nos As soient joués ;
+- contrée (coinchée ou surcoinchée), l'équipe qui a pris n'entame pas atout (sauf au capot, et sauf
+  la règle précédente) ;
 - preneur très faible à l'atout (2 atouts dont le Valet, 3 dont le 9, ou moins) que le partenaire n'a
   pas soutenu dans l'atout : il n'entame pas atout, il garde ses atouts pour la fin, et surtout le
   plus fort (le Valet) pour être sûr de faire le dernier pli : s'il doit jouer atout, il met le plus petit ;
@@ -582,6 +586,10 @@ class AsRBot(CoincheBot):
         if not attacking:
             return self.defence_lead(game, seat, legal)
         trumps = [c for c in legal if c.suit == trump]
+        if trumps and not game.tricks and self._partner_announced(game, seat) and not ranks_in(hand, trump) & {Rank.JACK, Rank.NINE}:
+            # j'entame le premier pli et mon partenaire a annoncé l'atout : je lui donne la main en atout ;
+            # il fait tomber les atouts adverses et mes As ne risquent plus d'être coupés
+            return min(trumps, key=lambda c: c.strength(trump))
         majors = {Rank.JACK, Rank.NINE}
         if (trumps and self._opponents_may_have_trumps(game, seat) and self._partner_majors(game, seat) >= majors
                 and not ranks_in(hand, trump) & majors and (contract["mult"] == 1 or contract["value"] == CAPOT)):
@@ -649,6 +657,15 @@ class AsRBot(CoincheBot):
         if side:
             return self._from_longest(side, trump, gone, hand)
         return min(legal, key=lambda c: c.strength(trump))
+
+    @staticmethod
+    def _partner_announced(game, seat):
+        """Mon partenaire a annoncé l'atout le premier dans l'équipe, à 100 ou plus, et l'équipe a pris."""
+        trump, contract = game.trump, game.contract
+        if team_of(contract["seat"]) != team_of(seat):
+            return False
+        first = next(((s, a) for s, a in game.bids if a[0] == "bid" and a[2] == trump and team_of(s) == team_of(seat)), None)
+        return first is not None and first[0] == partner_of(seat) and first[1][1] >= 100
 
     def _last_opponent_trump(self, game, seat):
         """Il ne reste qu'un atout dehors, et il peut être chez un adversaire."""

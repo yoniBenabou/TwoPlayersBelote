@@ -214,6 +214,22 @@ def check_last_trump():
     assert bot.play(g, 0).suit != S
 
 
+def check_lead_to_taker():
+    # Est ouvre 110 carreau, Ouest a la partance et un seul atout : il entame atout, pas ses As
+    # (même après un 90 adverse, même coinché)
+    for bids, coinche in [([P, P], False), ([P, ("bid", 90, H)], False), ([P, P], True)]:
+        g = table([None, hand(D="7", S="A 8", H="A 9", C="A 8 9"), None, hand(D="J 9 A K", C="10", S="K Q")],
+                  dealer=0)
+        for b in bids:
+            g.bid(g.current, b)
+        g.bid(3, ("bid", 110, D))
+        if coinche:
+            g.bid(0, ("coinche",))
+        while g.phase == "bidding":
+            g.bid(g.current, P)
+        assert bot.play(g, 1) == Card(D, Rank.SEVEN), (bids, coinche, bot.play(g, 1))
+
+
 def check_collage():
     # un adversaire dit 90 ; j'ai une main de 90 : je colle à 100 ; mon partenaire ne répond que le complément
     g = deal([hand(S="J 9 7", D="A"), hand(H="J 7 8", C="A", D="7", S="Q")], [("bid", 90, S)])
@@ -340,11 +356,12 @@ def main():
     check_capot_play()
     check_weak_taker()
     check_last_trump()
+    check_lead_to_taker()
     check_collage()
     check_play()
     check_keep_nine()
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, collage, jeu, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, collage, jeu, parties) : OK")
 
 
 if __name__ == "__main__":
