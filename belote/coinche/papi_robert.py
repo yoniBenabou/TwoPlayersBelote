@@ -40,6 +40,9 @@ Jeu :
 - appel indirect : quand le partenaire entame atout et que je n'en ai plus, je
   défausse une petite carte dans la couleur sœur (même teinte) de celle de mon
   As ; le partenaire rejoue ensuite la couleur de l'As.
+Contrat coinché (ou surcoinché) : l'équipe coinchée garde ses atouts (pas
+d'entame atout) ; la défense non plus, et cherche à faire couper l'attaque au
+maximum (petite carte d'une couleur dont un attaquant n'a plus).
 On ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas
 le choix. Le reste du jeu en second, troisième ou quatrième est celui de CoincheBot.
 """
@@ -218,12 +221,19 @@ class PapiRobertBot(CoincheBot):
         attacking = team_of(game.contract["seat"]) == team_of(seat)
         called = [c for c in legal if c.suit in self._called_suits(game, seat)]
         called_lead = min(called, key=lambda c: c.strength(trump)) if called else None
+        coinched = game.contract["mult"] > 1
+        side = [c for c in legal if c.suit != trump] or legal
         if not attacking:
             # c'est l'équipe qui a pris qui décide de jouer atout : la défense n'entame pas atout
-            side = [c for c in legal if c.suit != trump] or legal
+            if coinched:
+                ruff = self._ruff_lead(game, seat, side)
+                if ruff is not None:
+                    return ruff
             return called_lead or super().lead(game, seat, side)
         trumps = [c for c in legal if c.suit == trump]
-        if trumps and self._opponents_may_have_trumps(game, seat):
+        if coinched:
+            legal = side  # coinché : on garde ses atouts pour couper
+        elif trumps and self._opponents_may_have_trumps(game, seat):
             # on a pris : atout tant que les adversaires en ont, en commençant fort
             return max(trumps, key=lambda c: c.strength(trump))
         aces = [c for c in legal if c.rank == Rank.ACE and c.suit != trump]
@@ -232,6 +242,27 @@ class PapiRobertBot(CoincheBot):
         if called_lead:
             return called_lead
         return min(legal, key=lambda c: (c.suit == trump, c.points(trump), c.strength(trump)))
+
+    @staticmethod
+    def _shown_voids(game):
+        """Couleurs dont chaque joueur a montré qu'il n'en a plus (il n'a pas fourni)."""
+        voids = [set() for _ in range(4)]
+        for trick in [t for t, _w in game.tricks] + ([game.trick] if game.trick else []):
+            led = trick[0][1].suit
+            for s, c in trick[1:]:
+                if c.suit != led:
+                    voids[s].add(led)
+        return voids
+
+    @classmethod
+    def _ruff_lead(cls, game, seat, side):
+        """Contrat coinché, en défense : faire couper l'attaque au maximum (la plus petite carte d'une
+        couleur dont un attaquant n'a plus, s'il peut encore avoir de l'atout)."""
+        voids = cls._shown_voids(game)
+        attackers = [s for s in range(4) if team_of(s) == team_of(game.contract["seat"])]
+        suits = {suit for s in attackers if game.trump not in voids[s] for suit in voids[s]}
+        cards = [c for c in side if c.suit in suits and c.suit != game.trump]
+        return min(cards, key=lambda c: (c.points(game.trump), c.strength(game.trump))) if cards else None
 
     @staticmethod
     def _called_suits(game, seat):

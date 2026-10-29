@@ -143,6 +143,24 @@ def check_defence_no_trump_lead():
     assert bot.play(game, 0).suit == S
 
 
+def check_coinched():
+    bot = PapiRobertBot()
+    # Sud prend 100 à pique, Ouest coinche : Sud garde ses atouts et joue son As
+    game = table([hand(S="J 9 7 8", H="A 10", D="K", C="8"), None, None, None])
+    game.bid(0, ("bid", 100, S))
+    game.bid(1, ("coinche",))
+    while game.phase == "bidding":
+        game.bid(game.current, ("pass",))
+    assert game.phase == "play" and game.contract["mult"] == 2 and game.current == 0, (game.phase, game.current)
+    assert bot.play(game, 0) == Card(H, Rank.ACE)
+    # défense : Nord (attaquant) n'a plus de carreau : Ouest joue petit carreau pour le faire couper
+    game.tricks = [([(0, Card(D, Rank.SEVEN)), (1, Card(D, Rank.EIGHT)), (2, Card(H, Rank.SEVEN)),
+                     (3, Card(D, Rank.NINE))], 3)]
+    game.current = 1
+    game.hands[1] = hand(D="Q 10", H="K Q", C="A K 7")
+    assert bot.play(game, 1) == Card(D, Rank.QUEEN)
+
+
 def check_trump_until_void():
     bot = PapiRobertBot()
     # Sud a pris ; les adversaires n'ont plus d'atout (ils n'ont pas fourni) : il garde ses atouts et joue son As
@@ -181,6 +199,7 @@ def main():
     check_discards()
     check_trump_until_void()
     check_defence_no_trump_lead()
+    check_coinched()
     check_full_games()
     print("OK")
 
