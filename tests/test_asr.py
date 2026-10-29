@@ -114,6 +114,18 @@ def check_play():
     g = deal([hand(S="J 9 A 8", H="A 10", D="K", C="8")], [("bid", 100, S), ("coinche",), P, P, P])
     assert g.phase == "play" and g.contract["mult"] == 2 and g.current == 0, (g.phase, g.bids)
     assert bot.play(g, 0).suit != S
+    # on ne défausse pas un As sans être maître derrière : As-Valet de pique, sans le 10
+    g = deal([None, None, hand(S="J 9 A 8")], [P, P, ("bid", 100, S), P, P, P])
+    g.trick = [(1, Card(D, Rank.ACE)), (2, Card(D, Rank.SEVEN))]      # Ouest, partenaire d'Est, est maître
+    g.current = 3
+    g.hands[3] = hand(H="A J", C="7 8 K Q 10")
+    from belote.coinche.bots import CoincheBot
+    assert CoincheBot().play(g, 3) == Card(H, Rank.ACE)               # l'ancien comportement donnait l'As
+    assert bot.play(g, 3) != Card(H, Rank.ACE)
+    g.hands[3] = hand(H="A 10", C="7 8 K Q J")                       # As-10 : le 10 sera maître, il peut le donner
+    assert Card(H, Rank.ACE) in bot._keep_aces(g, 3, g.legal_cards(3))
+    g.hands[3] = hand(H="A", C="A")                                   # que des As : pas le choix
+    assert bot._keep_aces(g, 3, g.legal_cards(3)) == g.legal_cards(3)
     # signal de belote : Roi en premier avec un nombre pair d'atouts, Dame avec un nombre impair
     g = deal([hand(S="K Q 7 8", H="A 10", D="K", C="8")], [("bid", 90, S), P, P, P])
     assert bot._belote_signal(g, 0, g.legal_cards(0), Card(S, Rank.QUEEN)) == Card(S, Rank.KING)
