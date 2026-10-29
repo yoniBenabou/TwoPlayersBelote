@@ -97,6 +97,53 @@ def check_110_dialogue():
     assert bot.bid(g, 0) == ("bid", CAPOT, H)
 
 
+def check_100_dialogue():
+    # 100 cœur (Sud a l'As de pique) ; Nord a deux As : 120 ; Sud a le dernier : 130 (« annonce tes autres
+    # plis maîtres ») ; Nord : le 10 de carreau derrière son As, le 10 de pique derrière l'As de Sud : 150
+    south = hand(H="J 9 7 8", S="A", D="7 8", C="7")
+    north = hand(D="A 10 Q", C="A 8", S="10", H="Q K")
+    g = deal([south, hand(S="9 J", D="9 J", C="9 J"), north], [])
+    g.bid(0, bot.bid(g, 0))
+    assert g.bids[-1][1] == ("bid", 100, H), g.bids
+    g.bid(1, P)
+    g.bid(2, bot.bid(g, 2))
+    assert g.bids[-1][1] == ("bid", 120, H), g.bids
+    g.bid(3, P)
+    g.bid(0, bot.bid(g, 0))
+    assert g.bids[-1][1] == ("bid", 130, H), g.bids
+    g.bid(1, P)
+    g.bid(2, bot.bid(g, 2))
+    assert g.bids[-1][1] == ("bid", 150, H), g.bids
+    g.bid(3, P)
+    assert bot.bid(g, 0) == ("bid", CAPOT, H)
+    # sans le troisième As, Sud ne remonte pas
+    g = deal([hand(H="J 9 A 8", S="K", D="7 8", C="7"), hand(S="9 J", D="9 J", C="9 J"), north],
+             [("bid", 100, H), P, ("bid", 120, H), P])
+    assert bot.bid(g, 0) == P
+    # Nord a les trois As (130) : Sud remonte à 140 ; Nord n'a pas d'autre pli maître : il passe
+    north3 = hand(D="A Q", C="A 8", S="A 8", H="Q K")
+    g = deal([hand(H="J 9 A 8", S="K", D="7 8", C="7"), hand(S="9 J", D="9 J", C="9 J"), north3],
+             [("bid", 100, H), P, ("bid", 130, H), P])
+    assert bot.bid(g, 0) == ("bid", 140, H)
+    g.bid(0, ("bid", 140, H)); g.bid(1, P)
+    assert bot.bid(g, 2) == P
+
+
+def check_capot_on_100():
+    # Nord a quatre plis maîtres : capot sur 100, sauf s'il a la partance sans atout
+    north = hand(D="A 10 K", C="A", S="Q 8", H="7 8")
+    for dealer, nh, want in [(3, north, ("bid", CAPOT, H)),
+                             (1, hand(D="A 10 K", C="A 8", S="Q 8 7"), ("bid", 120, H)),   # Nord entame, sans atout
+                             (1, north, ("bid", CAPOT, H))]:                                # Nord entame, avec un atout
+        g = table([hand(H="J 9 A Q"), hand(S="9 J"), nh], dealer=dealer)
+        while g.current != 0:
+            g.bid(g.current, P)
+        g.bid(0, ("bid", 100, H))
+        while g.current != 2:
+            g.bid(g.current, P)
+        assert bot.bid(g, 2) == want, (dealer, bot.bid(g, 2))
+
+
 def check_collage():
     # un adversaire dit 90 ; j'ai une main de 90 : je colle à 100 ; mon partenaire ne répond que le complément
     g = deal([hand(S="J 9 7", D="A"), hand(H="J 7 8", C="A", D="7", S="Q")], [("bid", 90, S)])
@@ -207,11 +254,13 @@ def main():
     check_answers_to_90()
     check_answers_to_80()
     check_110_dialogue()
+    check_100_dialogue()
+    check_capot_on_100()
     check_collage()
     check_play()
     check_keep_nine()
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, collage, jeu, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, collage, jeu, parties) : OK")
 
 
 if __name__ == "__main__":

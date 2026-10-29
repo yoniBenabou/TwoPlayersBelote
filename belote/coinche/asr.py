@@ -30,13 +30,19 @@ Réponses (une fois, puis relances prévues par le document) :
   par As ; rien sans complément ; le 9 sec ne se signale pas au premier tour,
   au second tour seulement (+10) avec un As à côté ou si l'équipe est très en
   retard (500 points) ;
-- sur 100 : +10 par As hors atout ; capot avec quatre plis maîtres ;
+- sur 100 : +10 par As hors atout ; capot avec quatre plis maîtres, si l'ouvreur ou un adversaire a
+  la partance (sinon il faut en plus un atout pour rendre la main à l'ouvreur). 100 -> 110/120/130 :
+  si l'équipe a les trois As hors atout (ceux du partenaire et les miens), l'ouvreur remonte de +10
+  pour demander les autres plis maîtres ; le partenaire ajoute +10 par pli maître après les As (son
+  As compris dans la couleur ne compte pas, et derrière l'As de l'ouvreur son 10 est maître) ; sans
+  les trois As, l'ouvreur ne remonte pas (ce serait une fausse information) ;
 - sur 110 : +10 par As de la famille opposée ; 110 -> 120 -> 130 : l'ouvreur
   qui a l'autre As noir dit 130, le partenaire ajoute +10 par pli
   supplémentaire dans la famille opposée (sans recompter son As) ;
 - sur 120 : +10 avec l'As de la couleur sœur ; sur 130 (demande initiale) :
   +10 par 10 de la famille opposée ; sur 140 : +10 avec le 10 sœur.
-Capot de l'ouvreur : après 100 et +30 avec 5 atouts ; après les réponses sur
+Capot de l'ouvreur : après 100 et +30 avec 5 atouts ; après 100, les trois As et les plis maîtres
+annoncés, si ses plis attendus font 8 ; après les réponses sur
 110, si ses plis attendus (atouts, As, plis signalés) font 8.
 Collage : sur un 90 adverse, une main de 90 dit 100 (le partenaire la lit
 comme un 90 et ne répond que le complément) ; une main de 100 saute à 110 (le
@@ -248,7 +254,7 @@ class AsRBot(CoincheBot):
                 return ("bid", game.contract["value"] + 10, suit)  # 9 sec signalé au second tour
             return None
         if level == 100:
-            if master_tricks(hand, suit) >= 4:
+            if master_tricks(hand, suit) >= 4 and self._capot_reachable(game, seat, suit):
                 return ("bid", CAPOT, suit)
             inc = 10 * side_aces(hand, suit)
         elif level == 110:
@@ -262,6 +268,20 @@ class AsRBot(CoincheBot):
         else:
             inc = 0
         return ("bid", value + inc, suit) if inc else None
+
+    @staticmethod
+    def _capot_reachable(game, seat, trump):
+        """Capot sur 100 : valable si l'ouvreur ou un adversaire a la partance ; si c'est moi qui entame
+        le premier pli, il me faut un atout pour donner la main à l'ouvreur."""
+        leader = (game.dealer + 1) % 4
+        return leader != seat or any(c.suit == trump for c in game.hands[seat])
+
+    @staticmethod
+    def _extra_masters(hand, trump):
+        """Plis maîtres hors atout en plus des As, quand l'équipe a les trois As : dans une couleur où
+        j'ai l'As, les cartes qui le suivent ; sinon (l'As est chez le partenaire), celles qui suivent son As."""
+        return sum(top_tricks(hand, s) - 1 if has(hand, s, Rank.ACE) else top_tricks(hand, s, above={Rank.ACE})
+                   for s in SUITS if s != trump)
 
     @staticmethod
     def _complement(ranks):
@@ -313,10 +333,21 @@ class AsRBot(CoincheBot):
                 other = next(s for s in opposite(suit) if s != ace_suit)
                 extra = (top_tricks(hand, ace_suit) - 1) + top_tricks(hand, other, above={Rank.ACE})
                 return ("bid", 130 + 10 * extra, suit) if extra > 0 else None
-            return None
-        if len(mine) >= 2 and not (first_value == 110 and len(mine) == 2 and mine[1][1][1] == 130):
+            # 100 -> +10 par As -> l'ouvreur remonte de 10 : on a les trois As, j'annonce mes autres plis maîtres
+            if (p_first[1] == 100 and p_first[2] == suit and len(mine) == 1 and mine[0][1][2] == suit
+                    and self._opponent_value(game, seat, before=theirs[0][0]) is None
+                    and 110 <= mine[0][1][1] <= 130 and value == mine[0][1][1] + 10):
+                extra = self._extra_masters(hand, suit)
+                return ("bid", value + 10 * extra, suit) if extra > 0 else None
             return None
         n = len(ranks_in(hand, suit))
+        if (first_value == 100 and suit == first_suit and value != CAPOT
+                and self._opponent_value(game, seat, before=first_i) is None):
+            action = self._rebid_100(hand, suit, mine, theirs, value, n)
+            if action is not False:
+                return action
+        if len(mine) >= 2 and not (first_value == 110 and len(mine) == 2 and mine[1][1][1] == 130):
+            return None
         if first_value == 80:
             if suit == first_suit and value == 90 and self._complement_of_90(ranks_in(hand, suit)):
                 # mes deux As sont déjà annoncés par le 80 : +10 s'ils sont hors atout, +10 par As hors atout en plus
@@ -351,6 +382,29 @@ class AsRBot(CoincheBot):
             if expected >= 8:
                 return ("bid", CAPOT, suit)
         return None
+
+    @staticmethod
+    def _rebid_100(hand, suit, mine, theirs, value, n):
+        """Ouvreur à 100 : remonter de 10 si l'équipe a les trois As hors atout, puis capot si les plis
+        attendus font 8. Renvoie False quand la séquence ne s'applique pas."""
+        partner_bids = [a[1] for _i, a in theirs if a[2] == suit]
+        if len(mine) == 1:
+            aces = (value - 100) // 10  # +10 par As hors atout
+            if aces >= 3 and n >= 5:
+                return ("bid", CAPOT, suit)
+            if 1 <= aces <= 3 and aces + side_aces(hand, suit) == 3:
+                return ("bid", value + 10, suit)  # on a les trois As : annonce tes autres plis maîtres
+            return None
+        if len(mine) == 2 and len(partner_bids) >= 2:
+            aces = (partner_bids[0] - 100) // 10
+            if mine[1][1][1] != partner_bids[0] + 10 or aces + side_aces(hand, suit) != 3:
+                return False
+            extra = (value - mine[1][1][1]) // 10
+            mine_tricks = AsRBot._extra_masters(hand, suit) + side_aces(hand, suit)
+            if n + mine_tricks + aces + extra >= 8:
+                return ("bid", CAPOT, suit)
+            return None
+        return False
 
     @staticmethod
     def _complement_of_90(ranks):
