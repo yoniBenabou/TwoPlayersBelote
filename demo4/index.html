@@ -552,7 +552,7 @@ function renderChoices(id, items, key) {
   const box = $(id); box.innerHTML = "";
   for (const it of items) {
     const b = document.createElement("div");
-    b.className = `choice ${it.key === "ai" ? "ai" : ""} ${choice[key] === it.key ? "sel" : ""}`;
+    b.className = `choice ${it.key.startsWith("ai") ? "ai" : ""} ${choice[key] === it.key ? "sel" : ""}`;
     b.innerHTML = `<div class="t"><span>${it.label}</span><span class="stars">${"★".repeat(it.stars)}${"☆".repeat(5 - it.stars)}</span></div>
                    <div class="d">${it.text}</div>`;
     b.onclick = () => { choice[key] = it.key; renderWelcome(); };

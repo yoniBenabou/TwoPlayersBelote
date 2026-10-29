@@ -22,6 +22,7 @@ import torch
 from belote.coinche.bots import CoincheBot
 from belote.coinche.asr import AsRBot
 from belote.coinche.papi_robert import PapiRobertBot
+from belote.coinche.pimc import CoinchePIMC
 from belote.coinche.petit_jeu import PetitJeuBot
 from belote.coinche.engine import CAPOT, DEFAULT_TARGET, SEAT_NAMES, team_of
 from belote.coinche.rl_env import CARD_INDEX, NUM_ACTIONS_BIDDING, NUM_ACTIONS_PLAY, CoincheEnv, bid_to_action
@@ -36,8 +37,9 @@ BOTS = {"bots": CoincheBot, "petitjeu": PetitJeuBot, "papirobert": PapiRobertBot
 class Side:
     """Une équipe : réseau (coup le plus probable), robot ou hasard."""
 
-    def __init__(self, spec):
-        self.name = spec
+    def __init__(self, spec, search=0):
+        self.name = spec + (f" + recherche {search}" if search else "")
+        self.search = None
         self.agent = None
         self.bot = None
         self.rng = random.Random(1)
@@ -49,6 +51,10 @@ class Side:
             network.eval()
             self.agent = PPOAgent(network, deterministic=True)
             self.bids = network.num_actions == NUM_ACTIONS_BIDDING
+            if search:
+                if not self.bids:
+                    raise ValueError("la recherche demande un modèle qui fait aussi les annonces")
+                self.search = CoinchePIMC(network, n_samples=search, seed=1)
 
     def act(self, env, obs):
         game = env.game
@@ -58,6 +64,8 @@ class Side:
             if self.name == "random":
                 return self.rng.choice([i for i, ok in enumerate(env.legal_mask()) if ok])
             return CARD_INDEX[self.bot.play(game, game.current)]
+        if self.search is not None:
+            return self.search.act(env)
         mask = env.legal_mask()
         if not self.bids:
             mask = mask[:NUM_ACTIONS_PLAY]
@@ -78,13 +86,15 @@ def main():
     parser = argparse.ArgumentParser(description="Match Coinche à 4 entre deux équipes (modèle .pt ou bots).")
     parser.add_argument("--a", required=True)
     parser.add_argument("--b", default="bots")
+    parser.add_argument("--a-search", type=int, default=0, help="recherche PIMC pour A : nombre de mains imaginées")
+    parser.add_argument("--b-search", type=int, default=0, help="recherche PIMC pour B")
     parser.add_argument("--deals", type=int, default=2000, help="donnes dupliquées (jouées 2 fois chacune)")
     parser.add_argument("--games", type=int, default=200, help="parties en 1 500 points")
     parser.add_argument("--seed", type=int, default=777)
     parser.add_argument("--show", type=int, default=0, help="affiche le déroulé des N premières donnes")
     args = parser.parse_args()
     torch.set_num_threads(1)
-    a, b = Side(args.a), Side(args.b)
+    a, b = Side(args.a, args.a_search), Side(args.b, args.b_search)
     env = CoincheEnv(bidding=True, seed=args.seed)
     # stats par équipe ("A" / "B")
     takes, made, coinched, capots = Counter(), Counter(), Counter(), Counter()
@@ -122,7 +132,7 @@ def main():
         diffs.append(sum(pair) / 2)
     m, ci = mean_ci(diffs)
     n = 2 * args.deals
-    print(f"\n{args.a}\n  contre {args.b}")
+    print(f"\n{a.name}\n  contre {b.name}")
     print(f"Donnes dupliquées ({args.deals} x 2) : écart A - B = {m:+.1f} points par donne (±{ci:.1f}) ; "
           f"redistributions {redeals}")
     for who in ("A", "B"):

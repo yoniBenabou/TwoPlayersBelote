@@ -20,6 +20,7 @@ from belote.coinche.engine import (
 )
 from belote.coinche.papi_robert import PapiRobertBot
 from belote.coinche.petit_jeu import PetitJeuBot
+from belote.coinche.pimc import CoinchePIMC
 from belote.coinche.rl_env import NUM_ACTIONS_BIDDING, CoincheEnv, action_to_bid
 from belote.core.cards import sort_hand
 from belote.rl.env import CARD_INDEX, INDEX_CARD
@@ -31,11 +32,15 @@ SEAT_KEYS = ("south", "west", "north", "east")  # sens des aiguilles d'une montr
 
 BOT_KINDS = {"simple": CoincheBot, "petitjeu": PetitJeuBot, "papirobert": PapiRobertBot, "asr": AsRBot}
 BOT_LABELS = {"simple": "Simple bots", "petitjeu": "Petit jeu", "papirobert": "Papi Robert", "asr": "AsR",
-              "ai": "AI"}
+              "ai": "AI", "ai_search": "AI + search"}
+SEARCH_SAMPLES = 20  # mains imaginées par la recherche avant chaque carte
 # présentation dans l'écran d'accueil (étoiles choisies par Noa)
 PLAYER_INFO = {
     "ai": {"label": "AI", "stars": 5, "text": "Our trained network: it taught itself by playing millions of deals. "
                                               "Shows its confidence at every move."},
+    "ai_search": {"label": "AI + search", "stars": 5,
+                  "text": "The same network, but before each card it imagines 20 possible deals of the hidden cards "
+                          "and plays them out. Bids like the AI."},
     "asr": {"label": "AsR", "stars": 4, "text": "80 shows two Aces, 90 asks for the other major, 110–140 ask for "
                                                 "precise Aces and 10s, discard calls, belote parity signal."},
     "papirobert": {"label": "Papi Robert", "stars": 2, "text": "The “jeu aux As”: 80 with two Aces, "
@@ -46,7 +51,7 @@ PLAYER_INFO = {
                                                           "play without conventions."},
 }
 STYLES = ("petitjeu", "papirobert", "asr", "simple")
-OPPONENTS = ("ai", "asr", "papirobert", "petitjeu", "simple")
+OPPONENTS = ("ai_search", "ai", "asr", "papirobert", "petitjeu", "simple")
 
 
 class IllegalMove(Exception):
@@ -73,9 +78,10 @@ class AIPlayer:
     """L'IA entraînée à une place : observation construite comme pendant l'entraînement (CoincheEnv
     branché sur la partie de la table, avec ses déductions sur les mains cachées)."""
 
-    def __init__(self, network):
+    def __init__(self, network, search=0):
         self.network = network
         self.env = CoincheEnv(bidding=True)
+        self.search = CoinchePIMC(network, n_samples=search, seed=random.randrange(2**31)) if search else None
 
     def attach(self, game):
         self.env.game = game
@@ -85,6 +91,8 @@ class AIPlayer:
         self.env.voids = [set() for _ in range(4)]
         self.env.trump_cap = [None] * 4
         self.env.belote_seen = None
+        self.env.done = False  # utilisé par la recherche (copies de la partie)
+        self.env.bid_seats = set(range(4))
 
     def before_card(self, seat, card):
         """À appeler avant chaque carte jouée (toutes les places) : met à jour les déductions."""
@@ -100,6 +108,8 @@ class AIPlayer:
             logits, _value = self.network(torch.as_tensor(obs))
             probs = torch.softmax(logits.masked_fill(~mask, float("-inf")), dim=-1)
         action = int(probs.argmax())
+        if self.search is not None and self.env.game.phase == "play":
+            action = self.search.act(self.env)  # confiance : probabilité du réseau pour la carte choisie
         move = action_to_bid(action) if self.env.game.phase == "bidding" else INDEX_CARD[action]
         return move, float(probs[action])
 
@@ -119,7 +129,7 @@ class Table:
 
     # ---------- réglages ----------
     def kinds(self):
-        return [k for k in OPPONENTS if k != "ai" or self.network is not None]
+        return [k for k in OPPONENTS if not k.startswith("ai") or self.network is not None]
 
     def configure(self, name, partner, opponents, start=True):
         name = " ".join("".join(ch for ch in str(name or "") if ch not in "<>&\"'").split())[:20] or "You"
@@ -128,10 +138,11 @@ class Table:
         if opponents not in self.kinds():
             raise IllegalMove(f"Unknown opponents: {opponents}")
         self.name, self.partner, self.opponents = name, partner, opponents
-        self.ai = AIPlayer(self.network) if opponents == "ai" else None
+        self.ai = (AIPlayer(self.network, SEARCH_SAMPLES if opponents == "ai_search" else 0)
+                   if opponents.startswith("ai") else None)
         self.players = {PARTNER: BOT_KINDS[partner]()}
         for seat in (1, 3):
-            self.players[seat] = self.ai if opponents == "ai" else BOT_KINDS[opponents]()
+            self.players[seat] = self.ai if self.ai is not None else BOT_KINDS[opponents]()
         self.configured = True
         if start:
             return self.new_game()
