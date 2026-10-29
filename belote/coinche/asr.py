@@ -52,12 +52,16 @@ partenaire reste prudent : il passe) ; sur un 100 adverse, une vraie main de
 Coinche : même règle que CoincheBot. Pas de surcoinche.
 
 Jeu :
-- contrée (coinchée ou surcoinchée), l'équipe qui a pris n'entame pas atout ;
+- contrée (coinchée ou surcoinchée), l'équipe qui a pris n'entame pas atout (sauf au capot) ;
+- quand le partenaire a montré le Valet et le 9 (100), j'entame atout dès que j'ai la main, avec mon plus
+  petit : il fait tomber les atouts adverses, puis me rend la main dans la couleur de mon appel ;
 - sinon, l'équipe qui a pris joue atout tant que les adversaires peuvent en avoir, en
   séparant le Valet et le 9 de l'équipe : avec le 9 sans le Valet, petit atout
   d'abord (le Valet du partenaire prend, ou celui de l'adversaire tombe) ; avec
   le Valet quand le partenaire a montré le 9, le Valet puis un petit atout ;
   on garde son dernier atout s'il n'en reste qu'un dehors, plus fort ;
+- sur l'entame atout du partenaire (en deuxième ou troisième), je prends avec le plus petit atout
+  qui bat tous ceux qui restent dehors ;
 - signal de belote : celui qui a la belote dans l'équipe qui a pris joue le Roi
   en premier s'il a un nombre pair d'atouts (carte jouée comprise), la Dame
   s'il est impair ; le partenaire en déduit, quand c'est sûr, que les
@@ -66,7 +70,7 @@ Jeu :
   pour demander la couleur de mon As : une carte de cette couleur si elle est
   de la famille de l'atout (appel direct), sinon une carte de sa couleur sœur
   (appel indirect) ; jeter l'As lui-même annonce la longue maîtresse (au moins
-  As-10-Roi) ; le partenaire rejoue la couleur demandée (petite carte) avant
+  As-10-Roi, pas au capot) ; le partenaire rejoue la couleur demandée (petite carte) avant
   d'encaisser ses As ; seulement dans l'équipe qui a pris ;
 - ensuite : les cartes maîtresses (As, 10, Roi...), le Roi d'un Roi-10 quand
   l'As n'est pas tombé, puis la couleur la plus longue ;
@@ -442,10 +446,14 @@ class AsRBot(CoincheBot):
         # appel par défausse quand le partenaire joue atout et que je n'en ai plus
         attacking = team_of(game.contract["seat"]) == team_of(seat)
         if attacking and trick[0][0] == partner and led == trump and not any(c.suit == trump for c in hand):
-            call = self._call_discard(hand, legal, trump)
+            call = self._call_discard(hand, legal, trump, long_ok=game.contract["value"] != CAPOT)
             if call is not None:
                 return call
         winning = trick[trick_winner(trick, trump)]
+        if attacking and trick[0][0] == partner and led == trump and len(trick) < 3:
+            sure = self._sure_trump(game, seat, legal)
+            if sure is not None:
+                return sure
         # en troisième : l'As plutôt qu'une plus petite carte si un 10 peut être derrière
         if len(trick) == 2 and led != trump and winning[0] != partner:
             winners = [c for c in legal if trick_winner(trick + [(seat, c)], trump) == 2]
@@ -461,6 +469,18 @@ class AsRBot(CoincheBot):
             return super().play(game, seat, keep or legal)
         return super().play(game, seat, legal)
 
+    def _sure_trump(self, game, seat, legal):
+        """Sur l'entame atout du partenaire : le plus petit atout qui bat tous ceux qui peuvent encore
+        venir derrière moi (je prends la main pour faire tomber les atouts)."""
+        trump, hand = game.trump, game.hands[seat]
+        seen = {c for cards in game.played for c in cards} | {c for _s, c in game.trick} | set(hand)
+        outside = [c for c in self._all_trumps(trump) if c not in seen]
+        strength = lambda c: c.strength(trump)
+        best_now = max((c for _s, c in game.trick if c.suit == trump), key=strength)
+        sure = [c for c in legal if c.suit == trump and strength(c) > strength(best_now)
+                and all(strength(c) > strength(o) for o in outside)]
+        return min(sure, key=strength) if sure else None
+
     def _keep_aces(self, game, seat, legal):
         """On ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas le choix."""
         trump, led = game.trump, game.trick[0][1].suit
@@ -475,15 +495,17 @@ class AsRBot(CoincheBot):
         return keep or legal
 
     @staticmethod
-    def _call_discard(hand, legal, trump):
+    def _call_discard(hand, legal, trump, long_ok=True):
         """Appel direct (couleur de la famille de l'atout) ou indirect (couleur sœur) vers un de mes As.
-        Jeter l'As lui-même = j'ai la longue maîtresse dans cette couleur (au moins As-10-Roi)."""
+        Jeter l'As lui-même = j'ai la longue maîtresse dans cette couleur (au moins As-10-Roi) ; pas au
+        capot (l'As serait un pli perdu) : on appelle avec une petite carte."""
         for ace in (c for c in legal if c.rank == Rank.ACE and c.suit != trump):
-            if has(hand, ace.suit, Rank.TEN) and has(hand, ace.suit, Rank.KING):
+            if long_ok and has(hand, ace.suit, Rank.TEN) and has(hand, ace.suit, Rank.KING):
                 return ace
         for ace in (c for c in hand if c.rank == Rank.ACE and c.suit != trump):
             target = ace.suit if ace.suit == SISTER[trump] else SISTER[ace.suit]
-            small = [c for c in legal if c.suit == target and c.rank not in (Rank.ACE, Rank.TEN)]
+            masters = set(ORDER[:top_tricks(hand, target)]) if not long_ok else set()  # au capot, garder ses plis
+            small = [c for c in legal if c.suit == target and c.rank not in (Rank.ACE, Rank.TEN) and c.rank not in masters]
             if small:
                 return min(small, key=lambda c: c.strength(trump))
         return None
@@ -530,7 +552,13 @@ class AsRBot(CoincheBot):
         if not attacking:
             return self.defence_lead(game, seat, legal)
         trumps = [c for c in legal if c.suit == trump]
-        if contract["mult"] > 1 and side:
+        majors = {Rank.JACK, Rank.NINE}
+        if (trumps and self._opponents_may_have_trumps(game, seat) and self._partner_majors(game, seat) >= majors
+                and not ranks_in(hand, trump) & majors and (contract["mult"] == 1 or contract["value"] == CAPOT)):
+            # le partenaire a montré le Valet et le 9 (100) : je lui donne la main en atout, il fait tomber
+            # les atouts adverses (ils ne coupent pas mes plis maîtres) et me rend la main sur mon appel
+            return min(trumps, key=lambda c: c.strength(trump))
+        if contract["mult"] > 1 and side and contract["value"] != CAPOT:
             trumps = []  # contrés : on n'entame pas atout, on garde ses atouts
         if trumps and self._opponents_may_have_trumps(game, seat):
             choice = self._trump_lead(game, seat, trumps)

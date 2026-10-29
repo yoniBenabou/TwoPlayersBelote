@@ -150,6 +150,27 @@ def check_capot_on_100():
         assert bot.bid(g, 2) == want, (dealer, nh, bot.bid(g, 2))
 
 
+def check_capot_play():
+    # Sud dit 100 cœur, Nord (partance, un atout, quatre plis maîtres) dit capot, Est coinche. Nord entame
+    # atout pour donner la main à Sud, qui prend avec l'As et fait tomber les atouts ; Nord appelle trèfle
+    # avec un petit pique (pas avec l'As ni le Roi de carreau, au capot) ; Sud rejoue trèfle : capot fait
+    north = hand(D="A 10 K", C="A", S="Q 8 9", H="7")
+    g = table([hand(H="J 9 A K", S="7", D="7 8", C="7"), hand(S="J 10", H="Q"), north], dealer=1)
+    while g.current != 0:
+        g.bid(g.current, P)
+    g.bid(0, ("bid", 100, H)); g.bid(1, P); g.bid(2, bot.bid(g, 2)); g.bid(3, ("coinche",))
+    while g.phase == "bidding":
+        g.bid(g.current, P)
+    assert g.contract["value"] == CAPOT and g.contract["mult"] == 2, g.contract
+    while g.phase == "play":
+        g.play(g.current, bot.play(g, g.current))
+    first = dict(g.tricks[0][0])
+    assert first[2] == Card(H, Rank.SEVEN) and first[0] == Card(H, Rank.ACE), first
+    calls = [dict(t)[2] for t, _w in g.tricks[1:3]]
+    assert all(c.suit == S and c.rank not in (Rank.ACE, Rank.TEN) for c in calls), calls
+    assert all(w in (0, 2) for _t, w in g.tricks), [(t, w) for t, w in g.tricks]
+
+
 def check_collage():
     # un adversaire dit 90 ; j'ai une main de 90 : je colle à 100 ; mon partenaire ne répond que le complément
     g = deal([hand(S="J 9 7", D="A"), hand(H="J 7 8", C="A", D="7", S="Q")], [("bid", 90, S)])
@@ -262,11 +283,12 @@ def main():
     check_110_dialogue()
     check_100_dialogue()
     check_capot_on_100()
+    check_capot_play()
     check_collage()
     check_play()
     check_keep_nine()
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, collage, jeu, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, collage, jeu, parties) : OK")
 
 
 if __name__ == "__main__":
