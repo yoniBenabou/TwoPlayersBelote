@@ -55,11 +55,11 @@ def check_responses():
     assert response(hand(S="8", H="A 7", D="K 8", C="7 8 K"), 110, S) is None
     assert response(hand(S="8", H="A 7", D="A 8", C="A 8 K"), 110, S) == (130, S)
     assert response(hand(S="8", H="K 7", D="Q 8", C="7 8 K"), 100, S) is None
-    # sur 120 comme sur 110 : rien avec un As, +10 avec deux, +20 avec les trois ; l'As d'atout ne compte pas
+    # sur 120 : +10 seulement avec les trois As ; l'As d'atout ne compte pas
     assert response(hand(S="8", H="A 7", D="K 8", C="7 8 K"), 120, S) is None
     assert response(hand(S="A", H="A 7", D="K 8", C="7 8 K"), 120, S) is None
-    assert response(hand(S="8", H="A 7", D="A 8", C="7 8 K"), 120, S) == (130, S)
-    assert response(hand(S="8", H="A 7", D="A 8", C="A 8 K"), 120, S) == (140, S)
+    assert response(hand(S="8", H="A 7", D="A 8", C="7 8 K"), 120, S) is None
+    assert response(hand(S="8", H="A 7", D="A 8", C="A 8 K"), 120, S) == (130, S)
 
 
 def bid_round(game, bot, n):

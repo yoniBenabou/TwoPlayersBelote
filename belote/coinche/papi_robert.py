@@ -22,7 +22,8 @@ Réponses du partenaire (une seule fois) :
 - sur 90 : seulement avec la deuxième majeure (même avec des As) : +10, puis
   +10 par As ;
 - sur 100 : +10 par As ;
-- sur 110 et 120 : rien avec 1 As, +10 avec 2 As, +20 avec 3 As.
+- sur 110 : rien avec 1 As, +10 avec 2 As, +20 avec 3 As ;
+- sur 120 : +10 seulement avec les 3 As.
 Relances de l'ouvreur (une fois) : ouvert à 110 avec 5 atouts et le
 partenaire a ajouté 20 ou plus : capot ; ouvert à 90 avec 5 atouts (ou plus)
 et une majeure, le partenaire a montré la deuxième : +10 par As, jusqu'à 130.
@@ -127,8 +128,10 @@ def response(hand, value, suit):
         return (100 + 10 * aces, suit) if majors(hand, suit) >= 1 else None
     if value == 100:
         return (value + 10 * aces, suit) if aces else None
-    if value in (110, 120):  # rien avec un As, +10 avec deux, +20 avec trois
-        return (value + 20, suit) if aces >= 3 else (value + 10, suit) if aces == 2 else None
+    if value == 110:  # rien avec un As, +10 avec deux, +20 avec trois
+        return (130, suit) if aces >= 3 else (120, suit) if aces == 2 else None
+    if value == 120:  # seulement avec les trois As : +10
+        return (130, suit) if aces >= 3 else None
     return None
 
 
