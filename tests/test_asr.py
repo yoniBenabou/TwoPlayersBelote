@@ -17,8 +17,10 @@ def opening(**suits):
 
 
 def check_openings():
-    assert opening(H="J 9 A 10", S="A", D="7 8", C="7") == (110, H)       # main exceptionnelle : directement
-    assert opening(H="J 9 A K", S="10 K Q", C="10") == (110, H)            # exemple du 110 cœur
+    assert opening(H="J 9 A 10", S="A", D="7 8", C="7") == (100, H)       # maîtrise forte, cherche rouge et noir : 100
+    assert opening(H="J 9 A K", S="10 K Q", C="10") == (100, H)            # aucun As à côté : 100
+    assert opening(H="J 9 A 10", D="A", S="7 8", C="7") == (110, H)       # As sœur : ne cherche que les As noirs
+    assert opening(H="J 9 A 10", S="A", C="A", D="7 8") == (120, H)       # As noirs : ne cherche que l'As de carreau
     assert opening(S="A 7", D="A 8", H="7 8", C="8 Q")[0] == 80               # deux As, sans atout
     assert opening(H="J 7 8", S="A", D="7 8", C="7 Q") == (90, H)          # Valet troisième + As
     assert opening(H="J 7 8", S="K", D="7 8", C="7 Q") is None             # jamais 90 sans As
@@ -111,8 +113,9 @@ def check_answers_to_80():
 
 
 def check_110_dialogue():
-    # 110 cœur ; Nord a un As noir : 120 ; Sud a l'autre : 130 ; Nord compte ses plis noirs en plus : 160
-    south = hand(H="J 9 A K", S="7 8", C="A", D="7")
+    # 110 cœur (Sud a l'As de carreau, il cherche les As noirs) ; Nord a un As noir : 120 ; Sud a l'autre :
+    # 130 ; Nord compte ses plis noirs en plus : 160
+    south = hand(H="J 9 A K", S="7", C="A", D="A")
     north = hand(S="A 10 K", C="10", H="7", D="8 9 Q")
     g = deal([south, hand(S="Q J", D="10 J", C="7 8"), north], [])
     g.bid(0, bot.bid(g, 0))
@@ -333,6 +336,9 @@ def check_play():
     g.played[1].remove(Card(H, Rank.TEN))
     g.hands[3] = hand(H="A", C="A")                                   # que des As : pas le choix
     assert bot._keep_aces(g, 3, g.legal_cards(3)) == g.legal_cards(3)
+    # partenaire maître : je lui donne mon 10 sec en priorité (pas le 10 accompagné de cœur)
+    g.hands[3] = hand(H="10 K 7", C="10", S="7 8")
+    assert bot.play(g, 3) == Card(C, Rank.TEN)
     # partie de Noa : atout pique, Ouest coupe le cœur ; Est a As-7 de cœur : il fournit le 7, pas l'As
     # (le 10 de cœur adverse deviendrait maître)
     g = deal([hand(H="8 9 10"), hand(S="J 9 A 8")], [P, ("bid", 100, S), P, P, P])

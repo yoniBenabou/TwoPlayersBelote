@@ -9,9 +9,9 @@ d'atout.
 Ouvertures (couleur choisie : la plus forte structure d'atout, puis la plus
 forte couleur), dans cet ordre :
 1. maîtrise forte (Valet + 9 et 5 atouts, ou Valet + 9 + As et 4 atouts) : on
-   annonce directement sa force, sous forme de demande : 110 (As de la famille
-   opposée) s'il en manque un, sinon 120 (As de la couleur sœur), sinon 130
-   (10 de la famille opposée), sinon 140 (10 de la couleur sœur) ;
+   annonce directement sa force, sous forme de demande : 100 si je cherche au moins un As rouge et
+   un As noir, sinon 110 (As de la famille opposée) s'il en manque un, sinon 120 (As de la couleur
+   sœur), sinon 130 (10 de la famille opposée), sinon 140 (10 de la couleur sœur) ;
 2. maîtrise (Valet + 9 + As, ou Valet + 9 quatrièmes) qui ne cherche des As que dans une famille :
    la demande directe, comme la maîtrise forte : 110 s'il ne me manque que des As de la famille
    opposée, 120 s'il ne me manque que l'As sœur (130/140 s'il ne manque aucun As) ;
@@ -26,8 +26,8 @@ compte seulement les As hors atout, jamais l'As d'atout :
 - sur 80, même couleur : 90 avec le Valet ou le 9 au moins second (même sans As : seule l'ouverture à
   90 en exige un), 100 avec les deux, +10 par As hors atout ; autre couleur, avec la maîtrise dans
   cette couleur, comme à l'ouverture : 100 si je cherche des As rouges et noirs, sinon la demande
-  directe (110 si je ne cherche que des As de la famille opposée, 120 si je ne cherche que l'As sœur ;
-  avec une maîtrise forte, toujours la demande). L'ouvreur à 80 : sur 90 dans sa
+  directe (110 si je ne cherche que des As de la famille opposée, 120 si je ne cherche que l'As sœur).
+  L'ouvreur à 80 : sur 90 dans sa
   couleur, s'il a le complément, 100, +10 si ses deux As (déjà annoncés
   par le 80) sont hors atout, +10 par As hors atout en plus ; sur 100 dans
   une autre couleur, +10 avec deux As hors de cet atout, +10 par As en plus ;
@@ -106,8 +106,8 @@ Jeu :
 - on ne défausse jamais un As, et on ne le charge jamais sur le pli du partenaire (même dans la
   couleur demandée), sans une carte maîtresse derrière lui dans sa couleur (le 10, ou la suivante si
   le 10 est tombé), sauf si on n'a pas le choix ;
-- partenaire maître : on ne donne pas un 10 accompagné (il peut faire un pli),
-  un 10 sec oui ; en troisième, avec l'As et une plus petite carte qui prend,
+- partenaire maître : on lui donne en priorité son 10 sec (sinon l'As adverse le prendrait) ; jamais un
+  10 accompagné (il peut faire un pli) ; en troisième, avec l'As et une plus petite carte qui prend,
   on joue l'As si le 10 peut être derrière (on capture un 10 sec).
 Le reste du jeu est celui de CoincheBot.
 """
@@ -167,8 +167,11 @@ def strength_score(hand, suit):
 
 
 def ask_value(hand, suit):
-    """Demande d'une maîtrise forte : 110, 120, 130 ou 140 selon ce qui manque."""
+    """Demande d'une maîtrise : 100 si je cherche un As rouge et un As noir, sinon 110, 120, 130 ou 140
+    selon ce qui manque."""
     opp = opposite(suit)
+    if missing_both_families(hand, suit):
+        return 100
     if not all(has(hand, s, Rank.ACE) for s in opp):
         return 110
     if not has(hand, SISTER[suit], Rank.ACE):
@@ -545,7 +548,11 @@ class AsRBot(CoincheBot):
             if ace in winners and len(winners) > 1 and ten not in gone and ten not in hand:
                 return ace
         if winning[0] == partner:
-            # partenaire maître : on ne donne pas un 10 accompagné
+            # partenaire maître : d'abord mon 10 sec (il serait pris par l'As) ; jamais un 10 accompagné
+            dry = [c for c in legal if c.rank == Rank.TEN and c.suit != trump
+                   and sum(d.suit == c.suit for d in hand) == 1]
+            if dry:
+                return dry[0]
             keep = [c for c in legal if not (c.rank == Rank.TEN and c.suit != trump
                                              and sum(d.suit == c.suit for d in hand) > 1)]
             return super().play(game, seat, keep or legal)
