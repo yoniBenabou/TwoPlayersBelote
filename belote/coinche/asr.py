@@ -93,7 +93,8 @@ Jeu :
   As-10-Roi, pas au capot) ; le partenaire rejoue la couleur demandée (petite carte) avant
   d'encaisser ses As ; seulement dans l'équipe qui a pris ;
 - on garde son dernier atout pour le dernier pli (pas d'entame de son dernier atout) ; s'il ne reste
-  qu'un atout dehors, chez un adversaire, on ne le fait pas tomber avec un atout : on joue une carte
+  qu'un atout dehors et que j'ai un atout plus fort qui n'est pas mon dernier, je le fais tomber avec le
+  plus petit de ceux-là (pas si c'est contré, sauf au capot) ; sinon on ne le fait pas tomber : on joue une carte
   d'une couleur que cet adversaire n'a plus, pour le faire couper (sauf au capot) : la plus faible de
   mes cartes maîtresses de cette couleur (son partenaire ne peut pas prendre le pli à sa place), sinon
   la plus petite ;
@@ -745,6 +746,13 @@ class AsRBot(CoincheBot):
         if side and self._weak_alone(game, seat):
             trumps = []  # très faible à l'atout, sans soutien : on garde ses atouts pour la fin
         last_one = self._last_opponent_trump(game, seat)
+        if last_one and sum(c.suit == trump for c in legal) >= 2 and not (contract["mult"] > 1 and contract["value"] != CAPOT):
+            # un seul atout dehors et j'en ai un plus fort qui n'est pas mon dernier : je le fais tomber
+            gone_now = gone | {c for _s, c in game.trick}
+            unseen = next(c for c in self._all_trumps(trump) if c not in gone_now and c not in hand)
+            higher = [c for c in legal if c.suit == trump and c.strength(trump) > unseen.strength(trump)]
+            if higher:
+                return min(higher, key=lambda c: c.strength(trump))
         if side and contract["value"] != CAPOT and (len(trumps) == 1 or last_one):
             # mon dernier atout reste pour le dernier pli ; le dernier atout adverse, on ne le fait pas
             # tomber avec un atout, on essaie de le faire couper

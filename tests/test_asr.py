@@ -231,8 +231,7 @@ def check_weak_taker():
 
 
 def check_last_trump():
-    # Sud a pris 100 pique ; les atouts sont tombés sauf un, chez Ouest, qui n'a plus de carreau :
-    # Sud ne fait pas tomber cet atout avec le sien, il joue un petit carreau pour faire couper Ouest
+    # Sud a pris 100 pique ; les atouts sont tombés sauf un (le Roi), chez Ouest, qui n'a plus de carreau
     g = deal([hand(S="J 9 A 8 10")], [("bid", 100, S), P, P, P])
     played = [Card(S, r) for r in (Rank.SEVEN, Rank.QUEEN, Rank.EIGHT, Rank.ACE, Rank.TEN)]  # Roi de pique dehors
     g.tricks = [([(0, Card(D, Rank.SEVEN)), (1, Card(C, Rank.SEVEN)), (2, Card(D, Rank.EIGHT)),
@@ -242,6 +241,12 @@ def check_last_trump():
     g.played[2] += played
     g.hands[0] = hand(S="J 9", D="Q", H="A 10", C="A")
     g.current = 0
+    # Valet-9 : le 9 bat le Roi et ce n'est pas mon dernier atout -> je fais tomber le Roi avec le 9
+    assert bot.play(g, 0) == Card(S, Rank.NINE), bot.play(g, 0)
+    # 9-7 avec le Valet dehors : le 9 ne le bat pas -> petit carreau pour faire couper Ouest
+    g.played[2] = [c for c in g.played[2] if c != Card(S, Rank.SEVEN)] + [Card(S, Rank.KING)]
+    g.hands[0] = hand(S="9 7", D="Q", H="A 10", C="A")
+    g.played[2] = [c for c in g.played[2] if c != Card(S, Rank.JACK)]
     assert bot.play(g, 0) == Card(D, Rank.QUEEN), bot.play(g, 0)
     # mon dernier atout : je le garde pour le dernier pli
     g.hands[0] = hand(S="J", H="A 10 7", C="A 8")
