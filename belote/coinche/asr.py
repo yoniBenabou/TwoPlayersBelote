@@ -93,23 +93,33 @@ Jeu :
   As-10-Roi, pas au capot) ; le partenaire rejoue la couleur demandée (petite carte) avant
   d'encaisser ses As ; seulement dans l'équipe qui a pris ;
 - on garde son dernier atout pour le dernier pli (pas d'entame de son dernier atout) ; s'il ne reste
-  qu'un atout dehors, chez un adversaire, on ne le fait pas tomber avec un atout : on joue une petite
-  carte d'une couleur que cet adversaire n'a plus, pour le faire couper (sauf au capot) ;
+  qu'un atout dehors, chez un adversaire, on ne le fait pas tomber avec un atout : on joue une carte
+  d'une couleur que cet adversaire n'a plus, pour le faire couper (sauf au capot) : la plus faible de
+  mes cartes maîtresses de cette couleur (son partenaire ne peut pas prendre le pli à sa place), sinon
+  la plus petite ;
 - ensuite : les cartes maîtresses (As, 10, Roi...), le Roi d'un Roi-10 quand
   l'As n'est pas tombé, puis la couleur la plus longue ;
 - défense (pas d'appels en défense) : contre 140 ou plus, d'abord les cartes
   maîtresses ; sinon faire couper le preneur en jouant notre couleur la plus
-  longue (celle qu'il n'a plus s'il l'a déjà montré, même au prix d'un As ou
-  d'un 10) ; au premier pli, d'abord un As hors atout ; après avoir gagné un
+  longue (celle qu'il n'a plus s'il l'a déjà montré : la plus faible de mes
+  cartes maîtresses de cette couleur, sinon la plus petite) ; au premier pli, d'abord un As hors atout ; après avoir gagné un
   pli que j'ai entamé, je rejoue la même couleur avec ma plus grosse carte ;
   pas d'entame atout sauf s'il ne reste que ça ;
-- on ne défausse jamais un As, et on ne le charge jamais sur le pli du partenaire (même dans la
-  couleur demandée), sans une carte maîtresse derrière lui dans sa couleur (le 10, ou la suivante si
-  le 10 est tombé), sauf si on n'a pas le choix ;
+- on ne défausse jamais un As (ni ne le donne sur la coupe du partenaire) sans une carte maîtresse derrière lui
+  dans sa couleur (le 10, ou la suivante si le 10 est tombé), sauf si on n'a pas le choix ;
 - partenaire maître : s'il est sûr de faire le pli (je joue en dernier, ou sa carte est maîtresse et
   l'adversaire qui joue après moi ne peut pas couper), on lui donne en priorité son 10 sec (sinon l'As
-  adverse le prendrait) ; jamais un 10 accompagné (il peut faire un pli) ; en troisième, avec l'As et une plus petite carte qui prend,
-  on joue l'As si le 10 peut être derrière (on capture un 10 sec).
+  adverse le prendrait) ; jamais un 10 accompagné (il peut faire un pli) ;
+- pas d'impasse, quand je fournis une couleur hors atout (à l'entame : cartes maîtresses d'abord) :
+  - pli adverse déjà coupé : ma plus petite carte ;
+  - pli adverse, j'ai l'As : l'As en deuxième ou troisième ; en dernier, l'As s'il reste plus de 2
+    atouts dans le jeu, sinon la plus grosse carte qui prend sans l'As (l'As si lui seul prend) ;
+  - pli adverse, l'As n'est ni chez moi ni sorti : en dernier, la plus grosse carte qui prend (le 10),
+    sinon la plus petite ; avant, ma plus petite carte, ou une carte moyenne (Roi, Dame, Valet) si mon
+    partenaire, qui joue après moi, a appelé la couleur (il a l'As) ;
+  - pli du partenaire gagné dans la couleur, j'ai l'As : l'As (après le 10 sec, prioritaire), sauf si
+    l'adversaire qui joue après moi va forcément couper (il n'a plus la couleur et peut avoir de
+    l'atout) : ma plus petite ; s'il a coupé, pas d'As sans carte maîtresse derrière ;
 Le reste du jeu est celui de CoincheBot.
 """
 from ..core.cards import Card, Rank, Suit
@@ -540,14 +550,10 @@ class AsRBot(CoincheBot):
             sure = self._sure_trump(game, seat, legal)
             if sure is not None:
                 return sure
-        # en troisième : l'As plutôt qu'une plus petite carte si un 10 peut être derrière
-        if len(trick) == 2 and led != trump and winning[0] != partner:
-            winners = [c for c in legal if trick_winner(trick + [(seat, c)], trump) == 2]
-            ace = Card(led, Rank.ACE)
-            ten = Card(led, Rank.TEN)
-            gone = {c for cards in game.played for c in cards} | {c for _, c in trick}
-            if ace in winners and len(winners) > 1 and ten not in gone and ten not in hand:
-                return ace
+        if led != trump and any(c.suit == led for c in legal):
+            card = self._follow_side(game, seat, legal, winning)
+            if card is not None:
+                return card
         if winning[0] == partner:
             # partenaire sûr de prendre le pli : d'abord mon 10 sec (il serait pris par l'As) ; jamais un 10 accompagné
             dry = [c for c in legal if c.rank == Rank.TEN and c.suit != trump
@@ -560,6 +566,55 @@ class AsRBot(CoincheBot):
                                              and (not sure or sum(d.suit == c.suit for d in hand) > 1))]
             return super().play(game, seat, keep or legal)
         return super().play(game, seat, legal)
+
+    def _follow_side(self, game, seat, legal, winning):
+        """Je fournis une couleur hors atout (pas d'impasse) :
+        - pli adverse déjà coupé : ma plus petite carte ;
+        - pli adverse, j'ai l'As : l'As en deuxième ou troisième ; en dernier, l'As s'il reste plus de 2 atouts
+          dans le jeu, sinon la plus grosse carte qui prend sans l'As (l'As si lui seul prend) ;
+        - pli adverse, pas l'As et l'As pas sorti : en dernier, la plus grosse carte qui prend (le 10), sinon la
+          plus petite ; avant, la plus petite, ou une carte moyenne (Roi, Dame, Valet) si le partenaire, qui joue
+          après moi, a l'As (il l'a appelé) ;
+        - pli du partenaire, j'ai l'As : l'As, sauf si l'adversaire qui joue après moi va forcément couper
+          (il n'a plus la couleur et il peut avoir de l'atout) : ma plus petite carte.
+        Renvoie None quand la règle générale s'applique (l'As est déjà sorti, par exemple)."""
+        from .papi_robert import PapiRobertBot
+        trick, trump, hand = game.trick, game.trump, game.hands[seat]
+        led = trick[0][1].suit
+        cards = [c for c in legal if c.suit == led]
+        strength = lambda c: c.strength(trump)
+        small = min(cards, key=strength)
+        last = len(trick) == 3
+        ace = Card(led, Rank.ACE)
+        gone = {c for cards_ in game.played for c in cards_} | {c for _s, c in trick}
+        trumps_left = [c for c in self._all_trumps(trump) if c not in gone]
+        if winning[0] == partner_of(seat):
+            if ace not in cards or winning[1].suit == trump:
+                return None  # partenaire qui a coupé : pas d'As sans maîtresse derrière (_keep_aces)
+            nxt = (seat + 1) % 4
+            voids = PapiRobertBot._shown_voids(game)[nxt]
+            outside = [c for c in trumps_left if c not in hand]
+            if not last and led in voids and trump not in voids and outside:
+                return small  # l'adversaire derrière moi va couper
+            return ace
+        if winning[1].suit == trump:
+            return small  # déjà coupé
+        winners = [c for c in cards if trick_winner(trick + [(seat, c)], trump) == len(trick)]
+        if ace in cards:
+            if not last or len(trumps_left) > 2:
+                return ace
+            others = [c for c in winners if c != ace]
+            return max(others, key=strength) if others else ace
+        if ace in gone:
+            return None
+        if last:
+            return max(winners, key=strength) if winners else small
+        attacking = team_of(game.contract["seat"]) == team_of(seat)
+        if len(trick) == 1 and attacking and led in self._called_suits(game, seat):
+            mids = [c for c in cards if c.rank in (Rank.KING, Rank.QUEEN, Rank.JACK)]
+            if mids:
+                return max(mids, key=strength)
+        return small
 
     def _partner_sure(self, game, seat):
         """Le pli du partenaire est assuré : je joue en dernier, ou sa carte est maîtresse et l'adversaire
@@ -592,14 +647,15 @@ class AsRBot(CoincheBot):
         return min(sure, key=strength) if sure else None
 
     def _keep_aces(self, game, seat, legal):
-        """On ne défausse jamais un As, et on ne le charge jamais sur le pli du partenaire dans la couleur
-        demandée, sans avoir derrière lui une carte maîtresse dans sa couleur (sinon on rend maître le 10
-        adverse) ; sauf si on n'a pas le choix."""
+        """On ne défausse jamais un As sans avoir derrière lui une carte maîtresse dans sa couleur (As-10 :
+        sinon on rend maître le 10 adverse) ; sauf si on n'a pas le choix. L'As de la couleur demandée est
+        réglé par _follow_side."""
         trump, trick = game.trump, game.trick
         led = trick[0][1].suit
         hand = game.hands[seat]
-        partner_wins = trick[trick_winner(trick, trump)][0] == partner_of(seat)
         gone = {c for cards in game.played for c in cards} | {c for _, c in trick}
+        best = trick[trick_winner(trick, trump)]
+        ruffed_by_partner = best[0] == partner_of(seat) and best[1].suit == trump and led != trump
 
         def master_after(suit):
             nxt = next((r for r in ORDER[1:] if Card(suit, r) not in gone), None)
@@ -608,8 +664,8 @@ class AsRBot(CoincheBot):
         def bad(card):
             if card.rank != Rank.ACE or card.suit == trump:
                 return False
-            if card.suit == led and not partner_wins:
-                return False
+            if card.suit == led and not ruffed_by_partner:
+                return False  # couleur demandée, pli pas coupé : voir _follow_side
             return not master_after(card.suit)
 
         keep = [c for c in legal if not bad(c)]
@@ -699,6 +755,9 @@ class AsRBot(CoincheBot):
                 return choice
         called = [c for c in side if c.suit in self._called_suits(game, seat)]
         if called:
+            aces = [c for c in called if c.rank == Rank.ACE]
+            if aces:
+                return aces[0]  # l'As de la couleur demandée est chez moi : je le joue d'abord
             return min(called, key=lambda c: c.strength(trump))  # donner la main au partenaire qui a appelé
         if last_one:
             ruff = self._force_ruff(game, seat, side)
@@ -776,6 +835,12 @@ class AsRBot(CoincheBot):
         cards = [c for c in side if c.suit in target]
         if not cards:
             return None
+        gone = {c for cards_ in game.played for c in cards_}
+        masters = [c for c in cards if self._is_master(c, trump, gone, game.hands[seat])]
+        if masters:
+            # une carte maîtresse (la plus faible) : le partenaire de l'adversaire ne peut pas prendre le pli,
+            # l'adversaire doit couper
+            return min(masters, key=lambda c: c.strength(trump))
         return min(cards, key=lambda c: (c.points(trump), c.strength(trump)))
 
     def _weak_alone(self, game, seat):
@@ -870,7 +935,12 @@ class AsRBot(CoincheBot):
         if not cards:
             return None
         longest = max({c.suit for c in cards}, key=lambda s: (sum(c.suit == s for c in side), s.value))
-        return min((c for c in cards if c.suit == longest), key=lambda c: (c.points(game.trump), c.strength(game.trump)))
+        suit_cards = [c for c in cards if c.suit == longest]
+        gone = {c for cards_ in game.played for c in cards_}
+        masters = [c for c in suit_cards if AsRBot._is_master(c, game.trump, gone, game.hands[game.current])]
+        if masters:  # la plus faible carte maîtresse : le preneur doit couper
+            return min(masters, key=lambda c: c.strength(game.trump))
+        return min(suit_cards, key=lambda c: (c.points(game.trump), c.strength(game.trump)))
 
     @staticmethod
     def _is_master(card, trump, gone, hand):

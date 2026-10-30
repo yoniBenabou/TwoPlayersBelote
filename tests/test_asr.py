@@ -401,6 +401,54 @@ def check_keep_nine():
         assert kind().play(g, 2) == Card(S, Rank.SEVEN), kind.__name__
 
 
+def check_ace_first():
+    """Pas d'impasse quand je fournis une couleur hors atout (atout pique, Ouest = siège 1 a pris)."""
+    rest = dict(D="7 8 9", C="7 8")
+    # en deuxième avec As-Roi-7 sur le 8 adverse : l'As
+    g = deal([hand(S="J 8"), hand(H="8 10"), hand(H="A K 7", **rest)], [("bid", 90, S), P, P, P])
+    g.trick, g.current = [(1, Card(H, Rank.EIGHT))], 2
+    assert bot.play(g, 2) == Card(H, Rank.ACE), bot.play(g, 2)
+    # en deuxième sans l'As (pas sorti) avec 10-Roi-7 : la plus petite
+    g = deal([hand(S="J 8"), hand(H="8 A"), hand(H="10 K 7", **rest)], [("bid", 90, S), P, P, P])
+    g.trick, g.current = [(1, Card(H, Rank.EIGHT))], 2
+    assert bot.play(g, 2) == Card(H, Rank.SEVEN), bot.play(g, 2)
+    # en dernier, sans l'As (pas sorti), sur le Roi adverse : le 10
+    g = deal([hand(H="10 Q 7", D="7 8 9", C="7 8")], [("bid", 90, S), P, P, P])
+    g.trick, g.current = [(1, Card(H, Rank.EIGHT)), (2, Card(H, Rank.NINE)), (3, Card(H, Rank.KING))], 0
+    assert bot.play(g, 0) == Card(H, Rank.TEN), bot.play(g, 0)
+    # en dernier avec As-10 sur le Roi adverse : l'As (plus de 2 atouts dans le jeu)...
+    g = deal([hand(H="A 10", D="7 8 9", C="7 8 9")], [("bid", 90, S), P, P, P])
+    g.trick, g.current = [(1, Card(H, Rank.SEVEN)), (2, Card(H, Rank.EIGHT)), (3, Card(H, Rank.KING))], 0
+    assert bot.play(g, 0) == Card(H, Rank.ACE), bot.play(g, 0)
+    # ... le 10 quand il ne reste que 2 atouts dans le jeu
+    g.played[2] += [Card(S, r) for r in (Rank.JACK, Rank.NINE, Rank.ACE, Rank.TEN, Rank.KING, Rank.QUEEN)]
+    assert bot.play(g, 0) == Card(H, Rank.TEN), bot.play(g, 0)
+    # pli du partenaire dans la couleur : l'As...
+    g = deal([hand(H="A 8", D="7 8 9", C="7 8 9")], [("bid", 90, S), P, P, P])
+    g.trick, g.current = [(2, Card(H, Rank.KING)), (3, Card(H, Rank.SEVEN))], 0
+    assert bot.play(g, 0) == Card(H, Rank.ACE), bot.play(g, 0)
+    # ... sauf si l'adversaire derrière moi (siège 1) n'a plus de cœur : il va couper, la plus petite
+    g.tricks = [([(1, Card(D, Rank.KING)), (2, Card(D, Rank.TEN)), (3, Card(D, Rank.QUEEN)), (0, Card(D, Rank.ACE))], 0),
+                ([(0, Card(H, Rank.NINE)), (1, Card(C, Rank.KING)), (2, Card(H, Rank.QUEEN)), (3, Card(H, Rank.JACK))], 2)]
+    for trick, _w in g.tricks:
+        for s_, c in trick:
+            g.played[s_].append(c)
+    assert bot.play(g, 0) == Card(H, Rank.EIGHT), bot.play(g, 0)
+
+
+def check_ruff_with_master():
+    """Faire couper un adversaire : la plus faible carte maîtresse de la couleur, sinon la plus petite."""
+    g = deal([hand(H="A 10 K 7", D="7 8 9", C="7")], [("bid", 90, S), P, P, P])
+    g.current = 0
+    assert bot._force_ruff(g, 0, [c for c in g.hands[0]]) is None   # personne n'a montré de chicane
+    # Est (3) entame le 9 de cœur, Ouest (1) coupe : il n'a plus de cœur
+    g.tricks = [([(3, Card(H, Rank.NINE)), (0, Card(H, Rank.QUEEN)), (1, Card(S, Rank.SEVEN)), (2, Card(H, Rank.EIGHT))], 1)]
+    g.played[1].append(Card(S, Rank.SEVEN)); g.played[2].append(Card(H, Rank.EIGHT))
+    g.played[3].append(Card(H, Rank.NINE)); g.played[0].append(Card(H, Rank.QUEEN))
+    side = [c for c in g.hands[0] if c.suit != S]
+    assert bot._force_ruff(g, 0, side) == Card(H, Rank.KING), bot._force_ruff(g, 0, side)  # As-10-Roi : le Roi
+
+
 def check_full_games(n=100):
     rng = random.Random(0)
     for _ in range(n):
@@ -432,8 +480,10 @@ def main():
     check_collage()
     check_play()
     check_keep_nine()
+    check_ace_first()
+    check_ruff_with_master()
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, parties) : OK")
 
 
 if __name__ == "__main__":
