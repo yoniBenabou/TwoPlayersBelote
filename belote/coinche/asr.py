@@ -799,7 +799,7 @@ class AsRBot(CoincheBot):
         strength = lambda c: c.strength(trump)
         top = max(trumps, key=strength)
         top_is_master = all(strength(top) > strength(c) for c in outstanding)
-        # garder son dernier atout s'il n'en reste qu'un dehors, quelle que soit sa force
+        # garder son dernier atout s'il n'en reste qu'un dehors, quelle que soit sa force .
         if len(trumps) == 1 and len(outstanding) == 1:
             return None
         if nine in trumps and jack not in trumps and jack not in gone:
