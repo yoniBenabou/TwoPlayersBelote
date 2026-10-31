@@ -127,6 +127,11 @@ Jeu :
 - réflexion sur les 3 derniers plis (endgame.py) : pour chaque carte jouable, le robot imagine les mains
   cachées possibles, joue la fin à cartes ouvertes et compte les points, der comprise ; il garde la carte
   des règles sauf si une autre rapporte au moins 1 point de plus en moyenne (pas au capot) ;
+- atouts tombés, je joue en dernier sur le pli du partenaire : ma carte maîtresse, je la garde s'il reste
+  au moins 3 cartes de la couleur dehors (je donne la plus chère de mes autres cartes : avec As-Dame-7,
+  la Dame), sinon je la donne ; en dernier, un 10 non maître (As pas tombé) est donné, même accompagné ;
+- contre 150, 160 ou capot, un Roi troisième hors atout (sans l'As) est gardé le plus longtemps possible :
+  pas de défausse dans sa couleur, pas d'entame de la couleur, petite carte sur le pli du partenaire ;
 - avant-dernier pli, sur le pli du partenaire : je garde la carte qui peut encore gagner le dernier pli
   et je donne l'autre ; si les deux sont perdues (une carte encore dehors les bat), la plus chère ;
 - partenaire maître : s'il est sûr de faire le pli (je joue en dernier, ou sa carte est maîtresse et
@@ -679,6 +684,10 @@ class AsRBot(CoincheBot):
         led = trick[0][1].suit
         partner = partner_of(seat)
         legal = self._keep_aces(game, seat, legal)
+        kings = self._guarded_kings(game, seat)
+        if kings and not any(c.suit == led for c in legal):
+            keep = [c for c in legal if c.suit not in kings]
+            legal = keep or legal  # contre 150 et plus : je ne défausse pas la garde de mon Roi troisième
         # appel par défausse quand le partenaire joue atout et que je n'en ai plus
         attacking = team_of(game.contract["seat"]) == team_of(seat)
         if attacking and trick[0][0] == partner and led == trump and not any(c.suit == trump for c in hand):
@@ -694,6 +703,10 @@ class AsRBot(CoincheBot):
             card = self._give_lost_card(game, seat, legal)
             if card is not None:
                 return card
+        if led in kings and winning[0] == partner:
+            small = [c for c in legal if c.rank != Rank.KING]
+            if small:
+                return min(small, key=lambda c: c.strength(trump))  # je garde mon Roi troisième
         if led != trump and any(c.suit == led for c in legal):
             card = self._follow_side(game, seat, legal, winning)
             if card is not None:
@@ -733,8 +746,24 @@ class AsRBot(CoincheBot):
         gone = {c for cards_ in game.played for c in cards_} | {c for _s, c in trick}
         trumps_left = [c for c in self._all_trumps(trump) if c not in gone]
         if winning[0] == partner_of(seat):
-            if ace not in cards or winning[1].suit == trump:
+            if winning[1].suit == trump:
                 return None  # partenaire qui a coupé : pas d'As sans maîtresse derrière (_keep_aces)
+            if last:
+                if not [c for c in trumps_left if c not in hand]:
+                    # atouts tombés, je suis dernier : ma carte maîtresse, je la garde s'il reste au moins 3
+                    # cartes de la couleur dehors (je joue la plus chère des autres), sinon je la donne
+                    masters = [c for c in cards if self._is_master(c, trump, gone, hand)]
+                    others = [c for c in cards if c not in masters]
+                    out = [Card(led, r) for r in Rank if Card(led, r) not in gone and Card(led, r) not in hand]
+                    if masters and others and len(out) >= 3:
+                        return max(others, key=lambda c: (c.points(trump), strength(c)))
+                    if masters:
+                        return max(masters, key=lambda c: (c.points(trump), strength(c)))
+                ten = Card(led, Rank.TEN)
+                if ten in cards and ace not in gone and ace not in hand:
+                    return ten  # 10 non maître : je le donne, l'As le prendrait plus tard
+            if ace not in cards:
+                return None
             nxt = (seat + 1) % 4
             voids = PapiRobertBot._shown_voids(game)[nxt]
             outside = [c for c in trumps_left if c not in hand]
@@ -759,6 +788,16 @@ class AsRBot(CoincheBot):
             if mids:
                 return max(mids, key=strength)
         return small
+
+    @staticmethod
+    def _guarded_kings(game, seat):
+        """Contre 150, 160 ou capot : les couleurs hors atout où j'ai un Roi troisième (sans l'As), à garder
+        le plus longtemps possible (il fait souvent chuter le contrat)."""
+        contract, trump, hand = game.contract, game.trump, game.hands[seat]
+        if team_of(contract["seat"]) == team_of(seat) or not (contract["value"] == CAPOT or contract["value"] >= 150):
+            return set()
+        return {s for s in SUITS if s != trump and has(hand, s, Rank.KING) and not has(hand, s, Rank.ACE)
+                and len(ranks_in(hand, s)) == 3}
 
     def _give_lost_card(self, game, seat, legal):
         """Avant-dernier pli, sur le pli du partenaire : je garde la carte qui peut encore gagner le dernier
@@ -978,7 +1017,9 @@ class AsRBot(CoincheBot):
                 # passe pas au-dessus, et son partenaire doit couper au lieu de le laisser maître
                 return max(again, key=lambda c: c.strength(trump))
         if side:
-            return self._from_longest(side, trump, gone, hand)
+            kings = self._guarded_kings(game, seat)
+            free = [c for c in side if c.suit not in kings]  # contre 150 et plus : je n'entame pas mon Roi troisième
+            return self._from_longest(free or side, trump, gone, hand)
         return min(legal, key=lambda c: c.strength(trump))
 
     @staticmethod

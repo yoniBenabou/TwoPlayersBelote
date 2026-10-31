@@ -588,6 +588,39 @@ def check_change_to_90():
     assert rebid(hand(C="A 7 8", H="A 8", D="7 8 9")) == P                           # pas de complément
 
 
+def check_last_on_partner():
+    """Atouts tombés, je joue en dernier, mon partenaire est maître (atout pique, Sud = siège 0)."""
+    trumps = [Card(S, r) for r in Rank]
+    def table_(mine, trick, extra_gone=()):
+        g = deal([hand(S="J 8")], [("bid", 90, S), P, P, P])
+        g.played = [list(trumps) + list(extra_gone), [], [], []]
+        g.hands[0] = mine
+        g.trick, g.current = trick, 0
+        return g
+    trick = [(1, Card(H, Rank.SEVEN)), (2, Card(H, Rank.KING)), (3, Card(H, Rank.EIGHT))]
+    # As-Dame-7 de cœur, encore au moins 3 cœurs dehors : je garde l'As, je donne la Dame
+    g = table_([Card(H, Rank.ACE), Card(H, Rank.QUEEN), Card(C, Rank.SEVEN), Card(D, Rank.SEVEN)], trick)
+    assert bot.play(g, 0) == Card(H, Rank.QUEEN), bot.play(g, 0)     # dehors : 9, 10 et Valet de cœur
+    # moins de 3 cœurs dehors : je donne l'As
+    g = table_([Card(H, Rank.ACE), Card(H, Rank.QUEEN), Card(C, Rank.SEVEN), Card(D, Rank.SEVEN)], trick,
+               extra_gone=[Card(H, Rank.JACK)])
+    assert bot.play(g, 0) == Card(H, Rank.ACE), bot.play(g, 0)
+    # 10-8 de cœur, l'As pas tombé : je donne le 10 (l'As le prendrait plus tard)
+    g = table_([Card(H, Rank.TEN), Card(H, Rank.NINE), Card(C, Rank.SEVEN)], trick)
+    assert bot.play(g, 0) == Card(H, Rank.TEN), bot.play(g, 0)
+
+
+def check_guarded_king():
+    """Contre 150 et plus : le Roi troisième hors atout est gardé (pas de défausse, pas d'entame)."""
+    g = deal([hand(C="K 8 7", D="7 8 Q", H="7 8"), hand(S="J 9 A 10 K")], [P, ("bid", 160, S), P, P, P])
+    # Est (3) entame pique, Sud (0) n'en a pas : il défausse ailleurs qu'à trèfle
+    g.trick, g.current = [(1, Card(S, Rank.JACK)), (2, Card(H, Rank.NINE)), (3, Card(S, Rank.SEVEN))], 0
+    assert bot.play(g, 0).suit != C, bot.play(g, 0)
+    # en entame, il ne joue pas trèfle
+    g.trick, g.current = [], 0
+    assert bot.lead(g, 0, g.hands[0]).suit != C, bot.lead(g, 0, g.hands[0])
+
+
 def check_full_games(n=100):
     rng = random.Random(0)
     for _ in range(n):
@@ -627,8 +660,10 @@ def main():
     check_give_lost_card()
     check_endgame()
     check_change_to_90()
+    check_last_on_partner()
+    check_guarded_king()
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, réflexion de fin de donne, changement de couleur à 90, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, réflexion de fin de donne, changement de couleur à 90, dernier sur le pli du partenaire, Roi troisième gardé, parties) : OK")
 
 
 if __name__ == "__main__":
