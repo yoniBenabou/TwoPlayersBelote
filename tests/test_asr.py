@@ -497,6 +497,60 @@ def check_80_100_capot():
     assert master_tens(hand(D="10 K 7"), S, [D]) == 2
 
 
+def check_over_opponent():
+    """80 du partenaire, un adversaire parle, puis la réponse : elle se lit selon l'annonce adverse."""
+    # Sud (AsR) ouvre 80 trèfle avec As de trèfle et As de cœur ; Ouest dit 90 ; Nord répond
+    south = hand(C="A 7 8", H="A 8", D="7 8 9")
+    def after(north_bid, west=("bid", 90, D)):
+        g = deal([south, hand(D="J 9 A 10")], [("bid", 80, C), west])
+        g.bid(2, north_bid); g.bid(3, P)
+        return bot.bid(g, 0)
+    assert after(("bid", 110, S)) == ("bid", 120, S)                 # 110 sur 90 = un 100 : deux As hors pique, +10
+    assert after(("bid", 110, S), ("bid", 100, D)) == ("bid", 120, S)
+    assert after(("bid", 120, S)) == ("bid", 130, S)                 # vrai 120 : l'As sœur (trèfle), +10
+    assert after(("bid", 120, S), ("bid", 110, D)) == P              # 120 sur 110 : pas de réponse
+    assert after(("bid", 100, S)) == P                               # 100 sur 90 = un 90 : pas de complément
+    south_j = hand(C="A 7 8", H="A 8", D="7 8", S="J")
+    g = deal([south_j, hand(D="J 9 A 10")], [("bid", 80, C), ("bid", 90, D)])
+    g.bid(2, ("bid", 100, S)); g.bid(3, P)
+    assert bot.bid(g, 0) == ("bid", 130, S), bot.bid(g, 0)          # complément +10, +10 par As : 100 + 30
+    # AsR répondant : main de 100 à pique sur 80 trèfle et 90 adverse -> 110 (et pas 100, qui serait un collage)
+    g = deal([hand(C="A 7 8", H="A 8", D="7 8 9"), hand(D="J 9 A 10"), hand(S="J 9 7 8 K", D="A", H="7", C="7")],
+             [("bid", 80, C), ("bid", 90, D)])
+    assert bot.bid(g, 2) == ("bid", 110, S), bot.bid(g, 2)
+    g.bid(2, ("bid", 110, S)); g.bid(3, P)
+    g.bid(0, bot.bid(g, 0)); assert g.bids[-1][1] == ("bid", 120, S), g.bids[-1]
+    g.bid(1, P)
+    assert bot.bid(g, 2) == ("bid", CAPOT, S), bot.bid(g, 2)        # 5 atouts + 3 As = 8
+
+
+def check_partner_gives_lead():
+    """Partenaire de celui qui a annoncé l'atout en premier : il entame son dernier atout (pas le 9 sec)."""
+    g = deal([hand(H="J 9 7 8 K"), None, hand(H="A", S="A K", D="A 10", C="7 8 9")], [("bid", 100, H), P, P, P])
+    g.current = 2
+    assert bot.play(g, 2) == Card(H, Rank.ACE), bot.play(g, 2)
+    g.hands[2] = hand(H="9", S="A K", D="A 10", C="7 8 9")
+    g.hands[0] = hand(H="J A 7 8 K", C="10", D="7", S="7")
+    assert bot.play(g, 2).suit != H, bot.play(g, 2)                  # 9 sec : on le garde
+    # celui qui a annoncé en premier garde son dernier atout (le partenaire a dit 90 : il n'a pas montré
+    # le Valet et le 9, sinon on lui donnerait la main en atout)
+    g = deal([hand(H="A", S="A K", D="A 10", C="7 8 9")], [("bid", 80, H), P, ("bid", 90, H), P, P, P])
+    g.current = 0
+    assert bot.play(g, 0).suit != H, bot.play(g, 0)
+
+
+def check_give_lost_card():
+    """Avant-dernier pli, pli du partenaire : As et Roi d'atout, le 9 dehors -> les deux sont perdus, l'As."""
+    g = deal([hand(S="J 8")], [("bid", 90, S), P, P, P])
+    played = [Card(s, r) for s in (H, D, C) for r in Rank] + [Card(S, r) for r in (Rank.JACK, Rank.TEN, Rank.QUEEN, Rank.EIGHT, Rank.SEVEN)]
+    g.hands = [[], [], [Card(S, Rank.ACE), Card(S, Rank.KING)], []]
+    g.played = [[], [], [], []]
+    g.played[0] = [c for c in played if c != Card(H, Rank.SEVEN) and c != Card(D, Rank.SEVEN)]
+    g.trick, g.current = [(0, Card(H, Rank.SEVEN)), (1, Card(D, Rank.SEVEN))], 2
+    g.hands[1] = [Card(S, Rank.NINE)]
+    assert bot.play(g, 2) == Card(S, Rank.ACE), bot.play(g, 2)
+
+
 def check_full_games(n=100):
     rng = random.Random(0)
     for _ in range(n):
@@ -531,8 +585,11 @@ def main():
     check_ace_first()
     check_ruff_with_master()
     check_80_100_capot()
+    check_over_opponent()
+    check_partner_gives_lead()
+    check_give_lost_card()
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, parties) : OK")
 
 
 if __name__ == "__main__":

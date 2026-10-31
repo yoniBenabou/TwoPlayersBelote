@@ -34,6 +34,9 @@ compte seulement les As hors atout, jamais l'As d'atout :
   maîtresse derrière ses As), rien avec un seul As hors atout ; le partenaire compte ses atouts, les As hors
   atout de l'équipe et les cartes maîtresses : 8 ou plus, capot ; sur le +10, s'il a un As hors atout et moins
   de 8, il remonte de 10 et l'ouvreur annonce +10 par carte maîtresse, puis capot si le compte fait 8.
+  Un adversaire a parlé entre le 80 et la réponse : 100 sur 90 vaut un 90 (collage), 110 sur 90 ou
+  100 vaut un 100 (dialogue ci-dessus) ; 120 et plus sur 90 ou 100, et 130/140 sur 110, sont de vrais
+  120/130/140 ; 120 sur 110 ne veut rien dire, pas de réponse. Le répondant AsR annonce de la même façon.
   Cartes maîtresses (en plus des As) : derrière son propre As, les cartes qui le suivent sans trou
   (As-10-Roi : le 10 et le Roi), toute la couleur avec As-10 et deux autres cartes ou plus ; dans la
   couleur de l'As du partenaire, les cartes qui suivent son As sauf une (le 10 sec ne compte pas) ;
@@ -99,7 +102,9 @@ Jeu :
   (appel indirect) ; jeter l'As lui-même annonce la longue maîtresse (au moins
   As-10-Roi, pas au capot) ; le partenaire rejoue la couleur demandée (petite carte) avant
   d'encaisser ses As ; seulement dans l'équipe qui a pris ;
-- on garde son dernier atout pour le dernier pli (pas d'entame de son dernier atout) ; s'il ne reste
+- on garde son dernier atout pour le dernier pli (pas d'entame de son dernier atout), sauf le
+  partenaire de celui qui a annoncé l'atout en premier : il entame atout pour lui donner la main, même
+  avec son dernier atout (pas le 9 sec, pas si c'est contré hors capot) ; s'il ne reste
   qu'un atout dehors et que j'ai un atout plus fort qui n'est pas mon dernier, je le fais tomber avec le
   plus petit de ceux-là (pas si c'est contré, sauf au capot) ; sinon on ne le fait pas tomber : on joue une carte
   d'une couleur que cet adversaire n'a plus, pour le faire couper (sauf au capot) : la plus faible de
@@ -115,6 +120,8 @@ Jeu :
   pas d'entame atout sauf s'il ne reste que ça ;
 - on ne défausse jamais un As (ni ne le donne sur la coupe du partenaire) sans une carte maîtresse derrière lui
   dans sa couleur (le 10, ou la suivante si le 10 est tombé), sauf si on n'a pas le choix ;
+- avant-dernier pli, sur le pli du partenaire : je garde la carte qui peut encore gagner le dernier pli
+  et je donne l'autre ; si les deux sont perdues (une carte encore dehors les bat), la plus chère ;
 - partenaire maître : s'il est sûr de faire le pli (je joue en dernier, ou sa carte est maîtresse et
   l'adversaire qui joue après moi ne peut pas couper), on lui donne en priorité son 10 sec (sinon l'As
   adverse le prendrait) ; jamais un 10 accompagné (il peut faire un pli) ;
@@ -355,7 +362,18 @@ class AsRBot(CoincheBot):
             return None
         level = 100 if (over == 100 and value == 110) else value
         if level == 80:
-            return self._answer_80(hand, suit)
+            action = self._answer_80(hand, suit)
+            cur = self._opponent_value(game, seat)  # l'adversaire a parlé après le 80
+            if action is not None and cur is not None:
+                v, s = action[1], action[2]
+                if cur == 90 and v == 90:
+                    v = 100  # collage : mon 100 vaut un 90
+                elif cur in (90, 100) and v == 100 and s != suit:
+                    v = 110  # mon 110 vaut un 100
+                elif cur == 110 and v == 120:
+                    return None  # 120 sur 110 ne veut rien dire
+                action = ("bid", v, s)
+            return action
         if level == 90:
             if self._complement(r):
                 return ("bid", value + 10 + 10 * side_aces(hand, suit), suit)
@@ -457,7 +475,8 @@ class AsRBot(CoincheBot):
                 other = next(s for s in opposite(suit) if s != ace_suit)
                 extra = (top_tricks(hand, ace_suit) - 1) + top_tricks(hand, other, above={Rank.ACE})
                 return ("bid", 130 + 10 * extra, suit) if extra > 0 else None
-            if p_first[1] == 80 and p_first[2] != suit and mine[0][1][1] == 100 and mine[0][1][2] == suit:
+            if (p_first[1] == 80 and p_first[2] != suit and mine[0][1][2] == suit
+                    and self._acts_as_100(game, seat, mine[0])):
                 return self._after_80_100(game, seat, mine, theirs, value, suit)
             # 100 -> +10 par As -> l'ouvreur remonte de 10 : on a les trois As, j'annonce mes autres plis maîtres
             if (p_first[1] == 100 and p_first[2] == suit and len(mine) == 1 and mine[0][1][2] == suit
@@ -473,7 +492,7 @@ class AsRBot(CoincheBot):
             if action is not False:
                 return action
         if (first_value == 80 and len(mine) == 2 and suit != first_suit and mine[1][1][2] == suit
-                and len(theirs) >= 2 and theirs[-2][1][1] == 100 and theirs[-2][1][2] == suit
+                and len(theirs) >= 2 and theirs[-2][1][2] == suit and self._acts_as_100(game, seat, theirs[-2])
                 and value == mine[1][1][1] + 10 and side_aces(hand, suit) == 2):
             # 80 -> 100 -> +10 -> +10 (il a le troisième As) : +10 par 10 maître (derrière mes As, ou non sec
             # dans la couleur de son As)
@@ -483,10 +502,20 @@ class AsRBot(CoincheBot):
         if len(mine) >= 2 and not (first_value == 110 and len(mine) == 2 and mine[1][1][1] == 130):
             return None
         if first_value == 80:
-            if suit == first_suit and value == 90 and self._complement_of_90(ranks_in(hand, suit)):
+            # l'adversaire a parlé juste avant : 100 sur 90 vaut un 90 (collage), 110 sur 90 ou 100 vaut un 100 ;
+            # 120 sur 110 ne veut rien dire, je ne réponds pas ; 120 et plus sur 90 ou 100 sont de vrais 120...
+            over = self._opponent_value(game, seat, before=_i)
+            level = value
+            if over == 90 and value == 100:
+                level = 90
+            elif over in (90, 100) and value == 110 and suit != first_suit:
+                level = 100
+            elif over == 110 and value == 120:
+                return None
+            if suit == first_suit and level == 90 and self._complement_of_90(ranks_in(hand, suit)):
                 # mes deux As sont déjà annoncés par le 80 : +10 s'ils sont hors atout, +10 par As hors atout en plus
-                return ("bid", 100 + 10 * max(0, side_aces(hand, suit) - 1), suit)
-            if suit != first_suit and value == 100:
+                return ("bid", value + 10 + 10 * max(0, side_aces(hand, suit) - 1), suit)
+            if suit != first_suit and level == 100:
                 # mes deux As sont déjà annoncés par le 80 : +10 s'ils sont hors de son atout ; avec trois As
                 # hors atout, +20 et +10 par 10 maître derrière mes As ; un seul As hors atout : je passe
                 k = side_aces(hand, suit)
@@ -496,16 +525,16 @@ class AsRBot(CoincheBot):
                 if k >= 3:
                     return ("bid", top + 20 + 10 * master_tens(hand, suit), suit)
                 return None
-            if suit != first_suit and value in (110, 120, 130, 140):
+            if suit != first_suit and level in (110, 120, 130, 140):
                 # demande du partenaire dans sa couleur : comme une réponse à son ouverture
                 k = {110: sum(has(hand, s, Rank.ACE) for s in opposite(suit)),
                      120: int(has(hand, SISTER[suit], Rank.ACE)),
                      130: sum(has(hand, s, Rank.TEN) for s in opposite(suit)),
-                     140: int(has(hand, SISTER[suit], Rank.TEN))}[value]
+                     140: int(has(hand, SISTER[suit], Rank.TEN))}[level]
                 return ("bid", value + 10 * k, suit) if k else None
-            if suit != first_suit and value == 90:
+            if suit != first_suit and level == 90:
                 r = ranks_in(hand, suit)
-                return ("bid", 100 + 10 * side_aces(hand, suit), suit) if self._complement(r) else None
+                return ("bid", value + 10 + 10 * side_aces(hand, suit), suit) if self._complement(r) else None
             return None
         if suit != first_suit:
             return None
@@ -527,6 +556,11 @@ class AsRBot(CoincheBot):
             if expected >= 8:
                 return ("bid", CAPOT, suit)
         return None
+
+    def _acts_as_100(self, game, seat, bid):
+        """Un 100 sur le 80 du partenaire : 100, ou 110 juste après un 90 ou un 100 adverse."""
+        i, (_k, value, _suit) = bid
+        return value == 100 or (value == 110 and self._opponent_value(game, seat, before=i) in (90, 100))
 
     def _after_80_100(self, game, seat, mine, theirs, value, suit):
         """Partenaire 80 (deux As), moi 100 dans une autre couleur, il remonte : je compte mes atouts, les As
@@ -627,6 +661,10 @@ class AsRBot(CoincheBot):
             sure = self._sure_trump(game, seat, legal)
             if sure is not None:
                 return sure
+        if winning[0] == partner and len(hand) == 2 and len(legal) == 2:
+            card = self._give_lost_card(game, seat, legal)
+            if card is not None:
+                return card
         if led != trump and any(c.suit == led for c in legal):
             card = self._follow_side(game, seat, legal, winning)
             if card is not None:
@@ -692,6 +730,27 @@ class AsRBot(CoincheBot):
             if mids:
                 return max(mids, key=strength)
         return small
+
+    def _give_lost_card(self, game, seat, legal):
+        """Avant-dernier pli, sur le pli du partenaire : je garde la carte qui peut encore gagner le dernier
+        pli et je donne l'autre ; si aucune ne peut le gagner (une carte encore dehors la bat), je donne la
+        carte qui vaut le plus de points. None : les deux peuvent gagner, la règle générale s'applique."""
+        trump = game.trump
+        seen = {c for cards in game.played for c in cards} | {c for _s, c in game.trick} | set(game.hands[seat])
+        unseen = [Card(s, r) for s in SUITS for r in Rank if Card(s, r) not in seen]
+
+        def lost(card):
+            if card.suit == trump:
+                return any(c.suit == trump and c.strength(trump) > card.strength(trump) for c in unseen)
+            return any(c.suit == trump or (c.suit == card.suit and c.strength(trump) > card.strength(trump))
+                       for c in unseen)
+
+        a, b = legal
+        if lost(a) and lost(b):
+            return max(legal, key=lambda c: (c.points(trump), c.strength(trump)))
+        if lost(a) != lost(b):
+            return a if not lost(b) else b  # je garde celle qui peut gagner
+        return None
 
     def _partner_sure(self, game, seat):
         """Le pli du partenaire est assuré : je joue en dernier, ou sa carte est maîtresse et l'adversaire
@@ -829,7 +888,11 @@ class AsRBot(CoincheBot):
             higher = [c for c in legal if c.suit == trump and c.strength(trump) > unseen.strength(trump)]
             if higher:
                 return min(higher, key=lambda c: c.strength(trump))
-        if side and contract["value"] != CAPOT and (len(trumps) == 1 or last_one):
+        # partenaire de celui qui a annoncé l'atout en premier : je lui donne la main en atout, même avec mon
+        # dernier atout (sauf le 9 sec) ; la règle du dernier atout gardé vaut pour le premier annonceur
+        gives_lead = (self._partner_first_announcer(game, seat) and len(trumps) == 1
+                      and trumps[0].rank != Rank.NINE)
+        if side and contract["value"] != CAPOT and ((len(trumps) == 1 and not gives_lead) or last_one):
             # mon dernier atout reste pour le dernier pli ; le dernier atout adverse, on ne le fait pas
             # tomber avec un atout, on essaie de le faire couper
             trumps = []
@@ -897,6 +960,13 @@ class AsRBot(CoincheBot):
             return False
         first = next(((s, a) for s, a in game.bids if a[0] == "bid" and a[2] == trump and team_of(s) == team_of(seat)), None)
         return first is not None and first[0] == partner_of(seat) and first[1][1] >= 100
+
+    @staticmethod
+    def _partner_first_announcer(game, seat):
+        """Mon partenaire a annoncé l'atout le premier dans l'équipe (à n'importe quel niveau)."""
+        trump = game.trump
+        first = next((s for s, a in game.bids if a[0] == "bid" and a[2] == trump and team_of(s) == team_of(seat)), None)
+        return first == partner_of(seat)
 
     def _last_opponent_trump(self, game, seat):
         """Il ne reste qu'un atout dehors, et il peut être chez un adversaire."""
