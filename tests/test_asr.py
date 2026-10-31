@@ -134,9 +134,10 @@ def check_110_dialogue():
 
 def check_100_dialogue():
     # 100 cœur (Sud a l'As de pique) ; Nord a deux As : 120 ; Sud a le dernier : 130 (« annonce tes autres
-    # plis maîtres ») ; Nord : le 10 de carreau derrière son As, le 10 de pique derrière l'As de Sud : 150
+    # plis maîtres ») ; Nord : le 10 de carreau derrière son As, le 10 de pique (non sec) derrière l'As de
+    # Sud : 150 ; un 10 sec derrière l'As de Sud ne compterait pas
     south = hand(H="J 9 7 8", S="A", D="7 8", C="7")
-    north = hand(D="A 10 Q", C="A 8", S="10", H="Q K")
+    north = hand(D="A 10 Q", C="A 8", S="10 8", H="Q")
     g = deal([south, hand(S="9 J", D="9 J", C="9 J"), north], [])
     g.bid(0, bot.bid(g, 0))
     assert g.bids[-1][1] == ("bid", 100, H), g.bids
@@ -454,6 +455,48 @@ def check_ruff_with_master():
     assert bot._force_ruff(g, 0, side) == Card(H, Rank.KING), bot._force_ruff(g, 0, side)  # As-10-Roi : le Roi
 
 
+def check_80_100_capot():
+    """Sud 80 trèfle (deux As), Nord 100 pique (vraie main de 100), Sud +10 / +20, Nord compte : capot à 8 plis."""
+    def seq(south, north, *more):
+        g = deal([south, hand(S="A Q", H="K Q"), north], [("bid", 80, C), P])
+        g.bid(2, bot.bid(g, 2)); assert g.bids[-1][1] == ("bid", 100, S), g.bids[-1]
+        g.bid(3, P)
+        for b in more:
+            g.bid(g.current, b)
+        return g
+    # partie de Noa : Nord Valet-9 cinquièmes + As de carreau, Sud As de trèfle et de cœur : 5 + 3 = 8 -> capot
+    south = hand(C="A 10 K Q", H="A 8", D="7 8")
+    g = seq(south, hand(S="J 9 7 8 K", D="A", H="7", C="7"))
+    assert bot.bid(g, 0) == ("bid", 110, S), bot.bid(g, 0)          # deux As hors de son atout : +10
+    g.bid(0, ("bid", 110, S)); g.bid(1, P)
+    assert bot.bid(g, 2) == ("bid", CAPOT, S), bot.bid(g, 2)
+    # un seul As hors atout chez Sud (l'autre est l'As de pique) : il ne remonte pas
+    assert bot.bid(seq(hand(C="A 10 K", S="A", H="8 9", D="7 8"), hand(S="J 9 7 8 K", D="A", H="7", C="7")), 0) == P
+    # Nord Valet-9 quatrièmes + As de carreau : 4 + 3 = 7 -> +10 ; Sud a As-10 de cœur : +10 ; Nord : 8 -> capot
+    north = hand(S="J 9 7 8", D="A 7", H="7", C="7")
+    south = hand(C="A K Q J", H="A 10", D="8 9")
+    g = seq(south, north, ("bid", 110, S), P)
+    assert bot.bid(g, 2) == ("bid", 120, S), bot.bid(g, 2)
+    g.bid(2, ("bid", 120, S)); g.bid(3, P)
+    assert bot.bid(g, 0) == ("bid", 130, S), bot.bid(g, 0)          # un 10 maître derrière mon As
+    g.bid(0, ("bid", 130, S)); g.bid(1, P)
+    assert bot.bid(g, 2) == ("bid", CAPOT, S), bot.bid(g, 2)
+    # trois As chez Sud : +20 (+10 pour son 10 de cœur derrière l'As) ; Nord Valet-9 quatrièmes : 4 + 3 + 1 = 8
+    south = hand(C="A K Q", H="A 10", D="A 8 9")
+    north = hand(S="J 9 7 8", D="K 7", H="7", C="7")
+    g = seq(south, north)
+    assert bot.bid(g, 0) == ("bid", 130, S), bot.bid(g, 0)
+    g.bid(0, ("bid", 130, S)); g.bid(1, P)
+    assert bot.bid(g, 2) == ("bid", CAPOT, S), bot.bid(g, 2)
+    # cartes maîtresses en plus des As : As-10-Roi -> 2 ; As-10 + deux autres -> toute la couleur (3)
+    from belote.coinche.asr import master_tens
+    assert master_tens(hand(H="A 10 K", D="7"), S) == 2
+    assert master_tens(hand(H="A 10 8 7", D="7"), S) == 3
+    assert master_tens(hand(H="A K 8", D="7"), S) == 0                 # pas de 10 : le Roi n'est pas maître
+    assert master_tens(hand(D="10"), S, [D]) == 0                      # 10 sec sous l'As du partenaire
+    assert master_tens(hand(D="10 K 7"), S, [D]) == 2
+
+
 def check_full_games(n=100):
     rng = random.Random(0)
     for _ in range(n):
@@ -487,8 +530,9 @@ def main():
     check_keep_nine()
     check_ace_first()
     check_ruff_with_master()
+    check_80_100_capot()
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, parties) : OK")
 
 
 if __name__ == "__main__":

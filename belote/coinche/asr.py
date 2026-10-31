@@ -30,7 +30,13 @@ compte seulement les As hors atout, jamais l'As d'atout :
   L'ouvreur à 80 : sur 90 dans sa
   couleur, s'il a le complément, 100, +10 si ses deux As (déjà annoncés
   par le 80) sont hors atout, +10 par As hors atout en plus ; sur 100 dans
-  une autre couleur, +10 avec deux As hors de cet atout, +10 par As en plus ;
+  une autre couleur (une vraie main de 100), +10 avec deux As hors de cet atout, +20 avec trois (+10 par carte
+  maîtresse derrière ses As), rien avec un seul As hors atout ; le partenaire compte ses atouts, les As hors
+  atout de l'équipe et les cartes maîtresses : 8 ou plus, capot ; sur le +10, s'il a un As hors atout et moins
+  de 8, il remonte de 10 et l'ouvreur annonce +10 par carte maîtresse, puis capot si le compte fait 8.
+  Cartes maîtresses (en plus des As) : derrière son propre As, les cartes qui le suivent sans trou
+  (As-10-Roi : le 10 et le Roi), toute la couleur avec As-10 et deux autres cartes ou plus ; dans la
+  couleur de l'As du partenaire, les cartes qui suivent son As sauf une (le 10 sec ne compte pas) ;
   sur 110/120/130/140 dans une autre couleur, il répond à la demande (+10 par As de la famille opposée
   sur 110, +10 avec l'As sœur sur 120, les 10 sur 130/140) ; sur 90 dans une autre couleur, avec le
   complément, 100, +10 par As ; sans réponse (un adversaire a parlé), 100 avec au moins le Valet
@@ -43,8 +49,9 @@ compte seulement les As hors atout, jamais l'As d'atout :
   l'ouvreur a la partance, capot ; si c'est moi, capot avec au moins un atout, sinon +10 par As ; si
   c'est un adversaire, capot avec un atout et les trois As hors atout, sinon +10 par As. 100 -> 110/120/130 :
   si l'équipe a les trois As hors atout (ceux du partenaire et les miens), l'ouvreur remonte de +10
-  pour demander les autres plis maîtres ; le partenaire ajoute +10 par pli maître après les As (son
-  As compris dans la couleur ne compte pas, et derrière l'As de l'ouvreur son 10 est maître) ; sans
+  pour demander les autres plis maîtres ; le partenaire ajoute +10 par carte maîtresse après les As,
+  comptées comme dans le dialogue 80 -> 100 (As-10-Roi : le 10 et le Roi ; As-10 et deux autres cartes :
+  toute la couleur ; derrière l'As de l'ouvreur, ses cartes qui suivent sauf une, donc pas le 10 sec) ; sans
   les trois As, l'ouvreur ne remonte pas (ce serait une fausse information) ;
 - sur 110 : +10 par As de la famille opposée ; 110 -> 120 -> 130 : l'ouvreur
   qui a l'autre As de la famille opposée dit 130, le partenaire ajoute +10 par pli
@@ -219,6 +226,27 @@ def natural_opening(hand):
     return None
 
 
+def master_tens(hand, trump, partner_aces=()):
+    """Cartes maîtresses hors atout en plus des As (dialogue 80 -> 100) :
+    - dans une couleur où j'ai l'As : les cartes qui le suivent sans trou (As-10-Roi : le 10 et le Roi) ;
+      avec As-10 et au moins deux autres cartes, toute la couleur est maîtresse ;
+    - dans une couleur où le partenaire a l'As : mes cartes qui suivent son As (10, Roi...), sauf une
+      que je joue sous son As (le 10 sec ne compte pas)."""
+    total = 0
+    for s in SUITS:
+        if s == trump:
+            continue
+        n = len(ranks_in(hand, s))
+        if has(hand, s, Rank.ACE):
+            if has(hand, s, Rank.TEN) and n >= 4:
+                total += n - 1
+            else:
+                total += top_tricks(hand, s) - 1
+        elif s in partner_aces:
+            total += min(top_tricks(hand, s, above={Rank.ACE}), n - 1)
+    return total
+
+
 def top_tricks(hand, suit, above=()):
     """Plis maîtres d'une couleur hors atout : les cartes qui se suivent depuis le haut (les cartes de
     above, tenues par le partenaire, comptent comme déjà là mais ne sont pas des plis pour moi)."""
@@ -371,8 +399,8 @@ class AsRBot(CoincheBot):
     def _extra_masters(hand, trump):
         """Plis maîtres hors atout en plus des As, quand l'équipe a les trois As : dans une couleur où
         j'ai l'As, les cartes qui le suivent ; sinon (l'As est chez le partenaire), celles qui suivent son As."""
-        return sum(top_tricks(hand, s) - 1 if has(hand, s, Rank.ACE) else top_tricks(hand, s, above={Rank.ACE})
-                   for s in SUITS if s != trump)
+        partner_aces = [s for s in SUITS if s != trump and not has(hand, s, Rank.ACE)]
+        return master_tens(hand, trump, partner_aces)
 
     @staticmethod
     def _complement(ranks):
@@ -429,6 +457,8 @@ class AsRBot(CoincheBot):
                 other = next(s for s in opposite(suit) if s != ace_suit)
                 extra = (top_tricks(hand, ace_suit) - 1) + top_tricks(hand, other, above={Rank.ACE})
                 return ("bid", 130 + 10 * extra, suit) if extra > 0 else None
+            if p_first[1] == 80 and p_first[2] != suit and mine[0][1][1] == 100 and mine[0][1][2] == suit:
+                return self._after_80_100(game, seat, mine, theirs, value, suit)
             # 100 -> +10 par As -> l'ouvreur remonte de 10 : on a les trois As, j'annonce mes autres plis maîtres
             if (p_first[1] == 100 and p_first[2] == suit and len(mine) == 1 and mine[0][1][2] == suit
                     and self._opponent_value(game, seat, before=theirs[0][0]) is None
@@ -442,6 +472,14 @@ class AsRBot(CoincheBot):
             action = self._rebid_100(hand, suit, mine, theirs, value, n)
             if action is not False:
                 return action
+        if (first_value == 80 and len(mine) == 2 and suit != first_suit and mine[1][1][2] == suit
+                and len(theirs) >= 2 and theirs[-2][1][1] == 100 and theirs[-2][1][2] == suit
+                and value == mine[1][1][1] + 10 and side_aces(hand, suit) == 2):
+            # 80 -> 100 -> +10 -> +10 (il a le troisième As) : +10 par 10 maître (derrière mes As, ou non sec
+            # dans la couleur de son As)
+            his_ace = [s for s in SUITS if s != suit and not has(hand, s, Rank.ACE)]
+            tens = master_tens(hand, suit, his_ace)
+            return ("bid", value + 10 * tens, suit) if tens else None
         if len(mine) >= 2 and not (first_value == 110 and len(mine) == 2 and mine[1][1][1] == 130):
             return None
         if first_value == 80:
@@ -449,8 +487,15 @@ class AsRBot(CoincheBot):
                 # mes deux As sont déjà annoncés par le 80 : +10 s'ils sont hors atout, +10 par As hors atout en plus
                 return ("bid", 100 + 10 * max(0, side_aces(hand, suit) - 1), suit)
             if suit != first_suit and value == 100:
+                # mes deux As sont déjà annoncés par le 80 : +10 s'ils sont hors de son atout ; avec trois As
+                # hors atout, +20 et +10 par 10 maître derrière mes As ; un seul As hors atout : je passe
                 k = side_aces(hand, suit)
-                return ("bid", 100 + 10 * (k - 1), suit) if k >= 2 else None
+                top = max(value, self._opponent_value(game, seat) or 0)
+                if k == 2:
+                    return ("bid", top + 10, suit)
+                if k >= 3:
+                    return ("bid", top + 20 + 10 * master_tens(hand, suit), suit)
+                return None
             if suit != first_suit and value in (110, 120, 130, 140):
                 # demande du partenaire dans sa couleur : comme une réponse à son ouverture
                 k = {110: sum(has(hand, s, Rank.ACE) for s in opposite(suit)),
@@ -481,6 +526,37 @@ class AsRBot(CoincheBot):
                 expected += sum(top_tricks(hand, s, above={Rank.ACE}) for s in opp if s not in held)
             if expected >= 8:
                 return ("bid", CAPOT, suit)
+        return None
+
+    def _after_80_100(self, game, seat, mine, theirs, value, suit):
+        """Partenaire 80 (deux As), moi 100 dans une autre couleur, il remonte : je compte mes atouts, les As
+        hors atout de l'équipe et les 10 maîtres ; 8 plis ou plus : capot.
+        - son +10 (deux As hors de mon atout) : avec un As hors atout à moi, capot si le compte fait 8, sinon
+          +10 (on a les trois As : il annonce ses 10 maîtres) ; sans As hors atout, je passe ;
+        - son +20 (trois As), +30, +40 (avec ses 10 maîtres) : capot si le compte fait 8, sinon je passe ;
+        - sa réponse à mon +10 : +10 par 10 maître ; capot si le compte fait 8, sinon je passe."""
+        hand = game.hands[seat]
+        answer_i = theirs[-1][0]
+        before = next((a[1] for _s, a in reversed(game.bids[:answer_i]) if a[0] == "bid"), 100)
+        jump = (value - before) // 10
+        n = len(ranks_in(hand, suit))
+        mine_aces = side_aces(hand, suit)
+        if len(mine) == 1:
+            if jump == 1:
+                if mine_aces == 0:
+                    return None
+                his = [s for s in SUITS if s != suit and not has(hand, s, Rank.ACE)]  # il a les deux autres
+                tricks = n + 2 + mine_aces + master_tens(hand, suit, his)
+                return ("bid", CAPOT, suit) if tricks >= 8 else ("bid", value + 10, suit)
+            if jump >= 2:
+                his = [s for s in SUITS if s != suit]  # les trois As hors atout sont chez lui
+                tricks = n + 3 + (jump - 2) + master_tens(hand, suit, his)
+                return ("bid", CAPOT, suit) if tricks >= 8 else None
+            return None
+        if len(mine) == 2 and mine[1][1][1] == before:
+            his = [s for s in SUITS if s != suit and not has(hand, s, Rank.ACE)]
+            tricks = n + 3 + jump + master_tens(hand, suit, his)
+            return ("bid", CAPOT, suit) if tricks >= 8 else None
         return None
 
     @staticmethod
