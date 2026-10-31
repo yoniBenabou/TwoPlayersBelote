@@ -551,6 +551,21 @@ def check_give_lost_card():
     assert bot.play(g, 2) == Card(S, Rank.ACE), bot.play(g, 2)
 
 
+def check_endgame():
+    """Réflexion de fin de donne : As-Valet d'atout, le 9 dehors chez un joueur qui n'a plus que lui comme
+    atout ; entamer le Valet fait tomber le 9 (il doit fournir atout), puis l'As fait la der."""
+    from belote.coinche.engine import SUITS
+    g = deal([hand(S="J 8")], [("bid", 90, S), P, P, P])
+    every = [Card(s, r) for s in SUITS for r in Rank]
+    g.hands = [[Card(H, Rank.SEVEN), Card(H, Rank.EIGHT)], [Card(S, Rank.ACE), Card(S, Rank.JACK)],
+               [Card(S, Rank.NINE), Card(D, Rank.SEVEN)], [Card(C, Rank.SEVEN), Card(C, Rank.EIGHT)]]
+    held = {c for h in g.hands for c in h}
+    g.played = [[c for c in every if c not in held], [], [], []]
+    g.tricks = [([(0, Card(D, Rank.KING)), (1, Card(D, Rank.QUEEN)), (2, Card(D, Rank.JACK)), (3, Card(D, Rank.NINE))], 0)] * 6
+    g.trick, g.current = [], 1
+    assert bot.play(g, 1) == Card(S, Rank.JACK), bot.play(g, 1)
+
+
 def check_full_games(n=100):
     rng = random.Random(0)
     for _ in range(n):
@@ -588,8 +603,9 @@ def main():
     check_over_opponent()
     check_partner_gives_lead()
     check_give_lost_card()
+    check_endgame()
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, réflexion de fin de donne, parties) : OK")
 
 
 if __name__ == "__main__":

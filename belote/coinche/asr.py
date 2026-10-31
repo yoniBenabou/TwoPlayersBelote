@@ -120,6 +120,9 @@ Jeu :
   pas d'entame atout sauf s'il ne reste que ça ;
 - on ne défausse jamais un As (ni ne le donne sur la coupe du partenaire) sans une carte maîtresse derrière lui
   dans sa couleur (le 10, ou la suivante si le 10 est tombé), sauf si on n'a pas le choix ;
+- réflexion sur les 3 derniers plis (endgame.py) : pour chaque carte jouable, le robot imagine les mains
+  cachées possibles, joue la fin à cartes ouvertes et compte les points, der comprise ; il garde la carte
+  des règles sauf si une autre rapporte au moins 1 point de plus en moyenne (pas au capot) ;
 - avant-dernier pli, sur le pli du partenaire : je garde la carte qui peut encore gagner le dernier pli
   et je donne l'autre ; si les deux sont perdues (une carte encore dehors les bat), la plus chère ;
 - partenaire maître : s'il est sûr de faire le pli (je joue en dernier, ou sa carte est maîtresse et
@@ -139,6 +142,7 @@ Le reste du jeu est celui de CoincheBot.
 """
 from ..core.cards import Card, Rank, Suit
 from .bots import CoincheBot, wants_coinche
+from .endgame import endgame_card
 from .engine import CAPOT, SUITS, partner_of, team_of, trick_winner
 
 RED = {Suit.COEUR, Suit.CARREAU}
@@ -631,7 +635,10 @@ class AsRBot(CoincheBot):
         else:
             card = self._follow(game, seat, legal)
         card = self._keep_top_trump(game, seat, legal, card)
-        return self._belote_signal(game, seat, legal, card)
+        card = self._belote_signal(game, seat, legal, card)
+        # fin de donne : réflexion sur les 3 derniers plis (der comprise) ; la carte des règles reste,
+        # sauf si une autre rapporte nettement plus
+        return endgame_card(game, seat, legal, card)
 
     def _keep_top_trump(self, game, seat, legal, card):
         """Preneur très faible à l'atout : son atout le plus fort est gardé pour le dernier pli ; s'il doit
