@@ -26,7 +26,10 @@ compte seulement les As hors atout, jamais l'As d'atout :
 - sur 80, même couleur : 90 avec le Valet ou le 9 au moins second (même sans As : seule l'ouverture à
   90 en exige un), 100 avec les deux, +10 par As hors atout ; autre couleur, avec la maîtrise dans
   cette couleur, comme à l'ouverture : 100 si je cherche des As rouges et noirs, sinon la demande
-  directe (110 si je ne cherche que des As de la famille opposée, 120 si je ne cherche que l'As sœur).
+  directe (110 si je ne cherche que des As de la famille opposée, 120 si je ne cherche que l'As sœur) ;
+  sans maîtrise, 90 dans une autre couleur même sans As (le 80 a montré deux As) avec le Valet au moins
+  quatrième, le 9 au moins cinquième, ou Valet-9 troisièmes sans l'As d'atout ; avec de quoi soutenir
+  (90 dans sa couleur), je soutiens, sauf avec le Valet au moins cinquième sans le 9 ailleurs.
   L'ouvreur à 80 : sur 90 dans sa
   couleur, s'il a le complément, 100, +10 si ses deux As (déjà annoncés
   par le 80) sont hors atout, +10 par As hors atout en plus ; sur 100 dans
@@ -42,7 +45,8 @@ compte seulement les As hors atout, jamais l'As d'atout :
   couleur de l'As du partenaire, les cartes qui suivent son As sauf une (le 10 sec ne compte pas) ;
   sur 110/120/130/140 dans une autre couleur, il répond à la demande (+10 par As de la famille opposée
   sur 110, +10 avec l'As sœur sur 120, les 10 sur 130/140) ; sur 90 dans une autre couleur, avec le
-  complément, 100, +10 par As ; sans réponse (un adversaire a parlé), 100 avec au moins le Valet
+  complément, comme sur un 100 : +10 pour le complément, +10 si ses deux As sont hors de cet atout,
+  +10 avec un troisième As hors atout ; sans complément, rien ; sans réponse (un adversaire a parlé), 100 avec au moins le Valet
   quatrième et un As hors atout (ou une maîtrise) ;
 - sur 90 : +10 pour le complément (le Valet, ou le 9 au moins second) et +10
   par As ; rien sans complément ; le 9 sec ne se signale pas au premier tour,
@@ -445,9 +449,24 @@ class AsRBot(CoincheBot):
             return ("bid", ask_value(hand, other), other)  # maîtrise : la demande des As qui me manquent
         if kind == "100":
             return ("bid", 100, other)  # je cherche des As rouges et noirs
+        # 90 dans une autre couleur, même sans As (le 80 a montré deux As) : Valet au moins quatrième, 9 au moins
+        # cinquième, ou Valet-9 troisièmes sans l'As d'atout
+        def own_90(s):
+            rs = ranks_in(hand, s)
+            return ((Rank.JACK in rs and len(rs) >= 4) or (Rank.NINE in rs and len(rs) >= 5)
+                    or (rs >= {Rank.JACK, Rank.NINE} and len(rs) >= 3 and Rank.ACE not in rs))
+        mine = [s for s in SUITS if s != suit and own_90(s)]
+        best = max(mine, key=lambda s: strength_score(hand, s)) if mine else None
         if Rank.JACK in r or (Rank.NINE in r and len(r) >= 2):
-            # le Valet, ou le 9 au moins second ; en réponse, pas besoin d'As (seule l'ouverture à 90 en exige un)
+            # le Valet, ou le 9 au moins second ; en réponse, pas besoin d'As (seule l'ouverture à 90 en exige un) ;
+            # je soutiens sa couleur, sauf avec le Valet au moins cinquième (sans le 9) ailleurs
+            long_jack = [s for s in SUITS if s != suit and has(hand, s, Rank.JACK) and not has(hand, s, Rank.NINE)
+                         and len(ranks_in(hand, s)) >= 5]
+            if long_jack:
+                return ("bid", 90, max(long_jack, key=lambda s: strength_score(hand, s)))
             return ("bid", 90, suit)
+        if best is not None:
+            return ("bid", 90, best)
         return None
 
     def _rebid(self, game, seat, mine, theirs):
@@ -537,8 +556,11 @@ class AsRBot(CoincheBot):
                      140: int(has(hand, SISTER[suit], Rank.TEN))}[level]
                 return ("bid", value + 10 * k, suit) if k else None
             if suit != first_suit and level == 90:
+                # comme sur un 100 : mes deux As sont déjà annoncés par le 80 ; le complément +10, +10 si mes deux
+                # As sont hors de son atout, +10 avec un troisième ; sans complément, je passe
                 r = ranks_in(hand, suit)
-                return ("bid", value + 10 + 10 * side_aces(hand, suit), suit) if self._complement(r) else None
+                extra = max(0, side_aces(hand, suit) - 1)
+                return ("bid", value + 10 + 10 * extra, suit) if self._complement(r) else None
             return None
         if suit != first_suit:
             return None

@@ -513,7 +513,7 @@ def check_over_opponent():
     south_j = hand(C="A 7 8", H="A 8", D="7 8", S="J")
     g = deal([south_j, hand(D="J 9 A 10")], [("bid", 80, C), ("bid", 90, D)])
     g.bid(2, ("bid", 100, S)); g.bid(3, P)
-    assert bot.bid(g, 0) == ("bid", 130, S), bot.bid(g, 0)          # complément +10, +10 par As : 100 + 30
+    assert bot.bid(g, 0) == ("bid", 120, S), bot.bid(g, 0)          # comme sur un 100 : complément +10, deux As hors atout +10
     # AsR répondant : main de 100 à pique sur 80 trèfle et 90 adverse -> 110 (et pas 100, qui serait un collage)
     g = deal([hand(C="A 7 8", H="A 8", D="7 8 9"), hand(D="J 9 A 10"), hand(S="J 9 7 8 K", D="A", H="7", C="7")],
              [("bid", 80, C), ("bid", 90, D)])
@@ -566,6 +566,28 @@ def check_endgame():
     assert bot.play(g, 1) == Card(S, Rank.JACK), bot.play(g, 1)
 
 
+def check_change_to_90():
+    """Sur 80 trèfle : 90 dans une autre couleur, sans As ; l'ouvreur répond comme sur un 100."""
+    def answer(north):
+        g = deal([hand(C="A 7 8", H="A 8", D="7 8 9"), hand(), north], [("bid", 80, C), P])
+        return bot.bid(g, 2)
+    assert answer(hand(S="J 7 8 K", D="Q K", H="7", C="Q")) == ("bid", 90, S)        # Valet quatrième
+    assert answer(hand(S="9 7 8 K Q", D="Q K", H="7")) == ("bid", 90, S)             # 9 cinquième
+    assert answer(hand(S="J 9 8", D="Q K 10", H="7", C="Q")) == ("bid", 90, S)       # Valet-9 troisièmes
+    assert answer(hand(S="J 7 8", D="Q K 10", H="7", C="Q")) == P                   # Valet troisième : pas assez
+    # de quoi soutenir (Valet de trèfle) : je soutiens, sauf avec le Valet cinquième ailleurs
+    assert answer(hand(S="J 7 8 K", C="J", D="Q K", H="7")) == ("bid", 90, C)
+    assert answer(hand(S="J 7 8 K Q", C="J", D="K", H="7")) == ("bid", 90, S)
+    # l'ouvreur sur 90 pique : complément +10, +10 si ses deux As sont hors atout, +10 avec un troisième
+    def rebid(south):
+        g = deal([south, hand()], [("bid", 80, C), P, ("bid", 90, S), P])
+        return bot.bid(g, 0)
+    assert rebid(hand(C="A 7 8", H="A 8", D="7 8", S="J")) == ("bid", 110, S)        # complément, deux As hors pique
+    assert rebid(hand(C="A 7 8", S="A 9", D="7 8 10")) == ("bid", 100, S)           # un seul As hors pique
+    assert rebid(hand(C="A 7", H="A 8", D="A 8", S="J 7")) == ("bid", 120, S)        # trois As hors pique
+    assert rebid(hand(C="A 7 8", H="A 8", D="7 8 9")) == P                           # pas de complément
+
+
 def check_full_games(n=100):
     rng = random.Random(0)
     for _ in range(n):
@@ -604,8 +626,9 @@ def main():
     check_partner_gives_lead()
     check_give_lost_card()
     check_endgame()
+    check_change_to_90()
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, réflexion de fin de donne, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, réflexion de fin de donne, changement de couleur à 90, parties) : OK")
 
 
 if __name__ == "__main__":
