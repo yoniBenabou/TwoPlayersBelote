@@ -9,7 +9,8 @@ Règles retenues (cf. RULES, affichées aussi dans la page web) :
   entame le premier pli ; le donneur change à chaque donne.
 - Annonces : contrat de 80 à 160 (par 10) ou capot (250) avec une couleur
   d'atout, chaque annonce plus haute que la précédente ; un adversaire de
-  l'équipe qui a le contrat peut coincher (×2), puis l'équipe du contrat peut
+  l'équipe qui a le contrat peut coincher (×2), même hors de son tour (à la
+  volée : la coinche coupe la parole, le joueur suivant parle), puis l'équipe du contrat peut
   surcoincher (×3). Après une coinche, on ne peut plus que surcoincher ou
   passer. Fin des annonces : 3 passes après la dernière annonce (ou
   surcoinche) ; 4 passes sans annonce : on redistribue.
@@ -260,6 +261,20 @@ class CoincheGame:
             self.contract["mult"] = 3
             return self._start_play()
         self.current = (self.current + 1) % 4
+
+    def volley_seats(self):
+        """Adversaires du contrat qui peuvent coincher à la volée (hors de leur tour)."""
+        c = self.contract
+        if self.phase != "bidding" or c is None or c["mult"] != 1:
+            return []
+        return [s for s in range(4) if team_of(s) != team_of(c["seat"]) and s != self.current]
+
+    def coinche_out_of_turn(self, seat):
+        """Coinche à la volée : elle coupe la parole ; ensuite, le joueur après moi parle."""
+        if seat not in self.volley_seats():
+            raise ValueError(f"Coinche not allowed for {SEAT_NAMES[seat]}")
+        self.current = seat
+        self.bid(seat, ("coinche",))
 
     def _start_play(self):
         self.phase = "play"

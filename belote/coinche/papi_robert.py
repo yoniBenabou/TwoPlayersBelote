@@ -33,7 +33,9 @@ sous l'annonce adverse. Le partenaire lit l'annonce 10 de moins et répond par-d
 Sortie (comme AsR, partie en 1 500) : pas de contrat qui, fait tout juste, ferait sortir les adversaires
 devant nous ; si leur contrat les fait sortir, on monte juste au-dessus dans une vraie couleur d'atout,
 sinon on contre.
-Coinche : même règle que CoincheBot. Pas de surcoinche.
+Coinche : même règle que CoincheBot à mon tour ; à la volée, seulement quasi sûr de la chute, belote
+adverse comprise (même règle qu'AsR).
+Pas de surcoinche.
 
 Jeu :
 - attaque : on retire les atouts adverses. Partenaire qui a annoncé l'atout le premier : je lui rends la
@@ -50,7 +52,7 @@ Jeu :
 Le reste du jeu en second, troisième ou quatrième est celui de CoincheBot.
 """
 from ..core.cards import Rank, Suit
-from .asr import AsRBot
+from .asr import AsRBot, volley_coinche_ok
 from .bots import CoincheBot, wants_coinche
 from .engine import CAPOT, SUITS, partner_of, team_of
 from .inference import may_hold, shown_voids, trump_ceilings
@@ -188,6 +190,11 @@ def _response(hand, value, suit):
 
 class PapiRobertBot(CoincheBot):
     name = "Papi Robert"
+
+    @staticmethod
+    def volley_coinche(game, seat):
+        """Coinche à la volée (hors de mon tour) : seulement quasi sûr de la chute (comme AsR)."""
+        return volley_coinche_ok(game.hands[seat], game.contract)
 
     # ---------- annonces ----------
     def bid(self, game, seat):

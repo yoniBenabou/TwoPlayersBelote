@@ -78,7 +78,11 @@ partenaire reste prudent : il passe) ; sur un 100 adverse, une vraie main de
 100 dit 110 (lue comme un 100).
 Belote : jamais annoncée, sauf si mon partenaire a annoncé un vrai 100 ou plus (jusqu'à 160), que j'ai
 passé et que l'adversaire a monté de 10 : je dis exactement 20 de plus que mon partenaire, jamais plus.
-Coinche : même règle que CoincheBot. Surcoinche : seulement le preneur, quand sa main assure déjà
+Coinche : même règle que CoincheBot à mon tour. À la volée (hors de mon tour), seulement quasi sûr de la
+chute avec ma seule main : mes plis sûrs (atouts maîtres depuis le Valet, un As par couleur à côté, chacun
+avec 10 points des autres) leur laissent moins que leur annonce, belote adverse comprise (20, sauf si j'ai
+le Roi ou la Dame d'atout) ; au capot, le Valet d'atout.
+Surcoinche : seulement le preneur, quand sa main assure déjà
 80 % des points de l'annonce (plis sûrs : atouts maîtres depuis le Valet, puis dans chaque autre
 couleur les cartes qui se suivent depuis l'As ; chacun compté avec ma carte plus 10 points pour les
 cartes des trois autres ; la belote en plus).
@@ -313,12 +317,36 @@ def sure_points(hand, trump):
     return sum(c.points(trump) + OTHERS_PER_TRICK for c in tricks) + belote
 
 
+def volley_coinche_ok(hand, contract):
+    """Coinche à la volée : seulement si je suis quasi sûr de la chute avec ma seule main. Mes plis sûrs en
+    défense (leurs atouts maîtres depuis le Valet, et un As par couleur à côté), chacun compté avec ma carte
+    plus 10 points des autres, doivent leur laisser moins que leur annonce, en leur comptant la belote (20)
+    si je n'ai ni le Roi ni la Dame d'atout. Au capot : le Valet d'atout suffit."""
+    trump, value = contract["suit"], contract["value"]
+    if value == CAPOT:
+        return has(hand, trump, Rank.JACK)
+    tricks = []
+    for r in TRUMP_TOP:
+        if not has(hand, trump, r):
+            break
+        tricks.append(Card(trump, r))
+    tricks += [Card(s, Rank.ACE) for s in SUITS if s != trump and has(hand, s, Rank.ACE)]
+    sure = sum(c.points(trump) + OTHERS_PER_TRICK for c in tricks)
+    belote = 0 if (has(hand, trump, Rank.KING) or has(hand, trump, Rank.QUEEN)) else 20
+    return sure > 162 - value + belote
+
+
 def master_tricks(hand, trump):
     return sum(top_tricks(hand, s) for s in SUITS if s != trump)
 
 
 class AsRBot(CoincheBot):
     name = "AsR"
+
+    @staticmethod
+    def volley_coinche(game, seat):
+        """Coinche à la volée (hors de mon tour) : seulement quasi sûr de la chute (belote adverse comprise)."""
+        return volley_coinche_ok(game.hands[seat], game.contract)
 
     # ================= annonces =================
     def bid(self, game, seat):

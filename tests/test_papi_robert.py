@@ -2,6 +2,7 @@
 import random
 import sys
 
+from belote.coinche.bots import volley
 from belote.coinche.engine import CAPOT, CoincheGame
 from belote.coinche.inference import may_hold, trump_ceilings
 from belote.coinche.papi_robert import PapiRobertBot, best_opening, opening_value, response
@@ -340,6 +341,26 @@ def check_trump_until_void():
     assert bot.play(game, 0) == Card(H, Rank.ACE)
 
 
+def check_volley():
+    bot = PapiRobertBot()
+    # Sud dit 150 cœur ; Ouest a la parole ; Est (Valet et As de cœur) est sûr de la chute : il coinche à la volée
+    # (Valet 20 + As 11, plus 10 chacun = 51 > 162 - 150 + 20 de belote possible)
+    game = table([hand(S="7 8"), None, None, hand(H="J A", S="A", D="8")])
+    game.bid(0, ("bid", 150, H))
+    assert game.volley_seats() == [3]
+    assert volley(game, [bot] * 4) == 3
+    assert game.contract["mult"] == 2 and game.coinche_seat == 3 and game.current == 0
+    assert game.volley_seats() == [] and volley(game, [bot] * 4) is None
+    # même main sur 100 : pas quasi sûr (51 <= 62 + 20 de belote), pas de coinche à la volée
+    game = table([hand(S="7 8"), None, None, hand(H="J A", S="A", D="8")])
+    game.bid(0, ("bid", 100, H))
+    assert volley(game, [bot] * 4) is None and game.current == 1
+    # Valet-9 d'atout et deux As sur 100 : 96 > 82, coinche
+    game = table([hand(S="7 8"), None, None, hand(H="J 9", S="A", D="A")])
+    game.bid(0, ("bid", 100, H))
+    assert volley(game, [bot] * 4) == 3
+
+
 def check_full_games(n=100):
     bot = PapiRobertBot()
     rng = random.Random(0)
@@ -349,6 +370,8 @@ def check_full_games(n=100):
             if game.phase in ("redeal", "done"):
                 game.new_deal()
                 continue
+            if game.phase == "bidding" and volley(game, [bot] * 4) is not None:
+                continue  # coinche à la volée
             seat = game.current
             if game.phase == "bidding":
                 game.bid(seat, bot.bid(game, seat))
@@ -372,6 +395,7 @@ def main():
     check_trump_until_void()
     check_defence_no_trump_lead()
     check_coinched()
+    check_volley()
     check_full_games()
     print("OK")
 

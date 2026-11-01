@@ -3,6 +3,7 @@ import random
 import sys
 
 from belote.coinche.asr import AsRBot, natural_opening
+from belote.coinche.bots import volley
 from belote.coinche.engine import CAPOT, CoincheGame
 from belote.core.cards import Card, Rank, Suit
 from tests.test_petit_jeu import hand, table
@@ -659,6 +660,8 @@ def check_full_games(n=100):
             if game.phase in ("redeal", "done"):
                 game.new_deal()
                 continue
+            if game.phase == "bidding" and volley(game, [bot] * 4) is not None:
+                continue  # coinche à la volée
             seat = game.current
             if game.phase == "bidding":
                 game.bid(seat, bot.bid(game, seat))

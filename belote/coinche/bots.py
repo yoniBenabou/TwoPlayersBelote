@@ -9,6 +9,17 @@ TRUMP_WEIGHT = {Rank.JACK: 25, Rank.NINE: 18, Rank.ACE: 11, Rank.TEN: 9, Rank.KI
                 Rank.EIGHT: 4, Rank.SEVEN: 4}
 
 
+def volley(game, players):
+    """Avant chaque annonce : un robot adverse du contrat qui n'a pas la parole peut coincher à la volée
+    (s'il sait le faire : méthode volley_coinche). Renvoie la place qui a coinché, ou None."""
+    for seat in game.volley_seats():
+        player = players[seat]
+        if hasattr(player, "volley_coinche") and player.volley_coinche(game, seat):
+            game.coinche_out_of_turn(seat)
+            return seat
+    return None
+
+
 def hand_estimate(hand, trump):
     """Points qu'une main peut espérer avec cet atout : atouts pondérés + As et 10 secs ailleurs."""
     estimate = sum(TRUMP_WEIGHT[c.rank] for c in hand if c.suit == trump)

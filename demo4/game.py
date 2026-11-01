@@ -272,6 +272,11 @@ class Table:
                 self._reset_deal()
                 events.append(self._deal_event())
                 continue
+            if game.phase == "bidding" and not self.coinche_window:
+                seat = self._bot_volley()
+                if seat is not None:
+                    events += self._apply_bid(seat, ("coinche",), volley=True)
+                    continue
             if game.phase not in ("bidding", "play") or game.current == HUMAN or self.coinche_window:
                 return events
             seat = game.current
@@ -290,11 +295,22 @@ class Table:
             else:
                 events += self._apply_card(seat, move, confidence)
 
-    def _apply_bid(self, seat, action, confidence=None):
+    def _bot_volley(self):
+        """Un robot adverse du contrat qui n'a pas la parole coinche à la volée (AsR, Papi Robert)."""
+        for seat in self.game.volley_seats():
+            player = self.players.get(seat)
+            if hasattr(player, "volley_coinche") and player.volley_coinche(self.game, seat):
+                return seat
+        return None
+
+    def _apply_bid(self, seat, action, confidence=None, volley=False):
         game = self.game
-        game.bid(seat, action)
+        if volley:
+            game.coinche_out_of_turn(seat)
+        else:
+            game.bid(seat, action)
         event = {"type": "bid", "seat": SEAT_KEYS[seat], "label": bid_label(action),
-                 "text": f"{self.label(seat)}: {bid_label(action)}"}
+                 "text": f"{self.label(seat)}: {bid_label(action)}" + (" (out of turn)" if volley else "")}
         if confidence is not None:
             event["confidence"] = round(100 * confidence)
             event["text"] += f" (confidence {event['confidence']}%)"
