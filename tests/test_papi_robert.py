@@ -341,6 +341,27 @@ def check_trump_until_void():
     assert bot.play(game, 0) == Card(H, Rank.ACE)
 
 
+def check_defence_ace_on_partner():
+    bot = PapiRobertBot()
+    # Nord a pris 90 cœur ; Est entame le 10 de carreau, Sud fournit ; Ouest (As-Roi de carreau) met l'As :
+    # l'attaque a encore des atouts, l'As risquerait d'être coupé au tour suivant
+    def game_now(west, north_void=False):
+        g = table([hand(D="9 8", H="7"), hand(**west), hand(H="J 9 A 8"), hand(D="10")])
+        g.bid(0, ("pass",)); g.bid(1, ("pass",)); g.bid(2, ("bid", 90, H))
+        for seat in (3, 0, 1):
+            g.bid(seat, ("pass",))
+        if north_void:  # Nord a montré qu'il n'a plus de carreau
+            g.tricks = [([(3, Card(D, Rank.SEVEN)), (0, Card(D, Rank.JACK)), (1, Card(D, Rank.QUEEN)),
+                          (2, Card(H, Rank.EIGHT))], 2)]
+        g.trick = [(3, Card(D, Rank.TEN)), (0, Card(D, Rank.NINE))]
+        g.current = 1
+        return g
+    assert bot.play(game_now(dict(D="A K", C="7 8")), 1) == Card(D, Rank.ACE)
+    # Nord, qui joue après Ouest, n'a plus de carreau et a des atouts : il couperait l'As ; petite carte
+    card = bot.play(game_now(dict(D="A K 8", C="7"), north_void=True), 1)
+    assert card.suit == D and card.points(H) == 0, card
+
+
 def check_volley():
     bot = PapiRobertBot()
     # Sud dit 150 cœur ; Ouest a la parole ; Est (Valet et As de cœur) est sûr de la chute : il coinche à la volée
@@ -395,6 +416,7 @@ def main():
     check_trump_until_void()
     check_defence_no_trump_lead()
     check_coinched()
+    check_defence_ace_on_partner()
     check_volley()
     check_full_games()
     print("OK")

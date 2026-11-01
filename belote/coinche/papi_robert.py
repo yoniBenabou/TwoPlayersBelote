@@ -43,6 +43,9 @@ Jeu :
   d'abord, puis les As ; sans atout (adversaires encore à l'atout), une petite carte plutôt que les As ;
   exception : mon dernier atout, je le garde si un atout adverse est encore dehors, que ma main est faible
   (aucune carte maîtresse hors atout) et que mon partenaire n'a pas annoncé de grande force (moins de 110) ;
+- défense, sur le pli de mon partenaire dans une couleur hors atout : si l'attaque peut encore avoir de
+  l'atout, je mets mon As (sinon il risque d'être coupé au tour suivant), sauf si l'attaquant qui joue
+  après moi va couper ;
 - défense : avec au moins 2 As hors atout, je les joue d'abord, puis je rejoue une de ces couleurs pour
   faire couper ; sinon la défense d'AsR (faire couper le preneur, pas d'entame atout) ;
 - appels (équipe qui a pris, comme AsR) : sur l'atout du partenaire, appel direct (une carte de la
@@ -51,10 +54,10 @@ Jeu :
 - on ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas le choix.
 Le reste du jeu en second, troisième ou quatrième est celui de CoincheBot.
 """
-from ..core.cards import Rank, Suit
+from ..core.cards import Card, Rank, Suit
 from .asr import AsRBot, volley_coinche_ok
 from .bots import CoincheBot, wants_coinche
-from .engine import CAPOT, SUITS, partner_of, team_of
+from .engine import CAPOT, SUITS, partner_of, team_of, trick_winner
 from .inference import may_hold, shown_voids, trump_ceilings
 
 SISTER = {Suit.PIQUE: Suit.TREFLE, Suit.TREFLE: Suit.PIQUE, Suit.COEUR: Suit.CARREAU, Suit.CARREAU: Suit.COEUR}
@@ -334,7 +337,33 @@ class PapiRobertBot(CoincheBot):
             call = AsRBot._call_discard(game.hands[seat], self._allowed_discards(game, seat, legal), trump)
             if call is not None:
                 return call
+        if trick and not attacking:
+            card = self._defence_ace(game, seat, legal)
+            if card is not None:
+                return card
         return super().play(game, seat, self._allowed_discards(game, seat, legal))
+
+    @staticmethod
+    def _defence_ace(game, seat, legal):
+        """Défense, pli du partenaire dans une couleur hors atout, j'ai l'As et l'attaque peut encore avoir de
+        l'atout : je mets mon As (au tour suivant il risque d'être coupé). Sauf si l'attaquant qui joue après
+        moi va couper (il n'a plus la couleur et peut avoir de l'atout) : ma plus petite carte."""
+        trick, trump, hand = game.trick, game.trump, game.hands[seat]
+        led = trick[0][1].suit
+        winner = trick[trick_winner(trick, trump)]
+        ace = Card(led, Rank.ACE)
+        if led == trump or winner[0] != partner_of(seat) or winner[1].suit == trump or ace not in legal:
+            return None
+        gone = {c for cards in game.played for c in cards}
+        unseen = [Card(trump, r) for r in Rank if Card(trump, r) not in gone and Card(trump, r) not in hand]
+        voids, ceilings = shown_voids(game), trump_ceilings(game)
+        attackers = [s for s in range(4) if team_of(s) != team_of(seat)]
+        if not any(may_hold(game, a, c, voids, ceilings) for a in attackers for c in unseen):
+            return None  # atouts tombés : la règle générale
+        nxt = (seat + 1) % 4
+        if len(trick) < 3 and led in voids[nxt] and any(may_hold(game, nxt, c, voids, ceilings) for c in unseen):
+            return min((c for c in legal if c.suit == led), key=lambda c: (c.points(trump), c.strength(trump)))
+        return ace
 
     @staticmethod
     def _allowed_discards(game, seat, legal):
