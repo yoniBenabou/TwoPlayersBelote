@@ -716,6 +716,36 @@ def check_empty_trump_round():
     assert bot.play(g, 0) == Card(S, Rank.SEVEN), bot.play(g, 0)
 
 
+def check_belote_parity():
+    """Sud joue la Dame d'atout (belote, nombre impair) ; Nord (AsR) recoupe avec la suite."""
+    bot = AsRBot()
+
+    def game_after(trick, west="8", east="10"):
+        g = table([hand(S="K Q 7", H="7 8"), hand(S=west), hand(S="J 9 A", H="A K", D="A K", C="A"),
+                   hand(S=east) if east else hand(D="9")])
+        g.bid(0, ("bid", 100, S))
+        for seat in (1, 2, 3):
+            g.bid(seat, P)
+        assert g.belote_seat == 0
+        for seat, card in trick:
+            g.current = seat
+            g.play(seat, card)
+        return g
+
+    # 5 atouts invisibles pour Nord à la Dame : 3 chez Sud et 2 dehors, ou 5 chez Sud ; dans le doute, rien
+    g = game_after([(0, Card(S, Rank.QUEEN))])
+    assert not bot._belote_says_none(g, 2)
+    # les adversaires ont joué deux atouts : Sud en avait 3, il ne reste dehors que les siens
+    g = game_after([(0, Card(S, Rank.QUEEN)), (1, Card(S, Rank.EIGHT)), (2, Card(S, Rank.JACK)), (3, Card(S, Rank.TEN))])
+    assert bot._belote_says_none(g, 2)
+    assert not bot._opponents_may_have_trumps(g, 2)
+    assert bot.play(g, 2).suit != S  # Nord ne vient pas chercher le dernier atout de Sud
+    # un seul atout adverse tombé (Est n'en a pas) : Sud en a 3 et Ouest encore un, ou Sud 5 ; pas de conclusion
+    g = game_after([(0, Card(S, Rank.QUEEN)), (1, Card(S, Rank.TEN)), (2, Card(S, Rank.JACK)), (3, Card(D, Rank.NINE))],
+                   west="8 10", east="")
+    assert not bot._belote_says_none(g, 2)
+
+
 def main():
     check_openings()
     check_answers_to_90()
@@ -745,8 +775,9 @@ def main():
     check_near_exit()
     check_belote_signal()
     check_empty_trump_round()
+    check_belote_parity()
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, réflexion de fin de donne, changement de couleur à 90, dernier sur le pli du partenaire, Roi troisième gardé, adversaires proches de la sortie, belote signalée, tour d'atout à vide pour l'appel, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, réflexion de fin de donne, changement de couleur à 90, dernier sur le pli du partenaire, Roi troisième gardé, adversaires proches de la sortie, belote signalée, tour d'atout à vide pour l'appel, parité de la belote recoupée, parties) : OK")
 
 
 if __name__ == "__main__":

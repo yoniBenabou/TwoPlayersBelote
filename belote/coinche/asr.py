@@ -109,7 +109,8 @@ Jeu :
 - signal de belote : celui qui a la belote dans l'équipe qui a pris joue le Roi
   en premier s'il a un nombre pair d'atouts (carte jouée comprise), la Dame
   s'il est impair ; le partenaire en déduit, quand c'est sûr, que les
-  adversaires n'ont plus d'atout ;
+  adversaires n'ont plus d'atout : il garde les nombres d'atouts encore possibles chez lui (au moins 2, de
+  la bonne parité) et les recoupe avec la suite (atouts joués, chicanes) ; dans le doute, rien ;
 - appels : quand le partenaire joue atout et que je n'en ai plus, je défausse
   pour demander la couleur de mon As : une carte de cette couleur si elle est
   de la famille de l'atout (appel direct), sinon une carte de sa couleur sœur
@@ -166,7 +167,7 @@ Le reste du jeu est celui de CoincheBot.
 from ..core.cards import Card, Rank, Suit
 from .bots import CoincheBot, wants_coinche
 from .endgame import endgame_card
-from .inference import may_hold
+from .inference import may_hold, shown_voids
 from .engine import CAPOT, SUITS, partner_of, round_points, team_of, trick_winner
 
 RED = {Suit.COEUR, Suit.CARREAU}
@@ -1181,7 +1182,7 @@ class AsRBot(CoincheBot):
         trump, hand = game.trump, game.hands[seat]
         gone = {c for cards in game.played for c in cards} | {c for _, c in game.trick}
         unseen = [c for c in self._all_trumps(trump) if c not in gone and c not in hand]
-        if len(unseen) != 1:
+        if len(unseen) != 1 or self._belote_says_none(game, seat):
             return False
         return any(may_hold(game, s, unseen[0]) for s in range(4) if team_of(s) != team_of(seat))
 
@@ -1268,7 +1269,11 @@ class AsRBot(CoincheBot):
 
     @staticmethod
     def _belote_says_none(game, seat):
-        """Signal de belote du partenaire : si les atouts inconnus à ce moment étaient tous chez lui."""
+        """Signal de belote du partenaire (Roi d'abord : nombre pair d'atouts, Dame : impair) recoupé avec la
+        suite : les adversaires n'ont sûrement plus d'atout. Au moment du signal, les atouts que je ne voyais
+        pas étaient chez mon partenaire (c, au moins 2, de la bonne parité) ou chez les adversaires ; je garde
+        les c encore possibles (atouts joués depuis, chicanes) et je conclus seulement si, dans tous ces cas,
+        les adversaires n'en ont plus. Dans le doute, rien."""
         trump, partner = game.trump, partner_of(seat)
         if game.belote_seat != partner:
             return False
@@ -1277,11 +1282,18 @@ class AsRBot(CoincheBot):
                   and c.rank in (Rank.KING, Rank.QUEEN)), None)
         if k is None:
             return False
-        before, after = seq[:k], seq[k + 1:]
+        before, after = seq[:k], seq[k:]
         my_then = sum(c.suit == trump for c in game.hands[seat]) + sum(s == seat and c.suit == trump for s, c in after)
         unknown = 8 - sum(c.suit == trump for _s, c in before) - my_then
-        even = seq[k][1].rank == Rank.KING
-        return (even and unknown == 2) or (not even and unknown == 3)
+        parity = 0 if seq[k][1].rank == Rank.KING else 1
+        by_partner = sum(s == partner and c.suit == trump for s, c in after)
+        by_opponents = sum(team_of(s) != team_of(seat) and c.suit == trump for s, c in after)
+        voids = shown_voids(game)
+        opponents = [s for s in range(4) if team_of(s) != team_of(seat)]
+        possible = [c for c in range(max(2, by_partner), unknown - by_opponents + 1) if c % 2 == parity
+                    and (trump not in voids[partner] or c == by_partner)
+                    and (not all(trump in voids[o] for o in opponents) or c == unknown - by_opponents)]
+        return bool(possible) and all(unknown - by_opponents - c == 0 for c in possible)
 
     @staticmethod
     def _ruff_lead(game, side):
