@@ -155,7 +155,8 @@ Jeu :
 - pas d'impasse, quand je fournis une couleur hors atout (à l'entame : cartes maîtresses d'abord) :
   - pli adverse déjà coupé : ma plus petite carte ;
   - pli adverse, j'ai l'As : l'As en deuxième ou troisième ; en dernier, l'As s'il reste plus de 2
-    atouts dans le jeu, sinon la plus grosse carte qui prend sans l'As (l'As si lui seul prend) ;
+    atouts dans le jeu ou si j'ai aussi le 10 (As-10 : l'As d'abord), sinon la plus grosse carte qui prend
+    sans l'As (l'As si lui seul prend) ;
   - pli adverse, l'As n'est ni chez moi ni sorti : en dernier, la plus grosse carte qui prend (le 10),
     sinon la plus petite ; avant, ma plus petite carte, ou une carte moyenne (Roi, Dame, Valet) si mon
     partenaire, qui joue après moi, a appelé la couleur (il a l'As) ;
@@ -816,7 +817,8 @@ class AsRBot(CoincheBot):
         """Je fournis une couleur hors atout (pas d'impasse) :
         - pli adverse déjà coupé : ma plus petite carte ;
         - pli adverse, j'ai l'As : l'As en deuxième ou troisième ; en dernier, l'As s'il reste plus de 2 atouts
-          dans le jeu, sinon la plus grosse carte qui prend sans l'As (l'As si lui seul prend) ;
+          dans le jeu ou si j'ai aussi le 10, sinon la plus grosse carte qui prend sans l'As (l'As si lui seul
+          prend) ;
         - pli adverse, pas l'As et l'As pas sorti : en dernier, la plus grosse carte qui prend (le 10), sinon la
           plus petite ; avant, la plus petite, ou une carte moyenne (Roi, Dame, Valet) si le partenaire, qui joue
           après moi, a l'As (il l'a appelé) ;
@@ -862,8 +864,8 @@ class AsRBot(CoincheBot):
             return small  # déjà coupé
         winners = [c for c in cards if trick_winner(trick + [(seat, c)], trump) == len(trick)]
         if ace in cards:
-            if not last or len(trumps_left) > 2:
-                return ace
+            if not last or len(trumps_left) > 2 or Card(led, Rank.TEN) in cards:
+                return ace  # As-10 : je prends d'abord avec l'As
             others = [c for c in winners if c != ace]
             return max(others, key=strength) if others else ace
         if ace in gone:

@@ -438,9 +438,13 @@ def check_ace_first():
     g = deal([hand(H="A 10", D="7 8 9", C="7 8 9")], [("bid", 90, S), P, P, P])
     g.trick, g.current = [(1, Card(H, Rank.SEVEN)), (2, Card(H, Rank.EIGHT)), (3, Card(H, Rank.KING))], 0
     assert bot.play(g, 0) == Card(H, Rank.ACE), bot.play(g, 0)
-    # ... le 10 quand il ne reste que 2 atouts dans le jeu
+    # ... et aussi quand il ne reste que 2 atouts dans le jeu : As-10, je prends d'abord avec l'As
     g.played[2] += [Card(S, r) for r in (Rank.JACK, Rank.NINE, Rank.ACE, Rank.TEN, Rank.KING, Rank.QUEEN)]
-    assert bot.play(g, 0) == Card(H, Rank.TEN), bot.play(g, 0)
+    assert bot.play(g, 0) == Card(H, Rank.ACE), bot.play(g, 0)
+    # sans le 10 (As-Dame) et 2 atouts dans le jeu : la Dame prend le Valet, je garde l'As
+    g.trick = [(1, Card(H, Rank.SEVEN)), (2, Card(H, Rank.EIGHT)), (3, Card(H, Rank.JACK))]
+    g.hands[0] = hand(H="A Q", D="7 8 9", C="7 8 9")
+    assert bot.play(g, 0) == Card(H, Rank.QUEEN), bot.play(g, 0)
     # pli du partenaire dans la couleur : l'As...
     g = deal([hand(H="A 8", D="7 8 9", C="7 8 9")], [("bid", 90, S), P, P, P])
     g.trick, g.current = [(2, Card(H, Rank.KING)), (3, Card(H, Rank.SEVEN))], 0

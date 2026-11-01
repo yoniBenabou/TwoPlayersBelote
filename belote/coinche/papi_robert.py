@@ -61,6 +61,7 @@ Jeu :
 - appels (équipe qui a pris, comme AsR) : sur l'atout du partenaire, appel direct (une carte de la
   couleur) dans la famille de l'atout, appel indirect (couleur sœur) sinon ; le partenaire rejoue la couleur ;
 - contrat coinché : on garde ses atouts (pas d'entame atout) ;
+- As-10 dans la couleur demandée, sur un pli adverse que je peux prendre : je prends d'abord avec l'As ;
 - on ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas le choix.
 Le reste du jeu en second, troisième ou quatrième est celui de CoincheBot.
 """
@@ -392,7 +393,24 @@ class PapiRobertBot(CoincheBot):
             card = self._defence_ace(game, seat, legal)
             if card is not None:
                 return card
+        if trick:
+            card = self._ace_before_ten(game, seat, legal)
+            if card is not None:
+                return card
         return super().play(game, seat, self._allowed_discards(game, seat, legal))
+
+    @staticmethod
+    def _ace_before_ten(game, seat, legal):
+        """As-10 dans la couleur demandée (hors atout), pli adverse que je peux prendre : je prends d'abord
+        avec l'As (pas avec le 10)."""
+        trick, trump = game.trick, game.trump
+        led = trick[0][1].suit
+        ace, ten = Card(led, Rank.ACE), Card(led, Rank.TEN)
+        if led == trump or ace not in legal or ten not in legal:
+            return None
+        if trick[trick_winner(trick, trump)][0] == partner_of(seat):
+            return None
+        return ace if trick_winner(trick + [(seat, ace)], trump) == len(trick) else None
 
     @staticmethod
     def _defence_ace(game, seat, legal):

@@ -428,6 +428,20 @@ def check_over_partner():
     assert bot.bid(g, 0) == ("bid", 130, S)
 
 
+def check_ace_before_ten():
+    bot = PapiRobertBot()
+    g = table([hand(D="A 10 7", S="8", H="7 8", C="7 8"), None, None, None])
+    g.bid(0, ("pass",)); g.bid(1, ("bid", 90, S))
+    for seat in (2, 3, 0):
+        g.bid(seat, ("pass",))
+    g.trick, g.current = [(3, Card(D, Rank.KING))], 0
+    assert bot.play(g, 0) == Card(D, Rank.ACE)          # sur le Roi adverse : l'As, pas le 10
+    g.trick = [(1, Card(D, Rank.KING)), (2, Card(D, Rank.SEVEN)), (3, Card(D, Rank.EIGHT))]
+    assert bot.play(g, 0) == Card(D, Rank.ACE)          # en dernier aussi
+    g.trick = [(1, Card(D, Rank.KING)), (2, Card(D, Rank.EIGHT)), (3, Card(S, Rank.SEVEN))]
+    assert bot.play(g, 0) == Card(D, Rank.SEVEN)  # Est a coupé : je ne peux pas prendre, petite carte
+
+
 def check_volley():
     bot = PapiRobertBot()
     # Sud dit 150 cœur ; Ouest a la parole ; Est (Valet et As de cœur) est sûr de la chute : il coinche à la volée
@@ -486,6 +500,7 @@ def main():
     check_belote_parity()
     check_trump_choice()
     check_over_partner()
+    check_ace_before_ten()
     check_volley()
     check_full_games()
     print("OK")
