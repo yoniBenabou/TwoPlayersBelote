@@ -76,6 +76,8 @@ Collage : sur un 90 adverse, une main de 90 (donc avec un As) dit 100 (le parten
 comme un 90 et ne répond que le complément) ; une main de 100 saute à 110 (le
 partenaire reste prudent : il passe) ; sur un 100 adverse, une vraie main de
 100 dit 110 (lue comme un 100).
+Belote : jamais annoncée, sauf si mon partenaire a annoncé un vrai 100 ou plus (jusqu'à 160), que j'ai
+passé et que l'adversaire a monté de 10 : je dis exactement 20 de plus que mon partenaire, jamais plus.
 Coinche : même règle que CoincheBot. Surcoinche : seulement le preneur, quand sa main assure déjà
 80 % des points de l'annonce (plis sûrs : atouts maîtres depuis le Valet, puis dans chaque autre
 couleur les cartes qui se suivent depuis l'As ; chacun compté avec ma carte plus 10 points pour les
@@ -120,6 +122,10 @@ Jeu :
   la plus petite ;
 - ensuite : les cartes maîtresses (As, 10, Roi...), le Roi d'un Roi-10 quand
   l'As n'est pas tombé, puis la couleur la plus longue ;
+- tour d'atout à vide pour l'appel : tous les autres atouts sont tombés, mon partenaire m'a annoncé des
+  As et ne m'a pas encore appelé : s'il me reste au moins 2 atouts après le tour, je joue un petit atout,
+  il défausse pour m'appeler sa couleur et je la lui joue ; exception, 100 -> capot (il a peut-être 4 plis
+  maîtres plutôt que les 3 As) : je le fais même avec mon dernier atout ;
 - défense (pas d'appels en défense) : contre 140 ou plus, d'abord les cartes
   maîtresses ; sinon faire couper le preneur en jouant notre couleur la plus
   longue (celle qu'il n'a plus s'il l'a déjà montré : la plus faible de mes
@@ -156,6 +162,7 @@ Le reste du jeu est celui de CoincheBot.
 from ..core.cards import Card, Rank, Suit
 from .bots import CoincheBot, wants_coinche
 from .endgame import endgame_card
+from .inference import may_hold
 from .engine import CAPOT, SUITS, partner_of, round_points, team_of, trick_winner
 
 RED = {Suit.COEUR, Suit.CARREAU}
@@ -416,6 +423,11 @@ class AsRBot(CoincheBot):
         over = self._opponent_value(game, seat, before=index)
         passed_since = any(s == seat for s, _a in game.bids[index + 1:])
         r = ranks_in(hand, suit)
+        real = 90 if (over == 90 and value == 100) else 100 if (over in (90, 100) and value == 110) else value
+        opp_after = any(team_of(s) != team_of(seat) and a[0] == "bid" for s, a in game.bids[index + 1:])
+        if passed_since and opp_after and real >= 100 and {Rank.KING, Rank.QUEEN} <= r:
+            # belote : j'avais passé, l'adversaire a monté de 10 : je dis exactement 20 de plus, jamais plus
+            return ("bid", value + 20, suit) if value + 20 <= MAX_BID else None
         if over == 90 and value == 100:  # collage : lu comme un 90, on ne répond que le complément
             return ("bid", 110, suit) if self._complement(r) else None
         if over == 90 and value == 110:  # saut : on reste prudent
@@ -870,7 +882,6 @@ class AsRBot(CoincheBot):
     def _partner_sure(self, game, seat):
         """Le pli du partenaire est assuré : je joue en dernier, ou sa carte est maîtresse et l'adversaire
         qui joue après moi ne peut pas couper (il n'a plus d'atout, ou il n'en reste plus dehors)."""
-        from .papi_robert import PapiRobertBot
         trick, trump, hand = game.trick, game.trump, game.hands[seat]
         if len(trick) == 3:
             return True
@@ -882,15 +893,16 @@ class AsRBot(CoincheBot):
         if best.suit == trump:
             return True
         last = (seat + 1) % 4
-        no_trump_left = all(c in seen for c in self._all_trumps(trump))
-        return no_trump_left or trump in PapiRobertBot._shown_voids(game)[last]
+        return not any(may_hold(game, last, c) for c in self._all_trumps(trump) if c not in seen)
 
     def _sure_trump(self, game, seat, legal):
         """Sur l'entame atout du partenaire : le plus petit atout qui bat tous ceux qui peuvent encore
         venir derrière moi (je prends la main pour faire tomber les atouts)."""
         trump, hand = game.trump, game.hands[seat]
         seen = {c for cards in game.played for c in cards} | {c for _s, c in game.trick} | set(hand)
-        outside = [c for c in self._all_trumps(trump) if c not in seen]
+        later = [s for s in range(4) if s != seat and all(t != s for t, _c in game.trick)]
+        outside = [c for c in self._all_trumps(trump) if c not in seen
+                   and any(may_hold(game, s, c) for s in later)]  # seulement ce qui peut venir derrière moi
         strength = lambda c: c.strength(trump)
         best_now = max((c for _s, c in game.trick if c.suit == trump), key=strength)
         sure = [c for c in legal if c.suit == trump and strength(c) > strength(best_now)
@@ -980,6 +992,9 @@ class AsRBot(CoincheBot):
         if not attacking:
             return self.defence_lead(game, seat, legal)
         trumps = [c for c in legal if c.suit == trump]
+        empty_round = self._empty_trump_round(game, seat, trumps, side)
+        if empty_round is not None:
+            return empty_round
         if (trumps and not game.tricks and contract["mult"] == 1 and self._partner_announced(game, seat)
                 and not ranks_in(hand, trump) & {Rank.JACK, Rank.NINE}):
             # j'entame le premier pli et mon partenaire a annoncé l'atout : je lui donne la main en atout ;
@@ -1035,6 +1050,54 @@ class AsRBot(CoincheBot):
             return self._from_longest(side, trump, gone, hand)
         return min(legal, key=lambda c: c.strength(trump))
 
+    def _empty_trump_round(self, game, seat, trumps, side):
+        """Tour d'atout à vide pour l'appel : tous les autres atouts sont tombés et mon partenaire ne m'a pas
+        encore appelé. Je joue mon plus petit atout ; il défausse pour m'appeler sa couleur, que je lui joue.
+        - s'il m'a annoncé des As, et seulement s'il me reste au moins 2 atouts après ce tour ;
+        - exception, 100 -> capot : il a peut-être 4 plis maîtres plutôt que les 3 As ; je le fais même avec
+          mon dernier atout, pour qu'il m'appelle la couleur de ses plis."""
+        trump, hand = game.trump, game.hands[seat]
+        if not trumps or not side or self._called_suits(game, seat):
+            return None
+        gone = {c for cards in game.played for c in cards}
+        if any(c not in gone and c not in hand for c in self._all_trumps(trump)):
+            return None  # un atout dehors : le tour ne serait pas à vide
+        if self._capot_on_my_100(game, seat) or (len(trumps) >= 3 and self._partner_showed_aces(game, seat)):
+            return min(trumps, key=lambda c: c.strength(trump))
+        return None
+
+    @staticmethod
+    def _capot_on_my_100(game, seat):
+        """J'ai dit 100 et mon partenaire a répondu capot dans la même couleur."""
+        trump, partner = game.trump, partner_of(seat)
+        if game.contract["value"] != CAPOT:
+            return False
+        mine = [i for i, (s, a) in enumerate(game.bids) if s == seat and a[0] == "bid" and a[1:] == (100, trump)]
+        return any(s == partner and a[0] == "bid" and a[1:] == (CAPOT, trump) and mine and i > mine[0]
+                   for i, (s, a) in enumerate(game.bids))
+
+    @staticmethod
+    def _partner_showed_aces(game, seat):
+        """Mon partenaire m'a annoncé des As hors atout pendant les enchères : ouverture à 80 (deux As), ou une
+        réponse à mon annonce dans l'atout qui en compte (sur 100 à 120 : toute montée ; sur 90 : plus que le
+        complément ; sur 80 : 110 ou plus, au-delà du Valet et du 9)."""
+        trump, partner = game.trump, partner_of(seat)
+        team_bids = [(s, a) for s, a in game.bids if a[0] == "bid" and team_of(s) == team_of(seat)]
+        if team_bids and team_bids[0][0] == partner and team_bids[0][1][1] == 80:
+            return True  # il a ouvert à 80 : deux As, même si j'ai changé d'atout
+        ours = [(s, a[1]) for s, a in team_bids if a[2] == trump]
+        mine = None
+        for s, value in ours:
+            if s == seat:
+                mine = value
+            elif mine is None:
+                if value == 80:
+                    return True  # ouverture à 80 : deux As
+            elif value != CAPOT and ((100 <= mine <= 120 and value > mine) or (mine == 90 and value - mine >= 20)
+                                     or (mine == 80 and value >= 110)):
+                return True
+        return False
+
     def defence_lead(self, game, seat, legal):
         """Entame en défense (pas d'appels en défense) : au premier pli, un As hors atout ; contre 140 ou
         plus, les cartes maîtresses ;
@@ -1087,14 +1150,12 @@ class AsRBot(CoincheBot):
 
     def _last_opponent_trump(self, game, seat):
         """Il ne reste qu'un atout dehors, et il peut être chez un adversaire."""
-        from .papi_robert import PapiRobertBot
         trump, hand = game.trump, game.hands[seat]
         gone = {c for cards in game.played for c in cards} | {c for _, c in game.trick}
         unseen = [c for c in self._all_trumps(trump) if c not in gone and c not in hand]
         if len(unseen) != 1:
             return False
-        voids = PapiRobertBot._shown_voids(game)
-        return any(trump not in voids[s] for s in range(4) if team_of(s) != team_of(seat))
+        return any(may_hold(game, s, unseen[0]) for s in range(4) if team_of(s) != team_of(seat))
 
     def _force_ruff(self, game, seat, side):
         """Faire couper le dernier atout adverse : petite carte d'une couleur que l'adversaire qui peut

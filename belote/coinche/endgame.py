@@ -1,26 +1,17 @@
 """Réflexion de fin de donne (Coinche à 4) : sur les derniers plis, chaque carte jouable est essayée.
 
 Le robot imagine les répartitions possibles des cartes qu'il ne voit pas (en respectant le nombre de
-cartes de chacun et les couleurs qu'un joueur a montré ne plus avoir), joue la fin de la donne à cartes
+cartes de chacun, les couleurs qu'un joueur a montré ne plus avoir et les atouts trop forts pour
+lui, voir inference.py), joue la fin de la donne à cartes
 ouvertes (chaque équipe joue au mieux) et compte les points des plis, der comprise. Il ne regarde jamais
 les vraies mains des autres joueurs."""
 import random
 
 from ..core.cards import Card, Rank
 from .engine import CAPOT, SUITS, legal_cards, team_of, trick_winner
+from .inference import may_hold, shown_voids, trump_ceilings
 
 DER = 10
-
-
-def _voids(game):
-    """Couleurs que chaque joueur a montré ne plus avoir (il n'a pas fourni)."""
-    voids = [set() for _ in range(4)]
-    for trick in [t for t, _w in game.tricks] + ([game.trick] if game.trick else []):
-        led = trick[0][1].suit
-        for s, c in trick[1:]:
-            if c.suit != led:
-                voids[s].add(led)
-    return voids
 
 
 def _worlds(game, seat, max_worlds, rng):
@@ -29,7 +20,7 @@ def _worlds(game, seat, max_worlds, rng):
     unseen = [Card(s, r) for s in SUITS for r in Rank if Card(s, r) not in seen]
     others = [s for s in range(4) if s != seat]
     need = {s: len(game.hands[s]) for s in others}  # nombre de cartes : public
-    voids = _voids(game)
+    voids, ceilings = shown_voids(game), trump_ceilings(game)
     found = []
 
     def place(i, hands):
@@ -40,7 +31,7 @@ def _worlds(game, seat, max_worlds, rng):
             return
         card = unseen[i]
         for s in others:
-            if len(hands[s]) < need[s] and card.suit not in voids[s]:
+            if len(hands[s]) < need[s] and may_hold(game, s, card, voids, ceilings):
                 hands[s].append(card)
                 place(i + 1, hands)
                 hands[s].pop()

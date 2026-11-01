@@ -245,8 +245,9 @@ def check_last_trump():
     # Sud a pris 100 pique ; les atouts sont tombés sauf un (le Roi), chez Ouest, qui n'a plus de carreau
     g = deal([hand(S="J 9 A 8 10")], [("bid", 100, S), P, P, P])
     played = [Card(S, r) for r in (Rank.SEVEN, Rank.QUEEN, Rank.EIGHT, Rank.ACE, Rank.TEN)]  # Roi de pique dehors
-    g.tricks = [([(0, Card(D, Rank.SEVEN)), (1, Card(C, Rank.SEVEN)), (2, Card(D, Rank.EIGHT)),
-                  (3, Card(D, Rank.NINE))], 3)]
+    # Est entame et reste maître : Ouest, sans carreau, défausse sur son partenaire (il garde son atout)
+    g.tricks = [([(3, Card(D, Rank.NINE)), (0, Card(D, Rank.SEVEN)), (1, Card(C, Rank.SEVEN)),
+                  (2, Card(D, Rank.EIGHT))], 3)]
     g.played[0] += [Card(D, Rank.SEVEN)]; g.played[1] += [Card(C, Rank.SEVEN)]
     g.played[2] += [Card(D, Rank.EIGHT)]; g.played[3] += [Card(D, Rank.NINE)]
     g.played[2] += played
@@ -445,7 +446,7 @@ def check_ace_first():
     assert bot.play(g, 0) == Card(H, Rank.ACE), bot.play(g, 0)
     # ... sauf si l'adversaire derrière moi (siège 1) n'a plus de cœur : il va couper, la plus petite
     g.tricks = [([(1, Card(D, Rank.KING)), (2, Card(D, Rank.TEN)), (3, Card(D, Rank.QUEEN)), (0, Card(D, Rank.ACE))], 0),
-                ([(0, Card(H, Rank.NINE)), (1, Card(C, Rank.KING)), (2, Card(H, Rank.QUEEN)), (3, Card(H, Rank.JACK))], 2)]
+                ([(0, Card(H, Rank.NINE)), (1, Card(S, Rank.SEVEN)), (2, Card(H, Rank.QUEEN)), (3, Card(H, Rank.JACK))], 1)]
     for trick, _w in g.tricks:
         for s_, c in trick:
             g.played[s_].append(c)
@@ -665,6 +666,53 @@ def check_full_games(n=100):
                 game.play(seat, bot.play(game, seat))
 
 
+def check_belote_signal():
+    bot = AsRBot()
+    # mon partenaire dit 100, je passe, l'adversaire monte à 110 : je dis 120 (ma belote)
+    def deal():
+        game = table([hand(S="J 9 A 7", H="8", D="7 8", C="7"), None, hand(S="K Q", H="9 10", D="9 10", C="8 9")])
+        game.bid(0, bot.bid(game, 0)); game.bid(1, ("pass",))
+        game.bid(2, bot.bid(game, 2))
+        assert game.bids[0][1] == ("bid", 100, S) and game.bids[2][1] == ("pass",), game.bids
+        return game
+    game = deal()
+    game.bid(3, ("bid", 110, H)); game.bid(0, ("pass",)); game.bid(1, ("pass",))
+    assert bot.bid(game, 2) == ("bid", 120, S)
+    # l'adversaire a sauté à 120 : il faudrait plus de 20, je ne dis rien
+    game = deal()
+    game.bid(3, ("bid", 120, H)); game.bid(0, ("pass",)); game.bid(1, ("pass",))
+    assert bot.bid(game, 2) == ("pass",)
+
+
+def check_empty_trump_round():
+    """Tous les autres atouts sont tombés : un tour d'atout à vide pour que le partenaire m'appelle."""
+    others = [Card(S, r) for r in (Rank.ACE, Rank.TEN, Rank.KING, Rank.QUEEN, Rank.EIGHT)]
+
+    def game_with(bids, trumps):
+        g = deal([hand(S="J 9 A 7 8", H="K", D="K", C="K")], bids)
+        g.hands[0] = hand(S=trumps, H="K 8", D="K", C="K 7")
+        g.played[1] += [c for c in others + [Card(S, Rank.JACK), Card(S, Rank.NINE), Card(S, Rank.SEVEN)]
+                        if c not in g.hands[0]]
+        g.current = 0
+        return g
+
+    aces = [("bid", 100, S), P, ("bid", 120, S), P, P, P]       # Nord +20 : deux As
+    g = game_with(aces, "J 9 7")                                   # 3 atouts : il en reste 2 après le tour
+    assert bot.play(g, 0) == Card(S, Rank.SEVEN), bot.play(g, 0)
+    g = game_with(aces, "J 7")                                     # 2 atouts : pas de tour à vide
+    assert bot.play(g, 0).suit != S
+    g = game_with([("bid", 100, S), P, P, P], "J 9 7")             # Nord n'a pas annoncé d'As
+    assert bot.play(g, 0).suit != S
+    # Nord a déjà appelé (cœur jeté sur mon atout : appel indirect carreau) : je lui joue carreau
+    g = game_with(aces, "J 9 7")
+    g.tricks = [([(0, Card(S, Rank.ACE)), (1, Card(S, Rank.TEN)), (2, Card(H, Rank.SEVEN)),
+                  (3, Card(S, Rank.KING))], 0)]
+    assert bot.play(g, 0) == Card(D, Rank.KING), bot.play(g, 0)
+    # 100 -> capot : le tour se fait même avec mon dernier atout
+    g = game_with([("bid", 100, S), P, ("bid", CAPOT, S), P, P, P], "7")
+    assert bot.play(g, 0) == Card(S, Rank.SEVEN), bot.play(g, 0)
+
+
 def main():
     check_openings()
     check_answers_to_90()
@@ -692,8 +740,10 @@ def main():
     check_last_on_partner()
     check_guarded_king()
     check_near_exit()
+    check_belote_signal()
+    check_empty_trump_round()
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, réflexion de fin de donne, changement de couleur à 90, dernier sur le pli du partenaire, Roi troisième gardé, adversaires proches de la sortie, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, réflexion de fin de donne, changement de couleur à 90, dernier sur le pli du partenaire, Roi troisième gardé, adversaires proches de la sortie, belote signalée, tour d'atout à vide pour l'appel, parties) : OK")
 
 
 if __name__ == "__main__":

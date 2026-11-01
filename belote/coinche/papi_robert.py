@@ -53,6 +53,7 @@ from ..core.cards import Rank, Suit
 from .asr import AsRBot
 from .bots import CoincheBot, wants_coinche
 from .engine import CAPOT, SUITS, partner_of, team_of
+from .inference import may_hold, shown_voids, trump_ceilings
 
 SISTER = {Suit.PIQUE: Suit.TREFLE, Suit.TREFLE: Suit.PIQUE, Suit.COEUR: Suit.CARREAU, Suit.CARREAU: Suit.COEUR}
 MAX_RELAUNCH = 130
@@ -416,14 +417,8 @@ class PapiRobertBot(CoincheBot):
 
     @staticmethod
     def _shown_voids(game):
-        """Couleurs dont chaque joueur a montré qu'il n'en a plus (il n'a pas fourni)."""
-        voids = [set() for _ in range(4)]
-        for trick in [t for t, _w in game.tricks] + ([game.trick] if game.trick else []):
-            led = trick[0][1].suit
-            for s, c in trick[1:]:
-                if c.suit != led:
-                    voids[s].add(led)
-        return voids
+        """Couleurs dont chaque joueur a montré qu'il n'en a plus (voir inference.py)."""
+        return shown_voids(game)
 
     @staticmethod
     def _called_suits(game, seat):
@@ -432,14 +427,12 @@ class PapiRobertBot(CoincheBot):
 
     @staticmethod
     def _opponents_may_have_trumps(game, seat):
-        """Reste-t-il des atouts dehors, chez un adversaire qui n'a pas montré qu'il n'en a plus ?"""
+        """Reste-t-il un atout dehors qu'un adversaire peut encore avoir (ni chicane, ni plafond trop bas) ?"""
         trump = game.trump
         gone = {c for cards in game.played for c in cards} | {c for _, c in game.trick}
         outstanding = [c for c in CoincheBot._all_trumps(trump) if c not in gone and c not in game.hands[seat]]
         if not outstanding:
             return False
-        void = set()
-        for trick, _winner in game.tricks:
-            if trick[0][1].suit == trump:
-                void |= {s for s, c in trick if c.suit != trump}
-        return any(opp not in void for opp in ((seat + 1) % 4, (seat + 3) % 4))
+        voids, ceilings = shown_voids(game), trump_ceilings(game)
+        return any(may_hold(game, opp, c, voids, ceilings) for opp in ((seat + 1) % 4, (seat + 3) % 4)
+                   for c in outstanding)

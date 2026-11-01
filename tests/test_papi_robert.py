@@ -3,6 +3,7 @@ import random
 import sys
 
 from belote.coinche.engine import CAPOT, CoincheGame
+from belote.coinche.inference import may_hold, trump_ceilings
 from belote.coinche.papi_robert import PapiRobertBot, best_opening, opening_value, response
 from belote.core.cards import Card, Rank, Suit
 from tests.test_petit_jeu import hand, table
@@ -215,6 +216,44 @@ def check_defence_two_aces():
     assert bot.play(game, 0) == Card(D, Rank.NINE)
 
 
+def check_voids():
+    # Sud prend à pique
+    game = table([hand(S="J 9 7 8"), None, None, None])
+    game.bid(0, ("bid", 100, S))
+    for seat in (1, 2, 3):
+        game.bid(seat, ("pass",))
+    # Ouest entame cœur, Nord défausse un carreau alors qu'il devait couper : il n'a plus d'atout
+    game.trick = [(1, Card(H, Rank.SEVEN)), (2, Card(D, Rank.EIGHT))]
+    assert S in PapiRobertBot._shown_voids(game)[2]
+    # Sud est maître (As de cœur) : Nord, son partenaire, pouvait défausser ; on ne sait rien de ses atouts
+    game.trick = [(0, Card(H, Rank.ACE)), (1, Card(H, Rank.SEVEN)), (2, Card(D, Rank.EIGHT))]
+    assert S not in PapiRobertBot._shown_voids(game)[2] and H in PapiRobertBot._shown_voids(game)[2]
+    # Nord a déjà coupé : Est défausse, il n'a peut-être qu'un atout plus petit ; on ne conclut rien
+    game.trick = [(1, Card(H, Rank.SEVEN)), (2, Card(S, Rank.ACE)), (3, Card(D, Rank.NINE))]
+    assert S not in PapiRobertBot._shown_voids(game)[3]
+    # plafond d'atout : Sud joue la Dame, Ouest met le 7 : ni Roi, ni 10, ni As, ni 9, ni Valet
+    game.trick = [(0, Card(S, Rank.QUEEN)), (1, Card(S, Rank.SEVEN))]
+    assert not may_hold(game, 1, Card(S, Rank.KING)) and not may_hold(game, 1, Card(S, Rank.JACK))
+    assert may_hold(game, 1, Card(S, Rank.EIGHT))
+    game.played[0].append(Card(S, Rank.QUEEN)); game.played[1].append(Card(S, Rank.SEVEN))
+    game.played[3].append(Card(S, Rank.EIGHT))  # le 8 est tombé aussi : Ouest n'a plus d'atout
+    assert S in PapiRobertBot._shown_voids(game)[1]
+    game.played = [[] for _ in range(4)]
+    # pli coupé : Nord coupe du 10, Est (partenaire d'Ouest qui n'est pas maître) met le 7 : rien au-dessus du 10
+    game.trick = [(1, Card(H, Rank.SEVEN)), (2, Card(S, Rank.TEN)), (3, Card(S, Rank.SEVEN))]
+    assert not may_hold(game, 3, Card(S, Rank.ACE)) and may_hold(game, 3, Card(S, Rank.KING))
+    # partenaire maître : Nord a coupé, Sud défausse ; on ne conclut rien sur ses atouts
+    game.trick = [(1, Card(H, Rank.SEVEN)), (2, Card(S, Rank.TEN)), (3, Card(H, Rank.EIGHT)), (0, Card(D, Rank.SEVEN))]
+    assert trump_ceilings(game)[0] is None
+    # Est et Ouest ont montré qu'ils n'ont plus d'atout : Sud ne joue plus atout
+    game.trick = []
+    game.tricks = [([(0, Card(H, Rank.ACE)), (1, Card(C, Rank.SEVEN)), (2, Card(H, Rank.SEVEN)),
+                     (3, Card(H, Rank.EIGHT))], 0),
+                   ([(0, Card(D, Rank.ACE)), (1, Card(D, Rank.SEVEN)), (2, Card(D, Rank.EIGHT)),
+                     (3, Card(C, Rank.EIGHT))], 0)]
+    assert not PapiRobertBot._opponents_may_have_trumps(game, 0)
+
+
 def check_play():
     bot = PapiRobertBot()
     # attaque : commencer fort (le plus gros atout)
@@ -280,8 +319,8 @@ def check_coinched():
     assert game.phase == "play" and game.contract["mult"] == 2 and game.current == 0, (game.phase, game.current)
     assert bot.play(game, 0) == Card(H, Rank.ACE)
     # défense : Sud (le preneur) n'a plus de carreau : Ouest joue petit carreau pour le faire couper
-    game.tricks = [([(3, Card(D, Rank.SEVEN)), (0, Card(H, Rank.SEVEN)), (1, Card(D, Rank.EIGHT)),
-                     (2, Card(D, Rank.NINE))], 2)]
+    game.tricks = [([(3, Card(D, Rank.SEVEN)), (0, Card(S, Rank.SEVEN)), (1, Card(D, Rank.EIGHT)),
+                     (2, Card(D, Rank.NINE))], 0)]
     game.current = 1
     game.hands[1] = hand(D="Q 10", H="K Q", C="A K 7")
     assert bot.play(game, 1) == Card(D, Rank.QUEEN)
@@ -327,6 +366,7 @@ def main():
     check_exit()
     check_attack_leads()
     check_defence_two_aces()
+    check_voids()
     check_play()
     check_discards()
     check_trump_until_void()
