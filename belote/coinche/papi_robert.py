@@ -20,6 +20,11 @@ Réponses du partenaire (une fois) :
 - sur 110 : rien avec un As, +10 avec deux, +20 avec trois ; sur 120 : +10 seulement avec les trois ;
 - sur 110 ou 120 avec les trois As et un 10 derrière un As : capot (le partenaire a 4 atouts, il me
   fait la passe).
+Monter sur mon partenaire dans ma couleur (règle en plus, seulement quand je n'ai pas de réponse ; le
+complément et les réponses passent d'abord) : sur son 90, mon vrai 100 se dit 110 (+10), un énorme 90
+(Valet cinquième, ou 9 sixième avec la belote) se dit 100 ; sur son 100 ou plus, ma vraie valeur si elle
+dépasse son annonce (il dit 100, je dis 120 : un vrai 120). Mon partenaire lit 10 de moins sur son 90
+(110 = un 100, 100 = un énorme 90), la vraie valeur au-dessus, et me répond comme d'habitude.
 Relances de l'ouvreur (une fois) : 110 ou 120, le partenaire a montré les trois As : capot avec 5 atouts
 ou un 10 second hors atout ;
 90 avec 5 atouts et une majeure, le partenaire a montré la deuxième : +10 par As, jusqu'à 130.
@@ -196,6 +201,31 @@ def _response(hand, value, suit):
     return None
 
 
+def huge_ninety(hand, suit):
+    """Énorme 90 : le Valet cinquième ou plus, ou le 9 sixième ou plus avec la belote."""
+    r, n = _ranks(hand, suit), sum(c.suit == suit for c in hand)
+    return (Rank.JACK in r and n >= 5) or (Rank.NINE in r and n >= 6 and has_belote(hand, suit))
+
+
+def over_partner(hand, value, true, suit):
+    """Monter sur l'annonce de mon partenaire dans ma couleur (seulement quand je n'ai pas de réponse) :
+    - sur son 90 : mon vrai 100 (ou plus) se dit 10 de plus (110) ; un énorme 90 se dit 100 ;
+    - sur son 100 ou plus : ma vraie valeur, si elle dépasse son annonce.
+    Sur 80, rien de plus (règles du 80)."""
+    if true < 90:
+        return None
+    options = [(trump_value(hand, s), majors(hand, s), strength_score(hand, s), s) for s in SUITS
+               if s != suit and trump_value(hand, s)]
+    if not options:
+        return None
+    mine, _m, _st, new = max(options, key=lambda o: o[:3])
+    if true == 90:
+        if mine >= 100 or huge_ninety(hand, new):
+            return ("bid", mine + 10, new)
+        return None
+    return ("bid", mine, new) if mine > value else None
+
+
 class PapiRobertBot(CoincheBot):
     name = "Papi Robert"
 
@@ -233,7 +263,7 @@ class PapiRobertBot(CoincheBot):
                 return self._second_turn(game, seat, i, value, true, suit)
             answer = response(hand, true, suit)
             if answer is None:
-                return None
+                return over_partner(hand, value, true, suit)  # pas de réponse : je monte chez moi si je peux
             answer, new = answer
             if answer == CAPOT:
                 return ("bid", CAPOT, new)
@@ -249,8 +279,24 @@ class PapiRobertBot(CoincheBot):
             if value == 80 and trump_value(hand, suit) == 100 and not other_suit:
                 return ("bid", 100, suit)  # ouvert à 80 avec un jeu de 100 : je remonte si c'est possible
             if partner_bids and partner_bids[-1][0] > mine[0]:
-                return self._relaunch(hand, bids[mine[0]][1], partner_bids[-1][1])
+                relaunch = self._relaunch(hand, bids[mine[0]][1], partner_bids[-1][1])
+                if relaunch is not None:
+                    return relaunch
+                return self._answer_jump(game, hand, mine[0], partner_bids[-1])
         return None
+
+    def _answer_jump(self, game, hand, my_index, partner_bid):
+        """Mon partenaire est monté sur mon annonce dans sa couleur : sur mon 90, je lis 10 de moins (110 = un
+        100, 100 = un énorme 90) ; sur mon 100 ou plus, la vraie valeur ; je réponds comme d'habitude."""
+        _k, value, suit = game.bids[my_index][1]
+        _i, (_k2, pv, ps) = partner_bid
+        if ps == suit or value < 90 or pv == CAPOT:
+            return None
+        true = pv - 10 if self._true_value(game, my_index) == 90 else pv
+        answer = response(hand, true, ps)
+        if answer is None or answer[1] != ps:
+            return None
+        return ("bid", CAPOT if answer[0] == CAPOT else pv + answer[0] - true, ps)
 
     @staticmethod
     def _true_value(game, index):

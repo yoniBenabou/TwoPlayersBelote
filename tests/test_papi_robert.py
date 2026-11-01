@@ -400,6 +400,34 @@ def check_trump_choice():
     assert lead(dict(S="J 7 8", H="A K", D="A", C="7 8")) == Card(S, Rank.JACK)
 
 
+def check_over_partner():
+    bot = PapiRobertBot()
+
+    def north_on(value, north):
+        g = table([None, None, hand(**north), None])
+        g.bid(0, ("bid", value, H)); g.bid(1, ("pass",))
+        return bot.bid(g, 2)
+
+    # sur 90 cœur, sans complément : mon vrai 100 à pique se dit 110
+    assert north_on(90, dict(S="J 9 7 8", H="7", D="A", C="7 8")) == ("bid", 110, S)
+    # énorme 90 (Valet cinquième) : 100
+    assert north_on(90, dict(S="J 10 8 7 K", H="7", D="A", C="7")) == ("bid", 100, S)
+    # un 90 ordinaire : rien
+    assert north_on(90, dict(S="J 8 7", H="7 8", D="A", C="7 8")) == ("pass",)
+    # le complément passe d'abord : le 9 de cœur et un As -> 110 cœur, même avec un 100 à pique
+    assert north_on(90, dict(S="J 9 7 8", H="9", D="A", C="7 8")) == ("bid", 110, H)
+    # sur 100 : la réponse d'abord (un As : 110 cœur) ; sans As, mon vrai 120 à pique
+    assert north_on(100, dict(S="J 9 7 8", H="7", D="A", C="7 8")) == ("bid", 110, H)
+    assert north_on(100, dict(S="J 9 7 8 K", D="10 Q 8")) == ("bid", 120, S)
+    assert north_on(100, dict(S="J 9 7 8", H="7", D="Q", C="7 8")) == ("pass",)  # 90 à pique : pas plus que 100
+    # sur 80 : règles du 80, rien de plus
+    assert north_on(80, dict(S="J 8 7", H="7 8", D="A", C="7 8")) == ("bid", 90, S)
+    # l'ouvreur lit le saut : Sud 90 cœur, Nord 110 pique (= un 100) ; Sud a deux As hors pique : +20 -> 130
+    g = table([hand(H="J 8 7", D="A", C="A 8", S="Q K"), None, None, None])
+    g.bid(0, ("bid", 90, H)); g.bid(1, ("pass",)); g.bid(2, ("bid", 110, S)); g.bid(3, ("pass",))
+    assert bot.bid(g, 0) == ("bid", 130, S)
+
+
 def check_volley():
     bot = PapiRobertBot()
     # Sud dit 150 cœur ; Ouest a la parole ; Est (Valet et As de cœur) est sûr de la chute : il coinche à la volée
@@ -457,6 +485,7 @@ def main():
     check_defence_ace_on_partner()
     check_belote_parity()
     check_trump_choice()
+    check_over_partner()
     check_volley()
     check_full_games()
     print("OK")
