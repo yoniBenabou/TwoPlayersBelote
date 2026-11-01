@@ -61,6 +61,8 @@ Jeu :
 - appels (équipe qui a pris, comme AsR) : sur l'atout du partenaire, appel direct (une carte de la
   couleur) dans la famille de l'atout, appel indirect (couleur sœur) sinon ; le partenaire rejoue la couleur ;
 - contrat coinché : on garde ses atouts (pas d'entame atout) ;
+- sur l'entame atout de mon partenaire (en deuxième ou troisième), je prends avec le plus petit atout qui
+  bat tous ceux qui peuvent encore venir derrière moi (comme AsR) ;
 - As-10 dans la couleur demandée, sur un pli adverse que je peux prendre : je prends d'abord avec l'As ;
 - on ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas le choix.
 Le reste du jeu en second, troisième ou quatrième est celui de CoincheBot.
@@ -389,6 +391,12 @@ class PapiRobertBot(CoincheBot):
             call = AsRBot._call_discard(game.hands[seat], self._allowed_discards(game, seat, legal), trump)
             if call is not None:
                 return call
+        if attacking and trick[0][0] == partner_of(seat) and trick[0][1].suit == trump and len(trick) < 3:
+            # sur l'entame atout du partenaire, le plus petit atout qui bat tous ceux qui peuvent encore venir
+            # derrière moi (comme AsR) : je prends la main pour faire tomber les atouts
+            sure = AsRBot._sure_trump(self, game, seat, legal)
+            if sure is not None:
+                return sure
         if trick and not attacking:
             card = self._defence_ace(game, seat, legal)
             if card is not None:

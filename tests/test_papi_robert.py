@@ -442,6 +442,20 @@ def check_ace_before_ten():
     assert bot.play(g, 0) == Card(D, Rank.SEVEN)  # Est a coupé : je ne peux pas prendre, petite carte
 
 
+def check_sure_trump_on_partner():
+    # Nord (Papi Robert) 90 cœur, Sud 110 cœur (le 9 et un As) ; Sud entame la Dame de cœur, Ouest n'a pas
+    # d'atout ; Nord ne met pas le Roi (Est pourrait monter avec le 10 ou l'As) : il prend avec le Valet
+    g = table([hand(H="Q 9 7", S="A"), hand(S="7 8 9", D="7 8 9", C="7 8"), hand(H="J K 8", D="A")])
+    g.bid(0, ("pass",)); g.bid(1, ("pass",)); g.bid(2, ("bid", 90, H)); g.bid(3, ("pass",))
+    g.bid(0, ("bid", 110, H))
+    for seat in (1, 2, 3):
+        g.bid(seat, ("pass",))
+    for seat, card in ((0, Card(H, Rank.QUEEN)), (1, Card(S, Rank.SEVEN))):
+        g.current = seat
+        g.play(seat, card)
+    assert PapiRobertBot().play(g, 2) == Card(H, Rank.JACK)
+
+
 def check_volley():
     bot = PapiRobertBot()
     # Sud dit 150 cœur ; Ouest a la parole ; Est (Valet et As de cœur) est sûr de la chute : il coinche à la volée
@@ -501,6 +515,7 @@ def main():
     check_trump_choice()
     check_over_partner()
     check_ace_before_ten()
+    check_sure_trump_on_partner()
     check_volley()
     check_full_games()
     print("OK")
