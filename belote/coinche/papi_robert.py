@@ -40,7 +40,10 @@ Pas de surcoinche.
 Jeu :
 - attaque : on retire les atouts adverses. Partenaire qui a annoncé l'atout le premier : je lui rends la
   main (petit atout, ou sans atout la couleur qu'il a appelée, sinon une petite carte) ; sinon atouts forts
-  d'abord, puis les As ; sans atout (adversaires encore à l'atout), une petite carte plutôt que les As ;
+  d'abord quand le plus gros est maître ; sinon : seul atout, le 9 sec jamais, l'As ou plus petit oui ;
+  avec d'autres, je garde le plus gros et j'entame la carte qui fait monter le joueur suivant le plus haut
+  (9-As-10-7, Valet dehors : le 10), si je peux me permettre de perdre le pli, sinon la suivante, sinon la
+  plus petite ; puis les As ; sans atout (adversaires encore à l'atout), une petite carte plutôt que les As ;
   exception : mon dernier atout, je le garde si un atout adverse est encore dehors, que ma main est faible
   (aucune carte maîtresse hors atout) et que mon partenaire n'a pas annoncé de grande force (moins de 110) ;
 - défense, sur le pli de mon partenaire dans une couleur hors atout : si l'attaque peut encore avoir de
@@ -401,7 +404,10 @@ class PapiRobertBot(CoincheBot):
             elif gives_lead:
                 return min(trumps, key=lambda c: c.strength(trump))  # je rends la main à mon partenaire
             else:
-                return max(trumps, key=lambda c: c.strength(trump))  # atouts forts d'abord
+                choice = self._trump_choice(game, seat, trumps)
+                if choice is not None:
+                    return choice
+                no_trump_lead = True  # le 9 sec : je ne l'entame jamais
         if opponents_trumps and no_trump_lead:
             # sans atout (ou je garde le dernier) : la couleur appelée, sinon une petite carte plutôt que les As
             if called_lead:
@@ -413,6 +419,41 @@ class PapiRobertBot(CoincheBot):
         if called_lead:
             return called_lead
         return min(legal, key=lambda c: (c.suit == trump, c.points(trump), c.strength(trump)))
+
+    @staticmethod
+    def _trump_choice(game, seat, trumps):
+        """Quel atout entamer (attaque, les adversaires peuvent en avoir) :
+        - mon plus gros atout est maître : je le joue ;
+        - sinon, c'est mon seul atout : le 9 sec jamais (None), l'As ou plus petit je le joue ;
+        - sinon je garde le plus gros et je choisis parmi les autres, d'abord la carte qui oblige le joueur
+          suivant à monter le plus haut (le plus petit atout dehors au-dessus d'elle est le plus fort possible ;
+          à égalité la moins chère), si je peux me permettre de perdre le pli (ma carte, le plus gros atout
+          dehors et 10 points : les adversaires restent sous ce qui nous ferait chuter) ; sinon la suivante ;
+          sinon mon plus petit atout."""
+        trump, hand = game.trump, game.hands[seat]
+        strength = lambda c: c.strength(trump)
+        gone = {c for cards in game.played for c in cards} | {c for _s, c in game.trick}
+        outside = [Card(trump, r) for r in Rank if Card(trump, r) not in gone and Card(trump, r) not in hand]
+        top = max(trumps, key=strength)
+        if all(strength(top) > strength(o) for o in outside):
+            return top
+        if len(trumps) == 1:
+            return None if top.rank == Rank.NINE else top
+        others = [c for c in trumps if c != top]
+
+        def forced(c):  # l'atout le moins cher que le suivant peut mettre pour monter
+            return min((strength(o) for o in outside if strength(o) > strength(c)), default=99)
+
+        team, contract = team_of(seat), game.contract
+        partner = partner_of(seat)
+        ours = game.belote_seat == seat or (game.belote_seat == partner and any(
+            c.suit == trump and c.rank in (Rank.KING, Rank.QUEEN) for c in game.played[partner]))
+        limit = -1 if contract["value"] == CAPOT else 162 - contract["value"] + (20 if ours else 0)
+        biggest = max((o.points(trump) for o in outside), default=0)
+        for c in sorted(others, key=lambda c: (-forced(c), strength(c))):
+            if game.trick_points[1 - team] + c.points(trump) + biggest + 10 <= limit:
+                return c
+        return min(trumps, key=strength)
 
     def _keep_last_trump(self, game, seat):
         """Mon dernier atout : je le garde pour couper plus tard si ma main est faible (aucune carte maîtresse

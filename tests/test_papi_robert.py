@@ -375,6 +375,31 @@ def check_belote_parity():
     assert PapiRobertBot().play(g, 2).suit != S
 
 
+def check_trump_choice():
+    bot = PapiRobertBot()
+
+    def lead(south, value=100, gone=()):
+        g = table([hand(**south), None, None, None])
+        g.bid(0, ("bid", value, S))
+        for seat in (1, 2, 3):
+            g.bid(seat, ("pass",))
+        g.played[1] += [Card(S, r) for r in gone]
+        return bot.play(g, 0)
+
+    # 9-As-10-7, le Valet dehors : le 10 oblige le Valet à tomber (pas le 9 sous le Valet)
+    assert lead(dict(S="9 A 10 7", H="A K", D="A", C="7")) == Card(S, Rank.TEN)
+    # 9-10-7, As-Roi-Valet dehors : le 10 oblige à mettre l'As ou le Valet (avec le 7, le Roi suffirait)
+    assert lead(dict(S="9 10 7", H="A K 8", D="A", C="7"), gone=(Rank.QUEEN, Rank.EIGHT)) == Card(S, Rank.TEN)
+    # 160 : perdre le 10 sous le Valet nous ferait chuter ; le 7 aussi : le plus petit
+    assert lead(dict(S="9 A 10 7", H="A K", D="A", C="7"), value=160) == Card(S, Rank.SEVEN)
+    # 9 sec : jamais entamé
+    assert lead(dict(S="9", H="A K 8", D="A K", C="A 7")).suit != S
+    # As sec (pas maître) : je l'entame (main forte, l'exception du dernier atout ne joue pas)
+    assert lead(dict(S="A", H="A K 8", D="A K", C="A 7")) == Card(S, Rank.ACE)
+    # Valet maître : je le joue
+    assert lead(dict(S="J 7 8", H="A K", D="A", C="7 8")) == Card(S, Rank.JACK)
+
+
 def check_volley():
     bot = PapiRobertBot()
     # Sud dit 150 cœur ; Ouest a la parole ; Est (Valet et As de cœur) est sûr de la chute : il coinche à la volée
@@ -431,6 +456,7 @@ def main():
     check_coinched()
     check_defence_ace_on_partner()
     check_belote_parity()
+    check_trump_choice()
     check_volley()
     check_full_games()
     print("OK")
