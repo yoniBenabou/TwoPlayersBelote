@@ -258,10 +258,15 @@ def check_voids():
 def check_play():
     bot = PapiRobertBot()
     # attaque : commencer fort (le plus gros atout)
-    game = table([hand(S="J 9 7", H="A 10", D="K", C="8 7"), None, None, None])
-    game.bid(0, ("bid", 100, S))
-    for seat in (1, 2, 3):
-        game.bid(seat, ("pass",))
+    def deal(north_answers):
+        game = table([hand(S="J 9 7", H="K 10", D="K", C="8 7"), None, None, None])
+        game.bid(0, ("bid", 100, S)); game.bid(1, ("pass",))
+        if north_answers:  # Nord annonce un As (+10)
+            game.bid(2, ("bid", 110, S)); game.bid(3, ("pass",)); game.bid(0, ("pass",)); game.bid(1, ("pass",))
+        else:
+            game.bid(2, ("pass",)); game.bid(3, ("pass",))
+        return game
+    game = deal(True)
     assert bot.play(game, 0) == Card(S, Rank.JACK)
     # appel indirect : Nord n'a plus d'atout et a l'As de cœur : petite carte à carreau (couleur sœur)
     game.play(0, Card(S, Rank.JACK))
@@ -271,6 +276,13 @@ def check_play():
     assert card == Card(D, Rank.EIGHT), card
     game.tricks.append(([(0, Card(S, Rank.JACK)), (1, game.trick[1][1]), (2, card)], 0))
     assert PapiRobertBot._called_suits(game, 0) == {H}
+    # Nord n'a annoncé aucun As : sa défausse n'est pas un appel
+    game2 = deal(False)
+    game2.tricks = list(game.tricks)
+    assert PapiRobertBot._called_suits(game2, 0) == set()
+    # Nord a annoncé un As, mais l'As de cœur est chez Sud : ce n'était pas un appel
+    game.hands[0] = hand(S="9 7", H="A 10", D="K", C="8 7")
+    assert PapiRobertBot._called_suits(game, 0) == set()
 
 
 def check_discards():
@@ -288,9 +300,21 @@ def check_discards():
     allowed = PapiRobertBot._allowed_discards(game, 2, legal)
     assert Card(H, Rank.ACE) not in allowed and Card(C, Rank.ACE) not in allowed
     assert bot.play(game, 2).rank != Rank.ACE
-    # As protégé (10 et Roi derrière) : il peut le défausser
+    # As protégé (10 et Roi derrière) sur le pli adverse : il le garde
+    game.hands[2] = hand(H="A 10 K", C="7 8 9 Q K")
+    assert Card(H, Rank.ACE) not in PapiRobertBot._allowed_discards(game, 2, game.legal_cards(2))
+    # sur le pli de Sud (son partenaire) : il le jette, c'est un appel à cœur (il a la longue)
+    game.trick = [(1, Card(D, Rank.SEVEN)), (0, Card(S, Rank.SEVEN))]
+    game.current = 2
     game.hands[2] = hand(H="A 10 K", C="7 8 9 Q K")
     assert Card(H, Rank.ACE) in PapiRobertBot._allowed_discards(game, 2, game.legal_cards(2))
+    assert bot.play(game, 2) == Card(H, Rank.ACE)
+    game.tricks = [(game.trick + [(2, Card(H, Rank.ACE)), (3, Card(D, Rank.EIGHT))], 0)]
+    game.trick = []
+    assert H in PapiRobertBot._called_suits(game, 0)
+    game.tricks = []
+    game.trick = [(1, Card(D, Rank.SEVEN))]
+    game.current = 2
     # pas le choix : il ne reste que deux As
     game.hands[2] = hand(H="A", C="A")
     assert PapiRobertBot._allowed_discards(game, 2, game.legal_cards(2)) == game.legal_cards(2)
@@ -456,6 +480,130 @@ def check_sure_trump_on_partner():
     assert PapiRobertBot().play(g, 2) == Card(H, Rank.JACK)
 
 
+def check_asr_play_rules():
+    bot = PapiRobertBot()
+
+    def taken(south, value=100, by=0):
+        g = table([hand(**south), None, None, None])
+        for seat in range(by):
+            g.bid(seat, ("pass",))
+        g.bid(by, ("bid", value, S))
+        for seat in range(by + 1, by + 4):
+            g.bid(seat % 4, ("pass",))
+        return g
+
+    # 2. un seul atout dehors (le 7) et j'ai As-8 : je le fais tomber avec le 8
+    g = taken(dict(S="A 8", H="A K", D="A K", C="A K"))
+    g.played[1] += [Card(S, r) for r in (Rank.JACK, Rank.NINE, Rank.TEN, Rank.KING, Rank.QUEEN)]
+    g.current = 0
+    assert bot.play(g, 0) == Card(S, Rank.EIGHT)
+    # 6. signal de belote : Roi-Dame (2 atouts, pair) sur l'atout du partenaire : le Roi d'abord
+    g = taken(dict(S="K Q", H="A K 8", D="7 8", C="7"), by=2)
+    g.trick, g.current = [(2, Card(S, Rank.JACK)), (3, Card(S, Rank.SEVEN))], 0
+    assert bot.play(g, 0) == Card(S, Rank.KING)
+    # 8. attaque : Nord entame le Roi de carreau, Ouest (après moi) peut avoir le 10 : je mets l'As
+    g = taken(dict(S="J 9 8", D="A 7", H="7 8", C="7"))
+    g.trick, g.current = [(2, Card(D, Rank.KING)), (3, Card(D, Rank.EIGHT))], 0
+    assert bot.play(g, 0) == Card(D, Rank.ACE)
+    #    Nord a joué le 10 (maître : l'As est chez moi) : je garde l'As
+    g.trick = [(2, Card(D, Rank.TEN)), (3, Card(D, Rank.EIGHT))]
+    assert bot.play(g, 0) == Card(D, Rank.SEVEN)
+    # 9. pli sûr du partenaire, je ne fournis pas : mon 10 sec
+    g = taken(dict(S="J 9", H="10", C="7 8 9 Q K"))
+    g.trick = [(1, Card(D, Rank.SEVEN)), (2, Card(D, Rank.ACE)), (3, Card(D, Rank.EIGHT))]
+    g.played[1].append(Card(D, Rank.SEVEN)); g.played[2].append(Card(D, Rank.ACE)); g.played[3].append(Card(D, Rank.EIGHT))
+    g.played[1] += [Card(S, r) for r in (Rank.ACE, Rank.TEN, Rank.KING, Rank.QUEEN, Rank.EIGHT, Rank.SEVEN)]
+    g.current = 0
+    assert bot.play(g, 0) == Card(H, Rank.TEN)
+    # 11. atouts tombés, en dernier sur le pli du partenaire : As-8 de carreau, 4 carreaux dehors : je garde l'As
+    g = taken(dict(S="J", D="A 8", H="7 8 9", C="7 8"))
+    g.played[1] += [Card(S, r) for r in (Rank.NINE, Rank.ACE, Rank.TEN, Rank.KING, Rank.QUEEN, Rank.EIGHT, Rank.SEVEN)]
+    g.trick, g.current = [(1, Card(D, Rank.SEVEN)), (2, Card(D, Rank.TEN)), (3, Card(D, Rank.NINE))], 0
+    assert bot.play(g, 0) == Card(D, Rank.EIGHT)
+    # 12. contre 150 : Roi troisième de cœur (sans l'As), sur le pli du partenaire : petite carte
+    g = taken(dict(H="K Q 7", D="7 8", C="7 8 9"), value=150, by=1)
+    g.trick, g.current = [(2, Card(H, Rank.ACE)), (3, Card(H, Rank.EIGHT))], 0
+    assert bot.play(g, 0) == Card(H, Rank.SEVEN)
+
+
+def check_masters_and_no_finesse():
+    bot = PapiRobertBot()
+
+    def taken(south, by=0):
+        g = table([hand(**south), None, None, None])
+        for seat in range(by):
+            g.bid(seat, ("pass",))
+        g.bid(by, ("bid", 100, S))
+        for seat in range(by + 1, by + 4):
+            g.bid(seat % 4, ("pass",))
+        return g
+
+    # 4. atouts tombés, pas d'As : ma carte maîtresse (le 10 de cœur, l'As est tombé) avant le reste
+    g = taken(dict(S="J", H="10 8", D="7 8", C="7 8 9"))
+    g.played[1] += [Card(S, r) for r in (Rank.NINE, Rank.ACE, Rank.TEN, Rank.KING, Rank.QUEEN, Rank.EIGHT, Rank.SEVEN)]
+    g.played[3].append(Card(H, Rank.ACE))
+    g.current = 0
+    assert bot.play(g, 0) == Card(H, Rank.TEN)
+    # 7. Ouest (adversaire) entame le 7 de carreau ; j'ai As-Roi en deuxième : l'As tout de suite
+    g = taken(dict(S="J 9", D="A K 8", H="7 8", C="7"), by=1)
+    g.trick, g.current = [(1, Card(D, Rank.SEVEN))], 2
+    g.hands[2] = hand(S="J 9", D="A K 8", H="7 8", C="7")
+    assert bot.play(g, 2) == Card(D, Rank.ACE)
+    #    sans l'As (pas tombé), Roi-8 en deuxième : la plus petite
+    g.hands[2] = hand(S="J 9", D="K 8", H="7 8 9", C="7")
+    assert bot.play(g, 2) == Card(D, Rank.EIGHT)
+    #    en dernier, 10-8 sur la Dame adverse : le 10 prend
+    g.trick, g.current = [(3, Card(D, Rank.QUEEN)), (0, Card(D, Rank.NINE)), (1, Card(D, Rank.SEVEN))], 2
+    g.hands[2] = hand(S="J 9", D="10 8", H="7 8 9", C="7")
+    assert bot.play(g, 2) == Card(D, Rank.TEN)
+
+    #    mon partenaire, après moi, a appelé carreau (il a l'As) : une carte moyenne (le Roi)
+    class Called(PapiRobertBot):
+        @staticmethod
+        def _called_suits(game, seat):
+            return {D}
+    g.trick, g.current = [(1, Card(D, Rank.SEVEN))], 2
+    g.hands[2] = hand(S="J 9", D="K 8", H="7 8 9", C="7")
+    assert Called().play(g, 2) == Card(D, Rank.KING)
+
+
+def check_accompanied_ten():
+    """Sur le pli de mon partenaire, avec 10-9 de carreau : je garde le 10 seulement s'il fera un pli."""
+    from belote.coinche.asr import AsRBot
+
+    def south_plays(bot, taker, trick, trumps_gone=False, west_void=False):
+        g = table([hand(D="10 9", H="7 8", C="7 8 9", S="7"), None, None, None])
+        for seat in range(taker):
+            g.bid(seat, ("pass",))
+        g.bid(taker, ("bid", 100, S))
+        for seat in range(taker + 1, taker + 4):
+            g.bid(seat % 4, ("pass",))
+        if trumps_gone:
+            g.played[1] += [Card(S, r) for r in Rank if r != Rank.SEVEN]
+        if west_void:  # Ouest n'a pas fourni sur un tour d'atout : il n'en a plus
+            g.tricks = [([(0, Card(S, Rank.JACK)), (1, Card(H, Rank.NINE)), (2, Card(S, Rank.EIGHT)),
+                          (3, Card(S, Rank.NINE))], 0)]
+            for seat, card in g.tricks[0][0]:
+                g.played[seat].append(card)
+        for seat, card in trick:
+            g.played[seat].append(card)
+        g.trick, g.current = list(trick), 0
+        return bot.play(g, 0)
+
+    opp_led = [(1, Card(D, Rank.SEVEN)), (2, Card(D, Rank.ACE)), (3, Card(D, Rank.EIGHT))]
+    for bot in (PapiRobertBot(), AsRBot()):
+        # défense, l'attaque a encore des atouts : je donne mon 10
+        assert south_plays(bot, 1, opp_led) == Card(D, Rank.TEN), bot.name
+        # défense, atouts tous tombés : je le garde
+        assert south_plays(bot, 1, opp_led, trumps_gone=True) == Card(D, Rank.NINE), bot.name
+        # attaque, un adversaire entame et mon partenaire prend avec l'As : je le garde
+        assert south_plays(bot, 0, opp_led) == Card(D, Rank.NINE), bot.name
+        # attaque, mon partenaire entame l'As (pli sûr : Ouest n'a plus d'atout), Est peut encore en avoir :
+        # je donne mon 10
+        assert south_plays(bot, 0, [(2, Card(D, Rank.ACE)), (3, Card(D, Rank.EIGHT))],
+                           west_void=True) == Card(D, Rank.TEN), bot.name
+
+
 def check_volley():
     bot = PapiRobertBot()
     # Sud dit 150 cœur ; Ouest a la parole ; Est (Valet et As de cœur) est sûr de la chute : il coinche à la volée
@@ -516,6 +664,9 @@ def main():
     check_over_partner()
     check_ace_before_ten()
     check_sure_trump_on_partner()
+    check_asr_play_rules()
+    check_masters_and_no_finesse()
+    check_accompanied_ten()
     check_volley()
     check_full_games()
     print("OK")

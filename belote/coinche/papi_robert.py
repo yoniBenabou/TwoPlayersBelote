@@ -64,6 +64,13 @@ Jeu :
 - sur l'entame atout de mon partenaire (en deuxième ou troisième), je prends avec le plus petit atout qui
   bat tous ceux qui peuvent encore venir derrière moi (comme AsR) ;
 - As-10 dans la couleur demandée, sur un pli adverse que je peux prendre : je prends d'abord avec l'As ;
+- pas d'impasse sur un pli adverse hors atout (comme AsR) : coupé, ma plus petite ; avec l'As en deuxième ou
+  troisième, l'As ; sans l'As (pas tombé) : en dernier la plus grosse qui prend, avant la plus petite, ou une
+  carte moyenne si mon partenaire, après moi, a appelé la couleur ;
+- après les atouts (attaque) : mes As, puis mes cartes maîtresses, puis la couleur appelée, puis la plus
+  petite carte ;
+- un appel se lit seulement si mon partenaire m'a annoncé des As, et pas si j'ai l'As de la couleur
+  demandée (jeter un As est toujours un appel : la longue) ;
 - on ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas le choix.
 Le reste du jeu en second, troisième ou quatrième est celui de CoincheBot.
 """
@@ -204,6 +211,16 @@ def _response(hand, value, suit):
     return None
 
 
+_ASR = []
+
+
+def _asr():
+    """Un robot AsR pour reprendre ses règles de jeu (il n'a pas d'état)."""
+    if not _ASR:
+        _ASR.append(AsRBot())
+    return _ASR[0]
+
+
 def huge_ninety(hand, suit):
     """Énorme 90 : le Valet cinquième ou plus, ou le 9 sixième ou plus avec la belote."""
     r, n = _ranks(hand, suit), sum(c.suit == suit for c in hand)
@@ -231,6 +248,10 @@ def over_partner(hand, value, true, suit):
 
 class PapiRobertBot(CoincheBot):
     name = "Papi Robert"
+
+    @property
+    def _asr(self):
+        return _asr()
 
     @staticmethod
     def volley_coinche(game, seat):
@@ -384,28 +405,163 @@ class PapiRobertBot(CoincheBot):
     # ---------- jeu ----------
     def play(self, game, seat):
         legal = game.legal_cards(seat)
-        trick, trump = game.trick, game.trump
-        attacking = trick and team_of(game.contract["seat"]) == team_of(seat)
-        if attacking and trick[0][0] == partner_of(seat) and trick[0][1].suit == trump \
-                and not any(c.suit == trump for c in game.hands[seat]):
-            call = AsRBot._call_discard(game.hands[seat], self._allowed_discards(game, seat, legal), trump)
+        card = self._play(game, seat, legal)
+        return self._asr._belote_signal(game, seat, legal, card)  # signal de belote (Roi pair, Dame impair)
+
+    def _play(self, game, seat, legal):
+        trick, trump, hand = game.trick, game.trump, game.hands[seat]
+        if not trick:
+            return self.lead(game, seat, legal)
+        asr = self._asr
+        partner = partner_of(seat)
+        attacking = team_of(game.contract["seat"]) == team_of(seat)
+        led = trick[0][1].suit
+        winner = trick[trick_winner(trick, trump)][0]
+        if attacking and trick[0][0] == partner and led == trump and not any(c.suit == trump for c in hand):
+            call = AsRBot._call_discard(hand, self._allowed_discards(game, seat, legal), trump)
             if call is not None:
                 return call
-        if attacking and trick[0][0] == partner_of(seat) and trick[0][1].suit == trump and len(trick) < 3:
+        if attacking and trick[0][0] == partner and led == trump and len(trick) < 3:
             # sur l'entame atout du partenaire, le plus petit atout qui bat tous ceux qui peuvent encore venir
             # derrière moi (comme AsR) : je prends la main pour faire tomber les atouts
-            sure = AsRBot._sure_trump(self, game, seat, legal)
+            sure = asr._sure_trump(game, seat, legal)
             if sure is not None:
                 return sure
-        if trick and not attacking:
-            card = self._defence_ace(game, seat, legal)
+        kings = asr._guarded_kings(game, seat)
+        if kings and not any(c.suit == led for c in legal):
+            legal = [c for c in legal if c.suit not in kings] or legal  # je ne défausse pas la garde du Roi
+        if winner == partner and len(hand) == 2 and len(legal) == 2:
+            card = asr._give_lost_card(game, seat, legal)  # avant-dernier pli : je garde la carte qui peut gagner
             if card is not None:
                 return card
-        if trick:
-            card = self._ace_before_ten(game, seat, legal)
+        if led in kings and winner == partner:
+            small = [c for c in legal if c.rank != Rank.KING]
+            if small:
+                return min(small, key=lambda c: c.strength(trump))  # je garde mon Roi troisième
+        card = self._defence_ace(game, seat, legal) if not attacking else self._attack_ace(game, seat, legal)
+        if card is not None:
+            return card
+        card = self._last_on_partner(game, seat, legal)
+        if card is not None:
+            return card
+        card = self._ace_before_ten(game, seat, legal)
+        if card is not None:
+            return card
+        card = self._no_finesse(game, seat, legal)
+        if card is not None:
+            return card
+        if attacking and winner == partner and not any(c.suit == led for c in legal):
+            card = self._ace_call(game, seat, legal)
             if card is not None:
                 return card
-        return super().play(game, seat, self._allowed_discards(game, seat, legal))
+        legal = self._allowed_discards(game, seat, legal)
+        if winner == partner:
+            # partenaire sûr de faire le pli : d'abord mon 10 sec ; un 10 accompagné, je le garde seulement s'il
+            # fera un autre pli (comme AsR) ; pas de 10 du tout si le pli n'est pas sûr
+            sure = asr._partner_sure(game, seat)
+            dry = [c for c in legal if c.rank == Rank.TEN and c.suit != trump and sum(d.suit == c.suit for d in hand) == 1]
+            if dry and sure:
+                return dry[0]
+            keep_ten = asr._keep_accompanied_ten(game, seat)  # 10 accompagné gardé seulement s'il fera un pli
+            keep = [c for c in legal if not (c.rank == Rank.TEN and c.suit != trump
+                                             and (not sure or (keep_ten and sum(d.suit == c.suit for d in hand) > 1)))]
+            legal = keep or legal
+        return super().play(game, seat, legal)
+
+    @staticmethod
+    def _attack_ace(game, seat, legal):
+        """Attaque, pli du partenaire dans une couleur hors atout, j'ai l'As : je le mets si la carte de mon
+        partenaire n'est pas maître (un joueur après moi peut encore la battre), sauf si l'adversaire qui joue
+        après moi va couper."""
+        trick, trump, hand = game.trick, game.trump, game.hands[seat]
+        led = trick[0][1].suit
+        best = trick[trick_winner(trick, trump)]
+        ace = Card(led, Rank.ACE)
+        if led == trump or best[0] != partner_of(seat) or best[1].suit == trump or ace not in legal:
+            return None
+        later = [s for s in range(4) if s != seat and all(t != s for t, _c in trick)]
+        gone = {c for cards in game.played for c in cards} | {c for _s, c in trick}
+        voids, ceilings = shown_voids(game), trump_ceilings(game)
+        beaters = [Card(led, r) for r in Rank if Card(led, r).strength(trump) > best[1].strength(trump)
+                   and Card(led, r) not in gone and Card(led, r) not in hand]
+        if not any(may_hold(game, s, c, voids, ceilings) for s in later for c in beaters):
+            return None  # sa carte est maître : je garde mon As
+        nxt = (seat + 1) % 4
+        unseen = [Card(trump, r) for r in Rank if Card(trump, r) not in gone and Card(trump, r) not in hand]
+        if nxt in later and led in voids[nxt] and any(may_hold(game, nxt, c, voids, ceilings) for c in unseen):
+            return min((c for c in legal if c.suit == led), key=lambda c: (c.points(trump), c.strength(trump)))
+        return ace
+
+    @staticmethod
+    def _last_on_partner(game, seat, legal):
+        """Atouts tombés, je joue en dernier sur le pli de mon partenaire dans une couleur hors atout : ma carte
+        maîtresse, je la garde s'il reste au moins 3 cartes de la couleur dehors (je donne la plus chère des
+        autres), sinon je la donne ; un 10 non maître (As pas tombé) est donné (comme AsR)."""
+        trick, trump, hand = game.trick, game.trump, game.hands[seat]
+        led = trick[0][1].suit
+        if len(trick) != 3 or led == trump or trick[trick_winner(trick, trump)][0] != partner_of(seat):
+            return None
+        cards = [c for c in legal if c.suit == led]
+        gone = {c for cards_ in game.played for c in cards_} | {c for _s, c in trick}
+        if not cards or any(Card(trump, r) not in gone and Card(trump, r) not in hand for r in Rank):
+            return None
+        value = lambda c: (c.points(trump), c.strength(trump))
+        masters = [c for c in cards if AsRBot._is_master(c, trump, gone, hand)]
+        others = [c for c in cards if c not in masters]
+        out = [Card(led, r) for r in Rank if Card(led, r) not in gone and Card(led, r) not in hand]
+        if masters and others and len(out) >= 3:
+            return max(others, key=value)
+        if masters:
+            return max(masters, key=value)
+        ten, ace = Card(led, Rank.TEN), Card(led, Rank.ACE)
+        if ten in cards and ace not in gone and ace not in hand:
+            return ten  # 10 non maître : je le donne, l'As le prendrait plus tard
+        return None
+
+    @staticmethod
+    def _ace_call(game, seat, legal):
+        """Je ne fournis pas sur le pli de mon partenaire : j'ai As-10-Roi dans une couleur, je jette l'As
+        (appel : j'ai la longue dans cette couleur)."""
+        trump, hand = game.trump, game.hands[seat]
+        for ace in (c for c in legal if c.rank == Rank.ACE and c.suit != trump):
+            if all(any(d.suit == ace.suit and d.rank == r for d in hand) for r in (Rank.TEN, Rank.KING)):
+                return ace
+        return None
+
+    def _no_finesse(self, game, seat, legal):
+        """Pas d'impasse quand je fournis une couleur hors atout sur un pli adverse :
+        - déjà coupé par l'adversaire : ma plus petite carte ;
+        - j'ai l'As, en deuxième ou troisième : l'As tout de suite ;
+        - je n'ai pas l'As et il n'est pas tombé : en dernier, ma plus grosse carte qui prend (le 10), sinon la
+          plus petite ; avant, ma plus petite, ou une carte moyenne (Roi, Dame, Valet) si mon partenaire, qui
+          joue après moi, a appelé la couleur (il a l'As : l'adversaire entre nous doit mettre une grosse carte).
+        None : la règle générale (l'As est tombé, ou j'ai l'As en dernier)."""
+        trick, trump, hand = game.trick, game.trump, game.hands[seat]
+        led = trick[0][1].suit
+        cards = [c for c in legal if c.suit == led]
+        best = trick[trick_winner(trick, trump)]
+        if led == trump or not cards or best[0] == partner_of(seat):
+            return None
+        strength = lambda c: c.strength(trump)
+        small = min(cards, key=lambda c: (c.points(trump), strength(c)))
+        if best[1].suit == trump:
+            return small  # déjà coupé
+        last = len(trick) == 3
+        ace = Card(led, Rank.ACE)
+        gone = {c for cards_ in game.played for c in cards_} | {c for _s, c in trick}
+        if ace in cards:
+            return None if last else ace
+        if ace in gone:
+            return None
+        winners = [c for c in cards if trick_winner(trick + [(seat, c)], trump) == len(trick)]
+        if last:
+            return max(winners, key=strength) if winners else small
+        partner_after = all(s != partner_of(seat) for s, _c in trick)
+        if partner_after and led in self._called_suits(game, seat):
+            mids = [c for c in cards if c.rank in (Rank.KING, Rank.QUEEN, Rank.JACK)]
+            if mids:
+                return max(mids, key=strength)
+        return small
 
     @staticmethod
     def _ace_before_ten(game, seat, legal):
@@ -444,15 +600,18 @@ class PapiRobertBot(CoincheBot):
 
     @staticmethod
     def _allowed_discards(game, seat, legal):
-        """Jamais défausser un As sans le 10 et le Roi derrière, sauf si on n'a pas le choix."""
+        """Jamais défausser un As, sauf avec le 10 et le Roi derrière sur le pli de mon partenaire (c'est un
+        appel : j'ai la longue), ou si on n'a pas le choix."""
         trick, trump = game.trick, game.trump
         if not trick:
             return legal
         led = trick[0][1].suit
         hand = game.hands[seat]
+        partner_wins = trick[trick_winner(trick, trump)][0] == partner_of(seat)
 
         def protected(c):
-            return all(any(d.suit == c.suit and d.rank == r for d in hand) for r in (Rank.TEN, Rank.KING))
+            return partner_wins and all(any(d.suit == c.suit and d.rank == r for d in hand)
+                                        for r in (Rank.TEN, Rank.KING))
 
         allowed = [c for c in legal if not (c.rank == Rank.ACE and c.suit not in (led, trump) and not protected(c))]
         return allowed or legal
@@ -468,6 +627,19 @@ class PapiRobertBot(CoincheBot):
         opponents_trumps = self._opponents_may_have_trumps(game, seat)
         gives_lead = AsRBot._partner_first_announcer(game, seat)
         no_trump_lead = not trumps  # je n'ai pas d'atout, ou je garde mon dernier
+        contract = game.contract
+        last_one = (contract["mult"] == 1 or contract["value"] == CAPOT) and self._asr._last_opponent_trump(game, seat)
+        if last_one and len(trumps) >= 2:
+            # un seul atout dehors et j'en ai un plus fort qui n'est pas mon dernier : je le fais tomber avec le
+            # plus petit de ceux-là (comme AsR)
+            gone = {c for cards in game.played for c in cards}
+            unseen = next(c for c in CoincheBot._all_trumps(trump) if c not in gone and c not in game.hands[seat])
+            higher = [c for c in trumps if c.strength(trump) > unseen.strength(trump)]
+            if higher:
+                return min(higher, key=lambda c: c.strength(trump))
+        if last_one and side != legal:
+            no_trump_lead = True  # sinon je ne le fais pas tomber : je le fais couper
+            trumps = []
         if game.contract["mult"] > 1:
             legal = side  # coinché : on garde ses atouts pour couper
         elif trumps and opponents_trumps:
@@ -484,10 +656,18 @@ class PapiRobertBot(CoincheBot):
             # sans atout (ou je garde le dernier) : la couleur appelée, sinon une petite carte plutôt que les As
             if called_lead:
                 return called_lead
+            if last_one:
+                ruff = self._asr._force_ruff(game, seat, side)  # une couleur que l'adversaire n'a plus
+                if ruff is not None:
+                    return ruff
             return min(side, key=lambda c: (c.points(trump), c.strength(trump)))
         aces = [c for c in legal if c.rank == Rank.ACE and c.suit != trump]
         if aces:
             return aces[0]
+        gone = {c for cards in game.played for c in cards}
+        masters = [c for c in legal if c.suit != trump and AsRBot._is_master(c, trump, gone, game.hands[seat])]
+        if masters:
+            return max(masters, key=lambda c: (c.points(trump), c.strength(trump)))  # mes cartes maîtresses
         if called_lead:
             return called_lead
         return min(legal, key=lambda c: (c.suit == trump, c.points(trump), c.strength(trump)))
@@ -573,8 +753,32 @@ class PapiRobertBot(CoincheBot):
 
     @staticmethod
     def _called_suits(game, seat):
-        """Couleurs que le partenaire m'a demandées en défaussant sur mes entames atout (comme AsR)."""
-        return AsRBot._called_suits(game, seat)
+        """Couleurs que le partenaire m'a demandées :
+        - en défaussant sur mes entames atout (appel direct ou indirect, comme AsR), seulement s'il m'a annoncé
+          des As pendant les enchères, et pas si l'As de la couleur demandée est chez moi (ce n'était pas un
+          appel, il a juste défaussé) ;
+        - en jetant un As (il a la longue), sur mon entame atout ou sur un pli que j'ai gagné."""
+        trump, partner = game.trump, partner_of(seat)
+        showed_aces = AsRBot._partner_showed_aces(game, seat)
+        mine = set(game.hands[seat]) | set(game.played[seat])
+        calls = set()
+        for trick, _w in game.tricks:
+            if trick[0][0] != seat or trick[0][1].suit != trump:
+                continue
+            card = dict(trick)[partner]
+            if card.suit == trump:
+                continue
+            if card.rank == Rank.ACE:
+                calls.add(card.suit)
+                continue
+            target = card.suit if card.suit == SISTER[trump] else SISTER[card.suit]
+            if showed_aces and Card(target, Rank.ACE) not in mine:
+                calls.add(target)
+        for trick, winner in game.tricks:
+            card = dict(trick)[partner]
+            if winner == seat and card.rank == Rank.ACE and card.suit not in (trump, trick[0][1].suit):
+                calls.add(card.suit)
+        return calls
 
     @staticmethod
     def _opponents_may_have_trumps(game, seat):

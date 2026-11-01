@@ -151,7 +151,9 @@ Jeu :
   et je donne l'autre ; si les deux sont perdues (une carte encore dehors les bat), la plus chère ;
 - partenaire maître : s'il est sûr de faire le pli (je joue en dernier, ou sa carte est maîtresse et
   l'adversaire qui joue après moi ne peut pas couper), on lui donne en priorité son 10 sec (sinon l'As
-  adverse le prendrait) ; jamais un 10 accompagné (il peut faire un pli) ;
+  adverse le prendrait) ; un 10 accompagné, je le garde pour faire un autre pli seulement en défense quand
+  les atouts de l'attaque sont tombés, et en attaque quand les atouts adverses sont tombés ou quand un
+  adversaire a entamé et que mon partenaire prend avec son As ; sinon je le donne ; pli pas sûr : pas de 10 ;
 - pas d'impasse, quand je fournis une couleur hors atout (à l'entame : cartes maîtresses d'abord) :
   - pli adverse déjà coupé : ma plus petite carte ;
   - pli adverse, j'ai l'As : l'As en deuxième ou troisième ; en dernier, l'As s'il reste plus de 2
@@ -807,9 +809,10 @@ class AsRBot(CoincheBot):
             sure = self._partner_sure(game, seat)
             if dry and sure:
                 return dry[0]
-            # pli pas assuré : aucun 10 ; assuré : pas de 10 accompagné
+            # pli pas assuré : aucun 10 ; assuré : je garde un 10 accompagné seulement quand il fera un pli
+            keep_ten = self._keep_accompanied_ten(game, seat)
             keep = [c for c in legal if not (c.rank == Rank.TEN and c.suit != trump
-                                             and (not sure or sum(d.suit == c.suit for d in hand) > 1))]
+                                             and (not sure or (keep_ten and sum(d.suit == c.suit for d in hand) > 1)))]
             return super().play(game, seat, keep or legal)
         return super().play(game, seat, legal)
 
@@ -888,6 +891,21 @@ class AsRBot(CoincheBot):
             return set()
         return {s for s in SUITS if s != trump and has(hand, s, Rank.KING) and not has(hand, s, Rank.ACE)
                 and len(ranks_in(hand, s)) == 3}
+
+    def _keep_accompanied_ten(self, game, seat):
+        """Sur le pli de mon partenaire, je garde mon 10 accompagné (pour faire un autre pli) seulement :
+        - en défense, quand les atouts de l'attaque sont tous tombés ;
+        - en attaque, quand les atouts adverses sont tombés, ou quand un adversaire a entamé et que mon
+          partenaire prend avec son As (il va rejouer atout, mon 10 fera un pli maître).
+        Sinon je donne mon 10."""
+        trick, trump = game.trick, game.trump
+        if not self._opponents_may_have_trumps(game, seat):
+            return True
+        if team_of(game.contract["seat"]) != team_of(seat):
+            return False
+        best_seat, best = trick[trick_winner(trick, trump)]
+        return (team_of(trick[0][0]) != team_of(seat) and best_seat == partner_of(seat)
+                and best.rank == Rank.ACE and best.suit == trick[0][1].suit != trump)
 
     def _give_lost_card(self, game, seat, legal):
         """Avant-dernier pli, sur le pli du partenaire : je garde la carte qui peut encore gagner le dernier
