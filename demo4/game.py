@@ -44,8 +44,8 @@ PLAYER_INFO = {
                           "and plays them out. Bids like the AI."},
     "asr": {"label": "AsR", "stars": 4, "text": "80 shows two Aces, 90 asks for the other major, 110–140 ask for "
                                                 "precise Aces and 10s, discard calls, belote parity signal."},
-    "papirobert": {"label": "Papi Robert", "stars": 2, "text": "The “jeu aux As”: 80 with two Aces, "
-                                                              "90 looking for the second major, never 100 without both."},
+    "papirobert": {"label": "Papi Robert", "stars": 2, "text": "“Belote au miel”: 80 with two Aces, "
+                                                              "90 looking for the second major, 100–120 by number of suits."},
     "petitjeu": {"label": "Petit jeu", "stars": 2, "text": "80 with the Jack or the 9 and two trumps, 90 with both, "
                                                           "100 to 120 when master of trump."},
     "simple": {"label": "Simple bots", "stars": 1, "text": "Hand-written test bots: they bid on a point count and "

@@ -61,13 +61,17 @@ compte seulement les As hors atout, jamais l'As d'atout :
   toute la couleur ; derrière l'As de l'ouvreur, ses cartes qui suivent sauf une, donc pas le 10 sec) ; sans
   les trois As, l'ouvreur ne remonte pas (ce serait une fausse information) ;
 - sur 110 : +10 par As de la famille opposée ; 110 -> 120 -> 130 : l'ouvreur
-  qui a l'autre As de la famille opposée dit 130, le partenaire ajoute +10 par pli
-  supplémentaire dans la famille opposée (sans recompter son As) ;
+  qui a l'autre As de la famille opposée dit 130, le partenaire ajoute +10 par carte
+  maîtresse dans la famille opposée (sans recompter son As), comptées comme dans le dialogue 80 -> 100 ;
 - sur 120 : +10 avec l'As de la couleur sœur ; sur 130 (demande initiale) :
   +10 par 10 de la famille opposée ; sur 140 : +10 avec le 10 sœur.
 Capot de l'ouvreur : après 100 et +30 avec 5 atouts ; après 100, les trois As et les plis maîtres
 annoncés, si ses plis attendus font au moins 8 (tous les plis) ; après les réponses sur 110, si ses
 plis attendus (atouts, As, plis signalés) font au moins 8.
+Adversaires proches de la sortie (partie en 1 500) : tant qu'ils n'ont pas annoncé, pas de contrat qui,
+fait tout juste, leur laisserait de quoi sortir (environ 162 - contrat) : on passe (même l'ouverture à 80),
+sauf si ce contrat nous fait sortir devant eux ; si leur contrat, réussi, les fait sortir devant nous, on ne passe pas : on monte juste au-dessus dans sa meilleure
+couleur (une vraie couleur d'atout), sinon on contre.
 Collage : sur un 90 adverse, une main de 90 (donc avec un As) dit 100 (le partenaire la lit
 comme un 90 et ne répond que le complément) ; une main de 100 saute à 110 (le
 partenaire reste prudent : il passe) ; sur un 100 adverse, une vraie main de
@@ -152,7 +156,7 @@ Le reste du jeu est celui de CoincheBot.
 from ..core.cards import Card, Rank, Suit
 from .bots import CoincheBot, wants_coinche
 from .endgame import endgame_card
-from .engine import CAPOT, SUITS, partner_of, team_of, trick_winner
+from .engine import CAPOT, SUITS, partner_of, round_points, team_of, trick_winner
 
 RED = {Suit.COEUR, Suit.CARREAU}
 SISTER = {Suit.PIQUE: Suit.TREFLE, Suit.TREFLE: Suit.PIQUE, Suit.COEUR: Suit.CARREAU, Suit.CARREAU: Suit.COEUR}
@@ -246,14 +250,15 @@ def natural_opening(hand):
     return None
 
 
-def master_tens(hand, trump, partner_aces=()):
+def master_tens(hand, trump, partner_aces=(), suits=None):
     """Cartes maîtresses hors atout en plus des As (dialogue 80 -> 100) :
     - dans une couleur où j'ai l'As : les cartes qui le suivent sans trou (As-10-Roi : le 10 et le Roi) ;
       avec As-10 et au moins deux autres cartes, toute la couleur est maîtresse ;
     - dans une couleur où le partenaire a l'As : mes cartes qui suivent son As (10, Roi...), sauf une
-      que je joue sous son As (le 10 sec ne compte pas)."""
+      que je joue sous son As (le 10 sec ne compte pas).
+    suits : les couleurs comptées (toutes par défaut)."""
     total = 0
-    for s in SUITS:
+    for s in (SUITS if suits is None else suits):
         if s == trump:
             continue
         n = len(ranks_in(hand, s))
@@ -323,9 +328,51 @@ class AsRBot(CoincheBot):
             action = self._respond(game, seat, theirs[-1]) if theirs else self._open(game, seat)
         else:
             action = self._rebid(game, seat, mine, theirs)
+        action = self._near_exit(game, seat, action, legal)
         if action is not None and action[0] == "bid" and action[1] != CAPOT:
             action = ("bid", min(action[1], MAX_BID), action[2])
         return action if action in legal else ("pass",)
+
+    @staticmethod
+    def _wins_if_made(game, team, value):
+        """Le contrat value de l'équipe team, fait tout juste, fait-il gagner la partie à l'une des équipes ?
+        Renvoie l'équipe gagnante (team ou l'autre) ou None (personne ne sort)."""
+        mine = value if value == CAPOT else value + round_points(value)
+        theirs = 0 if value == CAPOT else round_points(162 - value)
+        after = [0, 0]
+        after[team] = game.totals[team] + mine
+        after[1 - team] = game.totals[1 - team] + theirs
+        if max(after) >= game.target and after[0] != after[1]:
+            return 0 if after[0] > after[1] else 1
+        return None
+
+    def _near_exit(self, game, seat, action, legal):
+        """Adversaires proches de la sortie :
+        - personne n'a annoncé chez eux : pas de contrat qui, fait tout juste, les ferait sortir (ils gardent
+          environ 162 - contrat) ; je passe, sauf si ce contrat me fait sortir devant eux ;
+        - leur contrat, s'il passe, les fait sortir : je ne passe pas ; je monte juste au-dessus dans ma
+          meilleure couleur (une vraie couleur d'atout, pas la leur), sinon je contre."""
+        team = team_of(seat)
+        contract = game.contract
+        opp_spoke = any(team_of(s) != team and a[0] == "bid" for s, a in game.bids)
+        if not opp_spoke:
+            if (action is not None and action[0] == "bid"
+                    and self._wins_if_made(game, team, min(action[1], MAX_BID) if action[1] != CAPOT else CAPOT)
+                    == 1 - team):
+                return ("pass",)
+            return action
+        if contract is None or team_of(contract["seat"]) == team or contract["mult"] != 1:
+            return action
+        value = contract["value"]
+        if (self._wins_if_made(game, 1 - team, value) != 1 - team
+                or (action is not None and action in legal and action[0] != "pass")):
+            return action
+        hand = game.hands[seat]
+        mine = [(trump_type(hand, s), s) for s in SUITS if s != contract["suit"] and trump_type(hand, s)]
+        if mine and value < MAX_BID:
+            _k, suit = max(mine, key=lambda o: (TYPE_RANK[o[0]], strength_score(hand, o[1])))
+            return ("bid", value + 10, suit)
+        return ("coinche",)
 
     @staticmethod
     def _wants_surcoinche(game, seat):
@@ -501,7 +548,7 @@ class AsRBot(CoincheBot):
                 if ace_suit is None:  # mon 120 ne signalait pas un As de la famille opposée
                     return None
                 other = next(s for s in opposite(suit) if s != ace_suit)
-                extra = (top_tricks(hand, ace_suit) - 1) + top_tricks(hand, other, above={Rank.ACE})
+                extra = master_tens(hand, suit, partner_aces=[other], suits=opposite(suit))
                 return ("bid", 130 + 10 * extra, suit) if extra > 0 else None
             if (p_first[1] == 80 and p_first[2] != suit and mine[0][1][2] == suit
                     and self._acts_as_100(game, seat, mine[0])):
@@ -583,7 +630,7 @@ class AsRBot(CoincheBot):
             held = {s for s in opp if has(hand, s, Rank.ACE)}
             expected = n + side_aces(hand, suit) + partner_aces + extra
             if len(mine) == 1:  # les deux As chez le partenaire : mes cartes derrière deviennent maîtresses
-                expected += sum(top_tricks(hand, s, above={Rank.ACE}) for s in opp if s not in held)
+                expected += master_tens(hand, suit, partner_aces=[s for s in opp if s not in held], suits=opp)
             if expected >= 8:
                 return ("bid", CAPOT, suit)
         return None

@@ -116,8 +116,8 @@ def check_110_dialogue():
     # 110 cœur (Sud a l'As de carreau, il cherche les As noirs) ; Nord a un As noir : 120 ; Sud a l'autre :
     # 130 ; Nord compte ses plis noirs en plus : 160
     south = hand(H="J 9 A K", S="7", C="A", D="A")
-    north = hand(S="A 10 K", C="10", H="7", D="8 9 Q")
-    g = deal([south, hand(S="Q J", D="10 J", C="7 8"), north], [])
+    north = hand(S="A 10 K", C="10 8", H="7", D="9 Q")
+    g = deal([south, hand(S="Q J", D="10 J", C="7 9"), north], [])
     g.bid(0, bot.bid(g, 0))
     assert g.bids[-1][1] == ("bid", 110, H), g.bids
     g.bid(1, P)
@@ -130,6 +130,16 @@ def check_110_dialogue():
     assert bot.bid(g, 2) == ("bid", 160, H)
     g.bid(2, ("bid", 160, H)); g.bid(3, P)
     assert bot.bid(g, 0) == ("bid", CAPOT, H)
+    # même dialogue, mais le 10 de trèfle de Nord est sec derrière l'As de Sud : il ne compte pas -> 150
+    north = hand(S="A 10 K", C="10", H="7", D="8 9 Q")
+    g = deal([south, hand(S="Q J", D="10 J", C="7 8"), north],
+             [("bid", 110, H), P, ("bid", 120, H), P, ("bid", 130, H), P])
+    assert bot.bid(g, 2) == ("bid", 150, H), bot.bid(g, 2)
+    # As-10 et deux autres cartes : toute la couleur est maîtresse (10, 8, 7) -> 160
+    north = hand(S="A 10 8 7", C="Q", H="7", D="8 9")
+    g = deal([south, hand(S="Q J", D="10 J", C="7 8"), north],
+             [("bid", 110, H), P, ("bid", 120, H), P, ("bid", 130, H), P])
+    assert bot.bid(g, 2) == ("bid", 160, H), bot.bid(g, 2)
 
 
 def check_100_dialogue():
@@ -621,6 +631,25 @@ def check_guarded_king():
     assert bot.lead(g, 0, g.hands[0]).suit != C, bot.lead(g, 0, g.hands[0])
 
 
+def check_near_exit():
+    # Est-Ouest à 50 points de la sortie (1 450) : Sud n'ouvre ni 90 ni 80 (fait tout juste, ils sortiraient)
+    for south, normal in [(hand(H="J 7 8", S="A", D="7 8", C="7 8"), ("bid", 90, H)),
+                          (hand(S="A 7", D="A 8", C="7 8", H="7 8"), ("bid", 80, None))]:
+        g = deal([south], [])
+        got = bot.bid(g, 0)
+        assert got[0] == "bid" and got[1] == normal[1], got
+        g.totals = [0, 1450]
+        assert bot.bid(g, 0) == P, bot.bid(g, 0)
+    # Ouest annonce 100 trèfle et sortirait s'il le fait (il lui manque 150) : Nord ne passe pas
+    for north, want in [(hand(H="J 7 8", S="A", D="7 8", C="7 8"), ("bid", 110, H)),     # vraie couleur : il monte
+                        (hand(H="7 8", S="A 7", D="7 8", C="Q 8"), ("coinche",))]:       # rien : il contre
+        g = deal([hand(S="9", D="9"), hand(C="J A 10 K"), north], [])
+        g.bid(0, P); g.bid(1, ("bid", 100, C))
+        assert bot.bid(g, 2) == P, bot.bid(g, 2)                                         # score normal : il passe
+        g.totals = [0, 1350]
+        assert bot.bid(g, 2) == want, bot.bid(g, 2)
+
+
 def check_full_games(n=100):
     rng = random.Random(0)
     for _ in range(n):
@@ -662,8 +691,9 @@ def main():
     check_change_to_90()
     check_last_on_partner()
     check_guarded_king()
+    check_near_exit()
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, réflexion de fin de donne, changement de couleur à 90, dernier sur le pli du partenaire, Roi troisième gardé, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, réflexion de fin de donne, changement de couleur à 90, dernier sur le pli du partenaire, Roi troisième gardé, adversaires proches de la sortie, parties) : OK")
 
 
 if __name__ == "__main__":

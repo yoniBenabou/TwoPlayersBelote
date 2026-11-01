@@ -1,52 +1,53 @@
-"""Robot "Papi Robert" pour la Coinche à 4 : le jeu aux As de Papi Robert
-(fiche "Belote au miel"). Majeures = Valet et 9 d'atout ; les As comptés sont
-ceux des couleurs autres que l'atout.
+"""Robot "Papi Robert" pour la Coinche à 4 : fiche "Belote au miel" (version mise à jour).
+Majeures = Valet et 9 d'atout. "+10 par As" compte toujours les As hors atout, jamais l'As d'atout.
 
-Ouvertures (on choisit d'abord la couleur avec le plus de majeures) :
-- 80, "jeu aux As" : 2 ou 3 atouts dont le Valet ou le 9 (ou la belote), et
-  2 As ; on choisit la couleur la plus forte (points des atouts, belote, As) ;
-- 90 (toujours avec un As, d'atout ou à côté) : Valet troisième, ou 9 (ou
-  Valet) quatrième ; ou les deux majeures en 3 atouts avec un As mais un jeu "light"
-  à côté (rien à côté avec l'As d'atout ; un seul As et pas de 10 sinon) ;
-- 100 : 3 atouts dont les deux majeures et un As (l'As d'atout ou un As à
-  côté) ; ou maître à l'atout : 4 atouts dont les deux majeures et un As, ou
-  5 atouts dont les deux majeures (Valet, 9, 10, Roi, Dame) ; jamais 100 sans
-  les deux majeures ;
-- 110 : maître à l'atout et tricolore, ou 5 atouts dont les deux majeures ;
-- 120 : comme 100 avec 4 atouts (ou plus) mais bicolore.
+Force à l'atout (couleur avec le plus de majeures, puis la plus forte) :
+- 90 : au moins 3 atouts avec le Valet ou le 9, et au moins un As hors atout ;
+- 100 : au moins 3 atouts avec Valet, 9 et As d'atout, ou au moins 4 atouts avec Valet et 9, et les
+  4 couleurs ; jeu nul à côté (aucun As hors atout) : on reste timide à 90 ;
+- 110 : même force que 100, jeu tricolore ; 120 : même force, jeu bicolore.
+Ouverture : 110 ou 120 directement si le jeu les vaut ; sinon 80 avec 2 As (l'As d'atout compte) et au
+moins 2 atouts dont le Valet ou le 9 (sans eux, exceptionnellement : 4 atouts avec la belote, ou 5 ou 6
+atouts) ; sinon la force à l'atout (90 ou 100). Ouvert à 80 avec un jeu de 100 : on remonte à 100 au
+tour suivant si les enchères le permettent (pas si le partenaire a changé d'atout).
 
-Réponses du partenaire (une seule fois) :
-- sur 80 : il change l'atout en s'appuyant sur les As de l'ouvreur : dans sa
-  couleur qui a le plus de majeures (Valet ou 9, au moins 3 cartes), +10, +20
-  avec un As, +30 avec deux As ;
-- sur 90 : seulement avec la deuxième majeure (même avec des As) : +10, puis
-  +10 par As ;
+Réponses du partenaire (une fois) :
+- sur 80 : avec un jeu d'au moins 100 ailleurs, je l'annonce chez moi ; sinon avec le complément, +10
+  par majeure (Valet, 9) et +10 par As ; sinon je change d'atout si j'ai une ouverture (90) ailleurs ;
+- sur 90 : +10 avec la deuxième majeure, puis +10 par As ; sans elle, rien au premier tour ; si un
+  adversaire a parlé et que j'ai des As, au tour suivant : 90 + 10 par As si c'est encore possible ;
 - sur 100 : +10 par As ;
-- sur 110 : rien avec 1 As, +10 avec 2 As, +20 avec 3 As ;
-- sur 120 : +10 seulement avec les 3 As.
-Relances de l'ouvreur (une fois) : ouvert à 110 avec 5 atouts et le
-partenaire a ajouté 20 ou plus : capot ; ouvert à 90 avec 5 atouts (ou plus)
-et une majeure, le partenaire a montré la deuxième : +10 par As, jusqu'à 130.
-Coinche : même règle que CoincheBot. Pas de surcoinche. La fiche ne dit rien
-des adversaires : si l'annonce n'est plus possible, on passe.
+- sur 110 : rien avec un As, +10 avec deux, +20 avec trois ; sur 120 : +10 seulement avec les trois ;
+- sur 110 ou 120 avec les trois As et un 10 derrière un As : capot (le partenaire a 4 atouts, il me
+  fait la passe).
+Relances de l'ouvreur (une fois) : 110 ou 120, le partenaire a montré les trois As : capot avec 5 atouts
+ou un 10 second hors atout ;
+90 avec 5 atouts et une majeure, le partenaire a montré la deuxième : +10 par As, jusqu'à 130.
+Belote : jamais annoncée, sauf si mon partenaire a annoncé un vrai 100 ou plus (jusqu'à 160), que je
+n'ai rien répondu et que l'adversaire a monté de 10 : je dis exactement 20 de plus que mon partenaire,
+jamais plus.
+
+Après une annonce adverse : sur 80, mon annonce vaut sa valeur exacte ; sur 90 ou plus, j'annonce 10 de
+plus que ma vraie valeur (collage +10 ou saut +20 : lu 10 de moins), et je passe si ma vraie valeur est
+sous l'annonce adverse. Le partenaire lit l'annonce 10 de moins et répond par-dessus ce qui a été dit.
+Sortie (comme AsR, partie en 1 500) : pas de contrat qui, fait tout juste, ferait sortir les adversaires
+devant nous ; si leur contrat les fait sortir, on monte juste au-dessus dans une vraie couleur d'atout,
+sinon on contre.
+Coinche : même règle que CoincheBot. Pas de surcoinche.
 
 Jeu :
-- l'équipe qui a pris joue atout quand elle a la main, tant que les
-  adversaires peuvent en avoir, en commençant fort (le plus gros) ; puis ses As, puis la couleur que le partenaire a appelée, puis la
-  plus petite carte ;
-- en défense : la même règle qu'AsR (pas d'appels en défense, jamais d'entame
-  atout sauf s'il ne reste que ça ; contre 140 ou plus les cartes maîtresses ;
-  faire couper le preneur en jouant la couleur la plus longue, même au prix
-  d'un As ou d'un 10) ;
-- appels (seulement dans l'équipe qui a pris) : quand le partenaire entame atout
-  et que je n'en ai plus, je défausse vers la couleur de mon As : appel direct
-  (une carte de cette couleur) si elle est de la famille de l'atout, appel
-  indirect (sa couleur sœur) sinon ; jeter l'As lui-même annonce la longue
-  maîtresse (au moins As-10-Roi) ; le partenaire rejoue la couleur demandée.
-Contrat coinché (ou surcoinché) : l'équipe coinchée garde ses atouts (pas
-d'entame atout).
-On ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas
-le choix. Le reste du jeu en second, troisième ou quatrième est celui de CoincheBot.
+- attaque : on retire les atouts adverses. Partenaire qui a annoncé l'atout le premier : je lui rends la
+  main (petit atout, ou sans atout la couleur qu'il a appelée, sinon une petite carte) ; sinon atouts forts
+  d'abord, puis les As ; sans atout (adversaires encore à l'atout), une petite carte plutôt que les As ;
+  exception : mon dernier atout, je le garde si un atout adverse est encore dehors, que ma main est faible
+  (aucune carte maîtresse hors atout) et que mon partenaire n'a pas annoncé de grande force (moins de 110) ;
+- défense : avec au moins 2 As hors atout, je les joue d'abord, puis je rejoue une de ces couleurs pour
+  faire couper ; sinon la défense d'AsR (faire couper le preneur, pas d'entame atout) ;
+- appels (équipe qui a pris, comme AsR) : sur l'atout du partenaire, appel direct (une carte de la
+  couleur) dans la famille de l'atout, appel indirect (couleur sœur) sinon ; le partenaire rejoue la couleur ;
+- contrat coinché : on garde ses atouts (pas d'entame atout) ;
+- on ne défausse jamais un As sans le 10 et le Roi derrière, sauf si on n'a pas le choix.
+Le reste du jeu en second, troisième ou quatrième est celui de CoincheBot.
 """
 from ..core.cards import Rank, Suit
 from .asr import AsRBot
@@ -54,8 +55,9 @@ from .bots import CoincheBot, wants_coinche
 from .engine import CAPOT, SUITS, partner_of, team_of
 
 SISTER = {Suit.PIQUE: Suit.TREFLE, Suit.TREFLE: Suit.PIQUE, Suit.COEUR: Suit.CARREAU, Suit.CARREAU: Suit.COEUR}
-SMALL = (Rank.SEVEN, Rank.EIGHT, Rank.NINE, Rank.QUEEN, Rank.KING, Rank.JACK)  # hors atout : pas As ni 10
 MAX_RELAUNCH = 130
+MAX_BID = 160
+GREAT_STRENGTH = 110  # "grande force" du partenaire
 
 
 def side_aces(hand, trump):
@@ -66,34 +68,43 @@ def majors(hand, suit):
     return sum(c.suit == suit and c.rank in (Rank.JACK, Rank.NINE) for c in hand)
 
 
+def _ranks(hand, suit):
+    return {c.rank for c in hand if c.suit == suit}
+
+
+def trump_value(hand, suit):
+    """Force à l'atout dans cette couleur (90 à 120), sans le jeu aux As, ou None."""
+    r = _ranks(hand, suit)
+    n = len(r)
+    jack, nine = Rank.JACK in r, Rank.NINE in r
+    if jack and nine and (n >= 4 or (n >= 3 and Rank.ACE in r)):
+        colours = len({c.suit for c in hand})
+        if colours <= 2:
+            return 120
+        if colours == 3:
+            return 110
+        return 100 if side_aces(hand, suit) else 90  # jeu nul à côté : timide
+    if (jack or nine) and n >= 3 and side_aces(hand, suit) >= 1:
+        return 90
+    return None
+
+
+def eighty_trumps(hand, suit):
+    """Atouts d'un 80 : au moins 2 avec le Valet ou le 9 ; sans eux, 4 avec la belote ou 5 et plus."""
+    n = sum(c.suit == suit for c in hand)
+    if majors(hand, suit):
+        return n >= 2
+    return n >= 5 or (n == 4 and has_belote(hand, suit))
+
+
 def opening_value(hand, suit):
     """Ouverture de Papi Robert avec cet atout (80 à 120), ou None."""
-    n = sum(c.suit == suit for c in hand)
-    m = majors(hand, suit)
-    aces = side_aces(hand, suit)
-    if m == 2:
-        trump_ace = any(c.suit == suit and c.rank == Rank.ACE for c in hand)
-        if n >= 4 and (aces >= 1 or trump_ace or n >= 5):  # maître à l'atout
-            colours = len({c.suit for c in hand})
-            return 120 if colours <= 2 else 110 if (colours == 3 or n >= 5) else 100
-        if n == 3 and (aces >= 1 or trump_ace):
-            tens = sum(c.rank == Rank.TEN and c.suit != suit for c in hand)
-            return 90 if aces + tens <= (0 if trump_ace else 1) else 100  # jeu light à côté : on reste à 90
-        if n == 2 and aces >= 2:
-            return 80
-        return None  # Valet et 9 sans aucun As : 90 oblige d'avoir un As
-    if m == 1:
-        jack = any(c.suit == suit and c.rank == Rank.JACK for c in hand)
-        any_ace = aces >= 1 or any(c.suit == suit and c.rank == Rank.ACE for c in hand)
-        if n >= 4 and any_ace:
-            return 90  # Valet ou 9 quatrième et un As (d'atout ou à côté)
-        if n == 3 and jack and any_ace and aces < 2:
-            return 90  # Valet troisième et un As (d'atout ou à côté)
-        if n in (2, 3) and aces >= 2:
-            return 80
-    if m == 0 and n in (2, 3) and aces >= 2 and has_belote(hand, suit):
-        return 80  # jeu aux As : la belote à l'atout et 2 As à côté
-    return None
+    value = trump_value(hand, suit)
+    if value is not None and value >= 110:
+        return value
+    if sum(c.rank == Rank.ACE for c in hand) >= 2 and eighty_trumps(hand, suit):
+        return 80  # 2 As (l'As d'atout compte)
+    return value
 
 
 def has_belote(hand, suit):
@@ -106,39 +117,71 @@ def strength_score(hand, suit):
             + 11 * side_aces(hand, suit))
 
 
-def best_opening(hand):
-    """(valeur, couleur) : la plus haute annonce ; à égalité, la couleur avec le plus
-    de majeures (à 80, jeu aux As : la couleur la plus forte, belote comprise)."""
+def _best(hand, value_of):
+    """(valeur, couleur) : la plus haute valeur ; à égalité, une vraie couleur d'atout, le plus de
+    majeures, puis la couleur la plus forte."""
     options = []
     for suit in SUITS:
-        value = opening_value(hand, suit)
+        value = value_of(hand, suit)
         if value is not None:
-            m = majors(hand, suit) if value > 80 else 0
-            options.append((value, m, strength_score(hand, suit), sum(c.suit == suit for c in hand), suit))
+            options.append((value, trump_value(hand, suit) or 0, majors(hand, suit), strength_score(hand, suit),
+                            sum(c.suit == suit for c in hand), suit))
     if not options:
         return None
-    value, _m, _s, _n, suit = max(options, key=lambda o: o[:4])
-    return value, suit
+    best = max(options, key=lambda o: o[:5])
+    return best[0], best[-1]
+
+
+def best_opening(hand):
+    return _best(hand, opening_value)
+
+
+def best_trump(hand):
+    """Meilleure force à l'atout (sans le jeu aux As)."""
+    return _best(hand, trump_value)
+
+
+def second_ten(hand, trump):
+    """Un 10 second hors atout (le 10 et une autre carte : elle tombe sous l'As du partenaire)."""
+    return any(any(c.suit == s and c.rank == Rank.TEN for c in hand) and sum(c.suit == s for c in hand) == 2
+               for s in SUITS if s != trump)
+
+
+def tens_behind_aces(hand, trump):
+    return sum(any(c.suit == s and c.rank == Rank.ACE for c in hand)
+               and any(c.suit == s and c.rank == Rank.TEN for c in hand) for s in SUITS if s != trump)
 
 
 def response(hand, value, suit):
-    """Réponse à une ouverture du partenaire (value, suit) : (valeur, couleur) ou None."""
-    if value == 80:  # jeu aux As : on change l'atout, appuyé sur ses As
-        options = [(majors(hand, s), sum(c.suit == s for c in hand), s) for s in SUITS
-                   if majors(hand, s) >= 1 and sum(c.suit == s for c in hand) >= 3]
-        if not options:
-            return None
-        new = max(options, key=lambda o: o[:2])[2]
-        return 90 + 10 * min(side_aces(hand, new), 2), new
+    """Réponse à la vraie valeur value du partenaire dans suit : (valeur, couleur) (valeur CAPOT possible),
+    ou None."""
+    answer = _response(hand, value, suit)
+    if isinstance(answer, tuple) or answer is None:
+        return answer
+    return answer, suit
+
+
+def _response(hand, value, suit):
     aces = side_aces(hand, suit)
+    if value == 80:
+        # un jeu d'au moins 100 : je l'annonce chez moi ; sinon le complément ; sinon je change d'atout
+        mine = [(trump_value(hand, s), s) for s in SUITS if s != suit and trump_value(hand, s)]
+        best = max(mine, key=lambda o: (o[0], majors(hand, o[1]), strength_score(hand, o[1])), default=None)
+        if best and best[0] >= 100:
+            return best
+        if majors(hand, suit):
+            return 80 + 10 * majors(hand, suit) + 10 * aces
+        return best
     if value == 90:
-        return (100 + 10 * aces, suit) if majors(hand, suit) >= 1 else None
+        return 100 + 10 * aces if majors(hand, suit) else None
     if value == 100:
-        return (value + 10 * aces, suit) if aces else None
+        return 100 + 10 * aces if aces else None
+    if value in (110, 120) and aces >= 3 and tens_behind_aces(hand, suit):
+        return CAPOT  # le partenaire a 4 atouts : il me fait la passe, mes As et mes 10 sont maîtres
     if value == 110:  # rien avec un As, +10 avec deux, +20 avec trois
-        return (130, suit) if aces >= 3 else (120, suit) if aces == 2 else None
+        return 130 if aces >= 3 else 120 if aces == 2 else None
     if value == 120:  # seulement avec les trois As : +10
-        return (130, suit) if aces >= 3 else None
+        return 130 if aces >= 3 else None
     return None
 
 
@@ -153,20 +196,85 @@ class PapiRobertBot(CoincheBot):
             return ("pass",)
         if ("coinche",) in legal and wants_coinche(hand, game.contract):
             return ("coinche",)
-        partner = partner_of(seat)
-        mine = [i for i, (s, a) in enumerate(game.bids) if s == seat and a[0] == "bid"]
-        partner_bids = [(i, a) for i, (s, a) in enumerate(game.bids) if s == partner and a[0] == "bid"]
-        action = None
-        if not mine:
-            if partner_bids:
-                answer = response(hand, *partner_bids[-1][1][1:])
-                action = answer and ("bid", min(answer[0], 160), answer[1])
-            else:
-                opening = best_opening(hand)
-                action = opening and ("bid", opening[0], opening[1])
-        elif len(mine) == 1 and partner_bids and partner_bids[-1][0] > mine[0]:
-            action = self._relaunch(hand, game.bids[mine[0]][1], partner_bids[-1][1])
+        action = self._choose_bid(game, seat)
+        action = self._near_exit(game, seat, action, legal)
+        if action is not None and action[0] == "bid" and action[1] != CAPOT:
+            action = ("bid", min(action[1], MAX_BID), action[2])
         return action if action in legal else ("pass",)
+
+    def _choose_bid(self, game, seat):
+        hand, bids = game.hands[seat], game.bids
+        partner = partner_of(seat)
+        mine = [i for i, (s, a) in enumerate(bids) if s == seat and a[0] == "bid"]
+        partner_bids = [(i, a) for i, (s, a) in enumerate(bids) if s == partner and a[0] == "bid"]
+        if not mine:
+            if not partner_bids:
+                return self._open(game, seat)
+            i, (_k, value, suit) = partner_bids[-1]
+            true = self._true_value(game, i)
+            already_spoke = any(s == seat for s, _a in bids[partner_bids[0][0] + 1:])
+            if already_spoke:
+                return self._second_turn(game, seat, i, value, true, suit)
+            answer = response(hand, true, suit)
+            if answer is None:
+                return None
+            answer, new = answer
+            if answer == CAPOT:
+                return ("bid", CAPOT, new)
+            if new == suit:
+                return ("bid", value + answer - true, suit)
+            opp = game.contract if team_of(game.contract["seat"]) != team_of(seat) else None
+            if opp is not None and opp["value"] >= 90:
+                return ("bid", answer + 10, new) if answer >= opp["value"] else None  # collage
+            return ("bid", answer, new)  # je change d'atout
+        if len(mine) == 1:
+            _k, value, suit = bids[mine[0]][1]
+            other_suit = any(a[2] != suit for i, a in partner_bids if i > mine[0])
+            if value == 80 and trump_value(hand, suit) == 100 and not other_suit:
+                return ("bid", 100, suit)  # ouvert à 80 avec un jeu de 100 : je remonte si c'est possible
+            if partner_bids and partner_bids[-1][0] > mine[0]:
+                return self._relaunch(hand, bids[mine[0]][1], partner_bids[-1][1])
+        return None
+
+    @staticmethod
+    def _true_value(game, index):
+        """Vraie valeur de l'annonce d'indice index : 10 de moins si elle passe par-dessus une annonce
+        adverse d'au moins 90."""
+        seat, (_k, value, _suit) = game.bids[index]
+        before = next((a for s, a in reversed(game.bids[:index]) if a[0] == "bid"), None)
+        last_seat = next((s for s, a in reversed(game.bids[:index]) if a[0] == "bid"), None)
+        if before is not None and team_of(last_seat) != team_of(seat) and before[1] >= 90:
+            return value - 10
+        return value
+
+    def _open(self, game, seat):
+        hand = game.hands[seat]
+        contract = game.contract
+        if contract is None:
+            opening = best_opening(hand)
+            return opening and ("bid", opening[0], opening[1])
+        best = best_trump(hand)  # un adversaire a parlé : plus de jeu aux As
+        if best is None:
+            return None
+        value, suit = best
+        opp = contract["value"]
+        if opp == 80:
+            return ("bid", value, suit)  # valeur exacte
+        return ("bid", value + 10, suit) if value >= opp else None  # collage (+10) ou saut (+20) : lu 10 de moins
+
+    def _second_turn(self, game, seat, index, value, true, suit):
+        """Je n'ai pas répondu à mon partenaire et un adversaire a parlé depuis."""
+        hand = game.hands[seat]
+        opp_after = any(team_of(s) != team_of(seat) and a[0] == "bid" for s, a in game.bids[index + 1:])
+        if not opp_after:
+            return None
+        if true >= 100 and has_belote(hand, suit):
+            # exactement 20 de plus : ma belote ; jamais plus (l'adversaire a dû monter de 10 seulement)
+            return ("bid", value + 20, suit) if value + 20 <= MAX_BID else None
+        aces = side_aces(hand, suit)
+        if true == 90 and not majors(hand, suit) and aces:
+            return ("bid", value + 10 * aces, suit)  # sans la deuxième majeure : mes As au second tour
+        return None
 
     @staticmethod
     def _relaunch(hand, opening, answer):
@@ -176,13 +284,37 @@ class PapiRobertBot(CoincheBot):
         if partner_suit != suit:
             return None
         n = sum(c.suit == suit for c in hand)
-        if value == 110 and n >= 5 and majors(hand, suit) == 2 and partner_value - value >= 20:
-            return ("bid", CAPOT, suit)
+        three_aces = (value == 110 and partner_value - value >= 20) or (value == 120 and partner_value - value >= 10)
+        if three_aces and (n >= 5 or second_ten(hand, suit)):
+            return ("bid", CAPOT, suit)  # le partenaire a les 3 As : gros jeu, capot
         if value == 90 and n >= 5 and majors(hand, suit) == 1:
             target = min(partner_value + 10 * side_aces(hand, suit), MAX_RELAUNCH)
             if target > partner_value:
                 return ("bid", target, suit)
         return None
+
+    @staticmethod
+    def _near_exit(game, seat, action, legal):
+        """Sortie (comme AsR) : pas de contrat qui ferait sortir les adversaires devant nous ; si leur
+        contrat les fait sortir, on monte juste au-dessus dans une vraie couleur d'atout, sinon on contre."""
+        team, contract = team_of(seat), game.contract
+        if not any(team_of(s) != team and a[0] == "bid" for s, a in game.bids):
+            if action is not None and action[0] == "bid":
+                value = action[1] if action[1] == CAPOT else min(action[1], MAX_BID)
+                if AsRBot._wins_if_made(game, team, value) == 1 - team:
+                    return ("pass",)
+            return action
+        if contract is None or team_of(contract["seat"]) == team or contract["mult"] != 1:
+            return action
+        value = contract["value"]
+        if (AsRBot._wins_if_made(game, 1 - team, value) != 1 - team
+                or (action is not None and action in legal and action[0] != "pass")):
+            return action
+        hand = game.hands[seat]
+        suits = [s for s in SUITS if s != contract["suit"] and trump_value(hand, s)]
+        if suits and value < MAX_BID:
+            return ("bid", value + 10, max(suits, key=lambda s: (trump_value(hand, s), strength_score(hand, s))))
+        return ("coinche",)
 
     # ---------- jeu ----------
     def play(self, game, seat):
@@ -213,26 +345,74 @@ class PapiRobertBot(CoincheBot):
 
     def lead(self, game, seat, legal):
         trump = game.trump
-        attacking = team_of(game.contract["seat"]) == team_of(seat)
+        if team_of(game.contract["seat"]) != team_of(seat):
+            return self._defence_lead(game, seat, legal)
         called = [c for c in legal if c.suit in self._called_suits(game, seat)]
         called_lead = min(called, key=lambda c: c.strength(trump)) if called else None
-        coinched = game.contract["mult"] > 1
         side = [c for c in legal if c.suit != trump] or legal
-        if not attacking:
-            # même défense qu'AsR (pas d'appels en défense, pas d'entame atout)
-            return AsRBot().defence_lead(game, seat, legal)
         trumps = [c for c in legal if c.suit == trump]
-        if coinched:
+        opponents_trumps = self._opponents_may_have_trumps(game, seat)
+        gives_lead = AsRBot._partner_first_announcer(game, seat)
+        no_trump_lead = not trumps  # je n'ai pas d'atout, ou je garde mon dernier
+        if game.contract["mult"] > 1:
             legal = side  # coinché : on garde ses atouts pour couper
-        elif trumps and self._opponents_may_have_trumps(game, seat):
-            # on a pris : atout tant que les adversaires en ont, en commençant fort
-            return max(trumps, key=lambda c: c.strength(trump))
+        elif trumps and opponents_trumps:
+            if len(trumps) == 1 and side != legal and self._keep_last_trump(game, seat):
+                no_trump_lead = True
+            elif gives_lead:
+                return min(trumps, key=lambda c: c.strength(trump))  # je rends la main à mon partenaire
+            else:
+                return max(trumps, key=lambda c: c.strength(trump))  # atouts forts d'abord
+        if opponents_trumps and no_trump_lead:
+            # sans atout (ou je garde le dernier) : la couleur appelée, sinon une petite carte plutôt que les As
+            if called_lead:
+                return called_lead
+            return min(side, key=lambda c: (c.points(trump), c.strength(trump)))
         aces = [c for c in legal if c.rank == Rank.ACE and c.suit != trump]
         if aces:
             return aces[0]
         if called_lead:
             return called_lead
         return min(legal, key=lambda c: (c.suit == trump, c.points(trump), c.strength(trump)))
+
+    def _keep_last_trump(self, game, seat):
+        """Mon dernier atout : je le garde pour couper plus tard si ma main est faible (aucune carte maîtresse
+        hors atout en ce moment) et que mon partenaire n'a pas annoncé de grande force."""
+        hand, trump = game.hands[seat], game.trump
+        gone = {c for cards in game.played for c in cards} | {c for _s, c in game.trick}
+        if any(c.suit != trump and AsRBot._is_master(c, trump, gone, hand) for c in hand):
+            return False
+        partner = partner_of(seat)
+        shown = [self._true_value(game, i) for i, (s, a) in enumerate(game.bids)
+                 if s == partner and a[0] == "bid" and a[1] != CAPOT]
+        capot = any(s == partner and a[0] == "bid" and a[1] == CAPOT for s, a in game.bids)
+        return not capot and max(shown, default=0) < GREAT_STRENGTH
+
+    def _defence_lead(self, game, seat, legal):
+        """Défense : avec au moins 2 As hors atout, je les joue d'abord, puis je rejoue une de leurs couleurs
+        pour faire couper (celle que le preneur n'a plus, sinon celle où il reste le moins de cartes dehors) ;
+        sinon la défense d'AsR."""
+        trump = game.trump
+        side = [c for c in legal if c.suit != trump]
+        aces = [c for c in side if c.rank == Rank.ACE]
+        led_aces = {t[0][1].suit for t, _w in game.tricks
+                    if t[0][0] == seat and t[0][1].rank == Rank.ACE and t[0][1].suit != trump}
+        if len(aces) + len(led_aces) >= 2:
+            if aces:
+                return max(aces, key=lambda c: (sum(d.suit == c.suit for d in side), c.suit.value))
+            again = [c for c in side if c.suit in led_aces]
+            if again:
+                voids = self._shown_voids(game)
+                attackers = [s for s in range(4) if team_of(s) == team_of(game.contract["seat"])]
+                gone = [c for cards in game.played for c in cards]
+
+                def ruff_chance(s):
+                    return (any(s in voids[a] and trump not in voids[a] for a in attackers),
+                            sum(c.suit == s for c in gone) + sum(c.suit == s for c in game.hands[seat]), s.value)
+
+                suit = max({c.suit for c in again}, key=ruff_chance)
+                return min((c for c in again if c.suit == suit), key=lambda c: (c.points(trump), c.strength(trump)))
+        return AsRBot().defence_lead(game, seat, legal)
 
     @staticmethod
     def _shown_voids(game):
