@@ -48,6 +48,8 @@ Jeu :
   après moi va couper ;
 - défense : avec au moins 2 As hors atout, je les joue d'abord, puis je rejoue une de ces couleurs pour
   faire couper ; sinon la défense d'AsR (faire couper le preneur, pas d'entame atout) ;
+- signal de belote du partenaire (Roi d'abord : nombre pair d'atouts, Dame : impair), lu comme AsR : je le
+  recoupe avec la suite et j'arrête l'atout quand les adversaires n'en ont sûrement plus ;
 - appels (équipe qui a pris, comme AsR) : sur l'atout du partenaire, appel direct (une carte de la
   couleur) dans la famille de l'atout, appel indirect (couleur sœur) sinon ; le partenaire rejoue la couleur ;
 - contrat coinché : on garde ses atouts (pas d'entame atout) ;
@@ -469,6 +471,8 @@ class PapiRobertBot(CoincheBot):
         outstanding = [c for c in CoincheBot._all_trumps(trump) if c not in gone and c not in game.hands[seat]]
         if not outstanding:
             return False
+        if AsRBot._belote_says_none(game, seat):
+            return False  # signal de belote du partenaire recoupé avec la suite (comme AsR)
         voids, ceilings = shown_voids(game), trump_ceilings(game)
         return any(may_hold(game, opp, c, voids, ceilings) for opp in ((seat + 1) % 4, (seat + 3) % 4)
                    for c in outstanding)

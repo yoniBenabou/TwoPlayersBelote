@@ -362,6 +362,19 @@ def check_defence_ace_on_partner():
     assert card.suit == D and card.points(H) == 0, card
 
 
+def check_belote_parity():
+    # Sud (belote) joue la Dame : 3 ou 5 atouts ; au premier tour 4 atouts tombent (Nord, Est, Sud, Ouest) :
+    # Sud en avait 3, les adversaires n'en ont plus ; Nord (Papi Robert) ne rejoue pas atout
+    g = table([hand(S="K Q 7"), hand(S="10"), hand(S="J 9 A", H="A K", D="A K", C="A"), hand(S="8")])
+    for seat, a in ((0, ("pass",)), (1, ("pass",)), (2, ("bid", 100, S)), (3, ("pass",)), (0, ("pass",)), (1, ("pass",))):
+        g.bid(seat, a)
+    for seat, card in ((2, Card(S, Rank.JACK)), (3, Card(S, Rank.EIGHT)), (0, Card(S, Rank.QUEEN)), (1, Card(S, Rank.TEN))):
+        g.current = seat
+        g.play(seat, card)
+    assert not PapiRobertBot._opponents_may_have_trumps(g, 2)
+    assert PapiRobertBot().play(g, 2).suit != S
+
+
 def check_volley():
     bot = PapiRobertBot()
     # Sud dit 150 cœur ; Ouest a la parole ; Est (Valet et As de cœur) est sûr de la chute : il coinche à la volée
@@ -417,6 +430,7 @@ def main():
     check_defence_no_trump_lead()
     check_coinched()
     check_defence_ace_on_partner()
+    check_belote_parity()
     check_volley()
     check_full_games()
     print("OK")
