@@ -813,6 +813,23 @@ def check_answer_over_opponent(bot):
     assert bot.bid(g, 0) == P, bot.bid(g, 0)
 
 
+def check_short_top_trump():
+    """Sur le Valet d'atout du partenaire : As second et le 9 peut être chez un adversaire (90) -> l'As tout
+    de suite ; As troisième -> le petit, on garde l'As ; le partenaire a ouvert 100 (Valet-9) -> on garde."""
+    for value, south, north, want in [(90, "J 7 Q", "A 8", "A"), (90, "J 7 Q", "10 8", "10"),
+                                      (90, "J 7 Q", "A 8 7", "7"), (100, "J 9 Q", "A 8", "8"),
+                                      (100, "J 9 Q", "A 10 8", "8")]:
+        g = deal([hand(H=south, S="A 7", D="8", C="7 Q"), hand(S="8 9 10", D="7 9", C="A J K"),
+                  hand(H=north, S="K Q", D="A", C="8 9 10")[:8]], [("bid", value, H), P, P, P])
+        g.trick, g.current = [(0, Card(H, Rank.JACK)), (1, Card(S, Rank.EIGHT))], 2
+        assert bot.play(g, 2) == hand(H=want)[0], (value, north, bot.play(g, 2))
+    # le 9 du partenaire : le Valet peut être chez Est, pli pas assuré -> je ne donne pas l'As
+    g = deal([hand(H="9 7 Q", S="A 7", D="8", C="7 Q"), hand(S="8 9 10", D="7 9", C="A J K"),
+              hand(H="A 8", S="K Q", D="A", C="8 9 10")], [("bid", 90, H), P, P, P])
+    g.trick, g.current = [(0, Card(H, Rank.NINE)), (1, Card(S, Rank.EIGHT))], 2
+    assert bot.play(g, 2) == Card(H, Rank.EIGHT)
+
+
 def main():
     check_openings()
     check_answers_to_90()
@@ -845,8 +862,9 @@ def main():
     check_belote_parity()
     check_coinche_with_partner()
     check_answer_over_opponent(bot)
+    check_short_top_trump()
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, réflexion de fin de donne, changement de couleur à 90, dernier sur le pli du partenaire, Roi troisième gardé, adversaires proches de la sortie, belote signalée, tour d'atout à vide pour l'appel, parité de la belote recoupée, coinche avec les As du partenaire, réponse par-dessus l'adversaire, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, réflexion de fin de donne, changement de couleur à 90, dernier sur le pli du partenaire, Roi troisième gardé, adversaires proches de la sortie, belote signalée, tour d'atout à vide pour l'appel, parité de la belote recoupée, coinche avec les As du partenaire, réponse par-dessus l'adversaire, As d'atout second sur le Valet du partenaire, parties) : OK")
 
 
 if __name__ == "__main__":

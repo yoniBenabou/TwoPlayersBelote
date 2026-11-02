@@ -929,6 +929,10 @@ class AsRBot(CoincheBot):
             sure = self._sure_trump(game, seat, legal)
             if sure is not None:
                 return sure
+        if trick[0][0] == partner and led == trump and winning[0] == partner:
+            top = self._short_top_trump(game, seat, legal)
+            if top is not None:
+                return top
         if winning[0] == partner and len(hand) == 2 and len(legal) == 2:
             card = self._give_lost_card(game, seat, legal)
             if card is not None:
@@ -1096,6 +1100,38 @@ class AsRBot(CoincheBot):
         sure = [c for c in legal if c.suit == trump and strength(c) > strength(best_now)
                 and all(strength(c) > strength(o) for o in outside)]
         return min(sure, key=strength) if sure else None
+
+    def _short_top_trump(self, game, seat, legal):
+        """Entame atout maîtresse du partenaire, j'ai l'As (ou le 10) d'atout second : si un atout plus fort
+        peut être chez un adversaire (le 9 sur le Valet du partenaire à 90), je le donne tout de suite, il se
+        ferait prendre plus tard ; si les plus forts sont chez mon partenaire (son ouverture à 100 et plus
+        montre Valet-9), je ne le donne pas, il deviendra maître. Avec trois atouts ou plus, la règle
+        générale : je mets les petits et je garde l'As pour le rendre maître."""
+        trump, hand, trick = game.trump, game.hands[seat], game.trick
+        strength = lambda c: c.strength(trump)
+        mine = [c for c in hand if c.suit == trump]
+        if len(mine) != 2:
+            return None
+        top = max(mine, key=strength)
+        if top.rank not in (Rank.ACE, Rank.TEN) or top not in legal:
+            return None
+        seen = {c for cards in game.played for c in cards} | {c for _s, c in trick} | set(hand)
+        unseen = [c for c in self._all_trumps(trump) if c not in seen]
+        best = trick[trick_winner(trick, trump)][1]
+        if any(strength(c) > strength(best) for c in unseen):
+            return None  # pli du partenaire pas assuré : je ne donne pas mon As
+        above = [c for c in unseen if strength(c) > strength(top)]
+        if self._partner_shows_jack_nine(game, seat):
+            above = [c for c in above if c.rank not in (Rank.JACK, Rank.NINE)]
+        opponents = [s for s in range(4) if team_of(s) != team_of(seat)]
+        return top if any(may_hold(game, s, c) for c in above for s in opponents) else None
+
+    @staticmethod
+    def _partner_shows_jack_nine(game, seat):
+        """Mon partenaire a ouvert l'atout à 100 ou plus (personne n'avait annoncé avant) : il a Valet-9."""
+        first = next(((s, a) for s, a in game.bids if a[0] == "bid"), None)
+        return (first is not None and first[0] == partner_of(seat) and first[1][2] == game.trump
+                and first[1][1] >= 100)
 
     def _keep_aces(self, game, seat, legal):
         """On ne défausse jamais un As sans avoir derrière lui une carte maîtresse dans sa couleur (As-10 :
