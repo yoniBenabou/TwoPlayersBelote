@@ -830,6 +830,15 @@ def check_short_top_trump():
     assert bot.play(g, 2) == Card(H, Rank.EIGHT)
 
 
+def check_quick_coinche():
+    """Coinche rapide seulement avec le Valet : partie de Noa, Ouest ouvre 90 trèfle, Nord a 9-8 de trèfle
+    et As-10 de carreau -> il passe ; avec le Valet à la place du 9 -> il coinche."""
+    for trumps, want in [("9 8", P), ("J 8", ("coinche",))]:
+        g = deal([hand(H="9 8 7", D="9 Q 7", S="K A"), None,
+                  hand(C=trumps, D="A 10 8", S="9 8 7")], [P, ("bid", 90, C)])
+        assert bot.bid(g, 2) == want, (trumps, bot.bid(g, 2))
+
+
 def main():
     check_openings()
     check_answers_to_90()
@@ -863,8 +872,9 @@ def main():
     check_coinche_with_partner()
     check_answer_over_opponent(bot)
     check_short_top_trump()
+    check_quick_coinche()
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, réflexion de fin de donne, changement de couleur à 90, dernier sur le pli du partenaire, Roi troisième gardé, adversaires proches de la sortie, belote signalée, tour d'atout à vide pour l'appel, parité de la belote recoupée, coinche avec les As du partenaire, réponse par-dessus l'adversaire, As d'atout second sur le Valet du partenaire, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, réflexion de fin de donne, changement de couleur à 90, dernier sur le pli du partenaire, Roi troisième gardé, adversaires proches de la sortie, belote signalée, tour d'atout à vide pour l'appel, parité de la belote recoupée, coinche avec les As du partenaire, réponse par-dessus l'adversaire, As d'atout second sur le Valet du partenaire, coinche rapide avec le Valet, parties) : OK")
 
 
 if __name__ == "__main__":

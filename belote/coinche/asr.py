@@ -445,6 +445,13 @@ def partner_shown_aces(game, seat):
     return shown
 
 
+def quick_coinche(hand, contract):
+    """Coinche rapide (règle de base : Valet ou 9 de leur atout, deux atouts, un As à côté), mais seulement
+    avec le Valet, qui est maître : sur leur 90, mon 9 second se fait prendre par le Valet troisième que
+    l'ouverture promet. Avec le 9 seul, c'est le calcul de points (coinche_with_partner) qui décide."""
+    return wants_coinche(hand, contract) and has(hand, contract["suit"], Rank.JACK)
+
+
 def coinche_with_partner(game, seat):
     """Coinche à mon tour : mes points sûrs + les As montrés par mon partenaire font chuter le contrat."""
     contract = game.contract
@@ -475,7 +482,7 @@ class AsRBot(CoincheBot):
         hand = game.hands[seat]
         if ("surcoinche",) in legal:
             return ("surcoinche",) if self._wants_surcoinche(game, seat) else ("pass",)
-        if ("coinche",) in legal and (wants_coinche(hand, game.contract) or coinche_with_partner(game, seat)):
+        if ("coinche",) in legal and (quick_coinche(hand, game.contract) or coinche_with_partner(game, seat)):
             return ("coinche",)
         partner = partner_of(seat)
         mine = [(i, a) for i, (s, a) in enumerate(game.bids) if s == seat and a[0] == "bid"]
