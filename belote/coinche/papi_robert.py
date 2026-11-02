@@ -20,6 +20,11 @@ Réponses du partenaire (une fois) :
 - sur 110 : rien avec un As, +10 avec deux, +20 avec trois ; sur 120 : +10 seulement avec les trois ;
 - sur 110 ou 120 avec les trois As et un 10 derrière un As : capot (le partenaire a 4 atouts, il me
   fait la passe).
+Réponse par-dessus l'adversaire (même règle qu'AsR, voir asr.contested_answer) : mon partenaire annonce,
+l'adversaire suivant surenchérit, je n'ai pas encore parlé : sur 90, complément (Valet, ou 9 au moins
+second) -> 110 sur 100, 120 sur 110 (+10 par As au-delà du premier), 130 sur 120 avec un As (complément
+troisième : 130 +10 par As) ; sur 100 : son annonce +10 par As sur 110 ou 120, 140 sur 130 avec les 3 As ;
+sur 110 ou 120 : ma réponse habituelle comptée par-dessus l'annonce adverse. Ensuite l'ouvreur se tait.
 Monter sur mon partenaire dans ma couleur (règle en plus, seulement quand je n'ai pas de réponse ; le
 complément et les réponses passent d'abord) : sur son 90, mon vrai 100 se dit 110 (+10), un énorme 90
 (Valet cinquième, ou 9 sixième avec la belote) se dit 100 ; sur son 100 ou plus, ma vraie valeur si elle
@@ -75,7 +80,7 @@ Jeu :
 Le reste du jeu en second, troisième ou quatrième est celui de CoincheBot.
 """
 from ..core.cards import Card, Rank, Suit
-from .asr import AsRBot, volley_coinche_ok
+from .asr import AsRBot, answered_over_opponent, contested_answer, volley_coinche_ok
 from .bots import CoincheBot, wants_coinche
 from .engine import CAPOT, SUITS, partner_of, team_of, trick_winner
 from .inference import may_hold, shown_voids, trump_ceilings
@@ -285,6 +290,9 @@ class PapiRobertBot(CoincheBot):
             already_spoke = any(s == seat for s, _a in bids[partner_bids[0][0] + 1:])
             if already_spoke:
                 return self._second_turn(game, seat, i, value, true, suit)
+            over = self._over_opponent(game, seat, i, value, true, suit)
+            if over is not False:
+                return over
             answer = response(hand, true, suit)
             if answer is None:
                 return over_partner(hand, value, true, suit)  # pas de réponse : je monte chez moi si je peux
@@ -297,6 +305,8 @@ class PapiRobertBot(CoincheBot):
             if opp is not None and opp["value"] >= 90:
                 return ("bid", answer + 10, new) if answer >= opp["value"] else None  # collage
             return ("bid", answer, new)  # je change d'atout
+        if answered_over_opponent(game, seat):
+            return None  # mon partenaire a répondu par-dessus l'adversaire : je me tais
         if len(mine) == 1:
             _k, value, suit = bids[mine[0]][1]
             other_suit = any(a[2] != suit for i, a in partner_bids if i > mine[0])
@@ -308,6 +318,24 @@ class PapiRobertBot(CoincheBot):
                     return relaunch
                 return self._answer_jump(game, hand, mine[0], partner_bids[-1])
         return None
+
+    @staticmethod
+    def _over_opponent(game, seat, index, value, true, suit):
+        """Un adversaire a surenchéri juste après l'annonce d'indice index de mon partenaire : ma réponse
+        par-dessus lui (action, ou None pour passer) ; False si la règle ne s'applique pas."""
+        contract = game.contract
+        opp_after = any(team_of(s) != team_of(seat) and a[0] == "bid" for s, a in game.bids[index + 1:])
+        if (not opp_after or contract is None or team_of(contract["seat"]) == team_of(seat)
+                or CAPOT in (value, contract["value"]) or true < 90):
+            return False
+        hand, cur = game.hands[seat], contract["value"]
+        if true in (90, 100):
+            v = contested_answer(hand, true, suit, cur)
+            return ("bid", v, suit) if v is not None else None
+        normal = _response(hand, true, suit)
+        if normal == CAPOT:
+            return ("bid", CAPOT, suit)
+        return ("bid", cur + normal - true, suit) if isinstance(normal, int) else None
 
     def _answer_jump(self, game, hand, my_index, partner_bid):
         """Mon partenaire est monté sur mon annonce dans sa couleur : sur mon 90, je lis 10 de moins (110 = un

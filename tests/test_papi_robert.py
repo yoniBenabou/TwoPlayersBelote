@@ -7,6 +7,7 @@ from belote.coinche.engine import CAPOT, CoincheGame
 from belote.coinche.inference import may_hold, trump_ceilings
 from belote.coinche.papi_robert import PapiRobertBot, best_opening, opening_value, response
 from belote.core.cards import Card, Rank, Suit
+from tests.test_asr import check_answer_over_opponent
 from tests.test_petit_jeu import hand, table
 
 S, H, D, C = Suit.PIQUE, Suit.COEUR, Suit.CARREAU, Suit.TREFLE
@@ -668,6 +669,7 @@ def main():
     check_masters_and_no_finesse()
     check_accompanied_ten()
     check_volley()
+    check_answer_over_opponent(PapiRobertBot())  # même règle qu'AsR
     check_full_games()
     print("OK")
 

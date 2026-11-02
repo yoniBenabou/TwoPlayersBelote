@@ -76,9 +76,24 @@ Collage : sur un 90 adverse, une main de 90 (donc avec un As) dit 100 (le parten
 comme un 90 et ne répond que le complément) ; une main de 100 saute à 110 (le
 partenaire reste prudent : il passe) ; sur un 100 adverse, une vraie main de
 100 dit 110 (lue comme un 100).
+Réponse par-dessus l'adversaire (aussi pour Papi Robert) : mon partenaire annonce, l'adversaire suivant
+surenchérit, je n'ai pas encore parlé ; je réponds dans la couleur du partenaire, par-dessus l'adversaire,
+selon la vraie valeur de son annonce (un 100 collé sur un 90 vaut un 90). Complément = le Valet, ou le 9
+au moins second ; jamais mes As sans le complément.
+- sur 90 : adversaire à 100, complément -> 110, +10 par As ; à 110, complément -> 120 (avec ou sans un As),
+  +10 par As au-delà du premier ; à 120, complément + au moins un As -> 130, complément au moins troisième ->
+  130 +10 par As (même sans As) ; à 130 ou plus, rien ;
+- sur 100 : adversaire à 110 ou 120 -> son annonce +10 par As (rien sans As) ; à 130 -> 140 avec les 3 As ;
+- sur 110 et plus : la réponse à la demande, comptée par-dessus l'annonce adverse, quoi qu'il en coûte.
+L'ouvreur ne redit plus rien après une réponse par-dessus l'adversaire (on est déjà en surannonce).
 Belote : jamais annoncée, sauf si mon partenaire a annoncé un vrai 100 ou plus (jusqu'à 160), que j'ai
 passé et que l'adversaire a monté de 10 : je dis exactement 20 de plus que mon partenaire, jamais plus.
-Coinche : même règle que CoincheBot à mon tour. À la volée (hors de mon tour), seulement quasi sûr de la
+Coinche : à mon tour, la règle de CoincheBot, ou bien la défense compte ses points sûrs : les miens (atouts
+maîtres depuis le Valet, un As par couleur à côté, la belote si je l'ai) et les As
+que mon partenaire m'a montrés (ouverture à 80 : deux As ; ouverture à 90 : un As ; réponse à mon 100 ou à
+mon 110 juste derrière : +10 par As), au plus les As hors atout que je n'ai pas, chacun avec 10 points des
+autres ; je coinche si ça dépasse ce que le contrat leur laisse (162 - contrat), plus leur belote (20, sauf
+si j'ai le Roi ou la Dame d'atout) et une marge de 10 points. À la volée (hors de mon tour), seulement quasi sûr de la
 chute avec ma seule main : mes plis sûrs (atouts maîtres depuis le Valet, un As par couleur à côté, chacun
 avec 10 points des autres) leur laissent moins que leur annonce, belote adverse comprise (20, sauf si j'ai
 le Roi ou la Dame d'atout) ; au capot, le Valet d'atout.
@@ -340,6 +355,96 @@ def volley_coinche_ok(hand, contract):
     return sure > 162 - value + belote
 
 
+def contested_answer(hand, true, suit, opp):
+    """Réponse à la vraie valeur true (90 ou 100) de mon partenaire dans suit, quand l'adversaire a surenchéri
+    à opp juste après lui : la valeur à annoncer dans suit, ou None (je passe)."""
+    r = ranks_in(hand, suit)
+    aces = side_aces(hand, suit)
+    complement = Rank.JACK in r or (Rank.NINE in r and len(r) >= 2)
+    if true == 90:
+        if not complement:
+            return None
+        if opp == 100:
+            return 110 + 10 * aces
+        if opp == 110:
+            return 120 + 10 * max(0, aces - 1)
+        if opp == 120:
+            if len(r) >= 3:
+                return 130 + 10 * aces  # complément au moins troisième : vraie annonce
+            return 130 if aces else None
+        return None
+    if true == 100:
+        if opp in (110, 120):
+            return opp + 10 * aces if aces else None
+        if opp == 130:
+            return 140 if aces >= 3 else None
+    return None
+
+
+def answered_over_opponent(game, seat):
+    """Mon partenaire a répondu à ma dernière annonce (90 ou plus) dans ma couleur après une surenchère
+    adverse : l'ouvreur ne redit plus rien."""
+    team = team_of(seat)
+    mine = [i for i, (s, a) in enumerate(game.bids) if s == seat and a[0] == "bid"]
+    if not mine:
+        return False
+    last = mine[-1]
+    _k, value, suit = game.bids[last][1]
+    if value == CAPOT or value < 90:
+        return False
+    after = game.bids[last + 1:]
+    partner_i = next((k for k, (s, a) in enumerate(after) if s == partner_of(seat) and a[0] == "bid"), None)
+    if partner_i is None or after[partner_i][1][2] != suit:
+        return False
+    return any(team_of(s) != team and a[0] == "bid" for s, a in after[:partner_i])
+
+
+COINCHE_MARGIN = 10  # la défense doit dépasser ce que le contrat lui laisse d'au moins cette marge
+
+
+def defence_points(hand, trump):
+    """Points sûrs de ma main en défense contre leur atout : atouts maîtres depuis le Valet, un As par couleur
+    à côté (le 10 derrière l'As ne compte pas : le preneur, long à l'atout, le coupe souvent), chacun avec
+    10 points des autres, ma belote. (Compter aussi les 10 maîtres : coinches justes 44 % du temps seulement,
+    -40 points par coinche contre l'IA ; un As par couleur : 66 %, +121 points.)"""
+    tricks = []
+    for r in TRUMP_TOP:
+        if not has(hand, trump, r):
+            break
+        tricks.append(Card(trump, r))
+    tricks += [Card(s, Rank.ACE) for s in SUITS if s != trump and has(hand, s, Rank.ACE)]
+    belote = 20 if has(hand, trump, Rank.KING) and has(hand, trump, Rank.QUEEN) else 0
+    return sum(c.points(trump) + OTHERS_PER_TRICK for c in tricks) + belote
+
+
+def partner_shown_aces(game, seat):
+    """As que mon partenaire m'a montrés pendant les annonces : ouverture à 80 (deux As) ou à 90 (un As),
+    personne n'ayant annoncé avant lui ; réponse +10 par As à mon 100 (ou par As de la famille opposée à
+    mon 110), dans ma couleur, juste après mon annonce (sans annonce adverse entre les deux)."""
+    partner = partner_of(seat)
+    bids = [(i, s, a) for i, (s, a) in enumerate(game.bids) if a[0] == "bid"]
+    shown = 0
+    if bids and bids[0][1] == partner:
+        shown = {80: 2, 90: 1}.get(bids[0][2][1], 0)
+    for (_i, s1, a1), (_j, s2, a2) in zip(bids, bids[1:]):
+        if (s1 == seat and s2 == partner and a1[2] == a2[2] and CAPOT not in (a1[1], a2[1])
+                and a1[1] in (100, 110)):
+            shown = max(shown, (a2[1] - a1[1]) // 10)
+    return shown
+
+
+def coinche_with_partner(game, seat):
+    """Coinche à mon tour : mes points sûrs + les As montrés par mon partenaire font chuter le contrat."""
+    contract = game.contract
+    if contract is None or contract["value"] == CAPOT or team_of(contract["seat"]) == team_of(seat):
+        return False
+    hand, trump, value = game.hands[seat], contract["suit"], contract["value"]
+    free_aces = 3 - side_aces(hand, trump)  # As hors atout que je n'ai pas
+    partner = min(partner_shown_aces(game, seat), free_aces) * (11 + OTHERS_PER_TRICK)
+    belote = 0 if (has(hand, trump, Rank.KING) or has(hand, trump, Rank.QUEEN)) else 20
+    return defence_points(hand, trump) + partner > 162 - value + belote + COINCHE_MARGIN
+
+
 def master_tricks(hand, trump):
     return sum(top_tricks(hand, s) for s in SUITS if s != trump)
 
@@ -358,7 +463,7 @@ class AsRBot(CoincheBot):
         hand = game.hands[seat]
         if ("surcoinche",) in legal:
             return ("surcoinche",) if self._wants_surcoinche(game, seat) else ("pass",)
-        if ("coinche",) in legal and wants_coinche(hand, game.contract):
+        if ("coinche",) in legal and (wants_coinche(hand, game.contract) or coinche_with_partner(game, seat)):
             return ("coinche",)
         partner = partner_of(seat)
         mine = [(i, a) for i, (s, a) in enumerate(game.bids) if s == seat and a[0] == "bid"]
@@ -457,6 +562,9 @@ class AsRBot(CoincheBot):
         r = ranks_in(hand, suit)
         real = 90 if (over == 90 and value == 100) else 100 if (over in (90, 100) and value == 110) else value
         opp_after = any(team_of(s) != team_of(seat) and a[0] == "bid" for s, a in game.bids[index + 1:])
+        cur = self._opponent_value(game, seat)
+        if opp_after and not passed_since and cur is not None and cur != CAPOT and real >= 90 and value != CAPOT:
+            return self._answer_over_opponent(hand, real, suit, cur)
         if passed_since and opp_after and real >= 100 and {Rank.KING, Rank.QUEEN} <= r:
             # belote : j'avais passé, l'adversaire a monté de 10 : je dis exactement 20 de plus, jamais plus
             return ("bid", value + 20, suit) if value + 20 <= MAX_BID else None
@@ -501,6 +609,19 @@ class AsRBot(CoincheBot):
         else:
             inc = 0
         return ("bid", value + inc, suit) if inc else None
+
+    @staticmethod
+    def _answer_over_opponent(hand, real, suit, cur):
+        """Réponse par-dessus l'adversaire (voir contested_answer) ; sur une demande (110 et plus), la réponse
+        habituelle comptée par-dessus l'annonce adverse."""
+        if real in (90, 100):
+            v = contested_answer(hand, real, suit, cur)
+            return ("bid", v, suit) if v is not None else None
+        inc = {110: 10 * sum(has(hand, s, Rank.ACE) for s in opposite(suit)),
+               120: 10 * has(hand, SISTER[suit], Rank.ACE),
+               130: 10 * sum(has(hand, s, Rank.TEN) for s in opposite(suit)),
+               140: 10 * has(hand, SISTER[suit], Rank.TEN)}.get(real, 0)
+        return ("bid", cur + inc, suit) if inc else None
 
     @staticmethod
     def _four_masters_on_100(game, seat, trump):
@@ -566,6 +687,8 @@ class AsRBot(CoincheBot):
         return None
 
     def _rebid(self, game, seat, mine, theirs):
+        if answered_over_opponent(game, seat):
+            return None  # réponse par-dessus l'adversaire : on est en surannonce, je me tais
         hand = game.hands[seat]
         first_i, (_k, first_value, first_suit) = mine[0]
         last_i = mine[-1][0]

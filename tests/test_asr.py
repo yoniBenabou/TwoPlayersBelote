@@ -750,6 +750,56 @@ def check_belote_parity():
     assert not bot._belote_says_none(g, 2)
 
 
+def check_coinche_with_partner():
+    # Nord (mon partenaire) ouvre à 80 = deux As ; Est dit 100 cœur. Sud : Valet d'atout sec, As de pique,
+    # As de trèfle = 72 points sûrs (le 10 de pique ne compte pas), + un As de Nord (il n'en reste qu'un hors
+    # atout) = 93 > 62 + 20 + 10 : coinche
+    g = deal([hand(H="J", S="A 10 8 7", C="A 7", D="8"), None, hand(D="A K", S="7"), hand(H="9 A 10 K Q")],
+             [P, P, ("bid", 80, D), ("bid", 100, H)])
+    assert bot.bid(g, 0) == ("coinche",), bot.bid(g, 0)
+    # même main, partenaire muet : 72 ne suffit pas (il faut plus de 92) -> pas de coinche
+    g = deal([hand(H="J", S="A 10 8 7", C="A 7", D="8"), None, None, hand(H="9 A 10 K Q")],
+             [P, P, P, ("bid", 100, H)])
+    assert bot.bid(g, 0) != ("coinche",), bot.bid(g, 0)
+    # 80 pique adverse, un As et un partenaire muet : pas de coinche
+    g = deal([hand(H="A 7 8", S="7", C="K 8", D="Q 8"), None, None, hand(S="J 9 A 10 K")], [P, P, P, ("bid", 80, S)])
+    assert bot.bid(g, 0) != ("coinche",), bot.bid(g, 0)
+
+
+def check_answer_over_opponent(bot):
+    """Réponse par-dessus l'adversaire (règle commune AsR / Papi Robert)."""
+    P = ("pass",)
+    opener = hand(S="9 A 7 8", H="A", D="7 8", C="8")
+    east = hand(C="J 9 A 10 K")
+    j0 = hand(S="J 10", H="7 8", D="9 Q", C="7 Q")
+    j1 = hand(S="J 10", H="7 8", D="A Q", C="7 Q")
+    j2 = hand(S="J 10", H="7 8", D="A Q", C="A Q")
+    jt = hand(S="J 10 8", H="7 8", D="9 Q", C="7")
+    aces = hand(S="K 10", H="7 8", D="A Q", C="A Q")
+    for opp, mine, want in [(100, j0, 110), (100, j1, 120), (100, j2, 130), (100, aces, None),
+                            (110, j0, 120), (110, j1, 120), (110, j2, 130),
+                            (120, j0, None), (120, j1, 130), (120, j2, 130), (120, jt, 130), (130, j2, None)]:
+        g = table([opener, None, mine, east])
+        g.bid(0, ("bid", 90, S)); g.bid(1, ("bid", opp, C))
+        got = bot.bid(g, 2)
+        assert got == (("bid", want, S) if want else P), (opp, mine, got)
+    for opp, mine, want in [(110, j0, None), (110, j2, 130), (120, j2, 140), (130, j2, None)]:
+        g = table([opener, None, mine, east])
+        g.bid(0, ("bid", 100, S)); g.bid(1, ("bid", opp, C))
+        got = bot.bid(g, 2)
+        assert got == (("bid", want, S) if want else P), ("sur 100", opp, mine, got)
+    # 100 collé sur un 90 adverse (= un 90) ; l'adversaire monte à 110, j'ai le complément : 120 direct
+    g = table([hand(S="9 A 7 8", H="A", D="7 8", C="8"), hand(C="J 9 A 10 K"), j0, None], dealer=0)
+    for b in [("bid", 90, C), P, P, ("bid", 100, S), ("bid", 110, C)]:
+        g.bid(g.current, b)
+    assert bot.bid(g, 2) == ("bid", 120, S), bot.bid(g, 2)
+    # l'ouvreur se tait après une réponse par-dessus l'adversaire
+    g = table([hand(S="J 9 A 8", H="A 10", D="A", C="8"), None, j1, east])
+    for b in [("bid", 90, S), ("bid", 100, C), ("bid", 120, S), P]:
+        g.bid(g.current, b)
+    assert bot.bid(g, 0) == P, bot.bid(g, 0)
+
+
 def main():
     check_openings()
     check_answers_to_90()
@@ -780,8 +830,10 @@ def main():
     check_belote_signal()
     check_empty_trump_round()
     check_belote_parity()
+    check_coinche_with_partner()
+    check_answer_over_opponent(bot)
     check_full_games()
-    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, réflexion de fin de donne, changement de couleur à 90, dernier sur le pli du partenaire, Roi troisième gardé, adversaires proches de la sortie, belote signalée, tour d'atout à vide pour l'appel, parité de la belote recoupée, parties) : OK")
+    print("Robot AsR (ouvertures, réponses à 80 et 90, dialogue 110-120-130, dialogue 100, capot sur 100, jeu du capot, preneur faible à l'atout, dernier atout, entame atout vers le preneur, remontée sur 80 et surcoinche, collage, jeu, As d'abord, coupe forcée avec une maîtresse, 80 -> 100 -> capot, réponses sur annonce adverse, le partenaire de l'annonceur donne la main, carte perdue donnée, réflexion de fin de donne, changement de couleur à 90, dernier sur le pli du partenaire, Roi troisième gardé, adversaires proches de la sortie, belote signalée, tour d'atout à vide pour l'appel, parité de la belote recoupée, coinche avec les As du partenaire, réponse par-dessus l'adversaire, parties) : OK")
 
 
 if __name__ == "__main__":
