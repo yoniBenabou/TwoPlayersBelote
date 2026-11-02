@@ -164,15 +164,18 @@ def check_second_turn():
 
 def check_exit():
     bot = PapiRobertBot()
-    # l'adversaire sort avec son 100 : je monte au-dessus dans une vraie couleur, sinon je contre
-    game = table([None, None, hand(S="J 8 7", H="A 8", D="7 8", C="7")])
-    game.totals = [0, 1400]
-    game.bid(0, ("pass",)); game.bid(1, ("bid", 100, H))
-    assert bot.bid(game, 2) == ("bid", 110, S)
-    game = table([None, None, hand(S="8 7", H="7 8", D="7 8", C="Q K")])
-    game.totals = [0, 1400]
-    game.bid(0, ("pass",)); game.bid(1, ("bid", 100, H))
-    assert bot.bid(game, 2) == ("coinche",)
+    # l'adversaire sort avec son 100 : le dernier à parler monte au-dessus dans une vraie couleur, sinon il
+    # contre ; avant lui (son partenaire parle encore), on ne force rien
+    for mine, want in [(hand(S="J 8 7", H="A 8", D="7 8", C="7"), ("bid", 110, S)),
+                       (hand(S="8 7", H="7 8", D="7 8", C="Q K"), ("coinche",))]:
+        game = table([None, None, mine])
+        game.totals = [0, 1400]
+        game.bid(0, ("pass",)); game.bid(1, ("bid", 100, H))
+        assert bot.bid(game, 2) == ("pass",), bot.bid(game, 2)   # Sud parle encore après moi
+        game = table([None, mine, None, None], dealer=1)          # Nord ouvre, je suis Ouest : dernier
+        game.totals = [1400, 0]
+        game.bid(2, ("bid", 100, H)); game.bid(3, ("pass",)); game.bid(0, ("pass",))
+        assert bot.bid(game, 1) == want, bot.bid(game, 1)
 
 
 def check_attack_leads():

@@ -42,7 +42,8 @@ plus que ma vraie valeur (collage +10 ou saut +20 : lu 10 de moins), et je passe
 sous l'annonce adverse. Le partenaire lit l'annonce 10 de moins et répond par-dessus ce qui a été dit.
 Sortie (comme AsR, partie en 1 500) : pas de contrat qui, fait tout juste, ferait sortir les adversaires
 devant nous ; si leur contrat les fait sortir, on monte juste au-dessus dans une vraie couleur d'atout,
-sinon on contre.
+sinon on contre ; cette enchère forcée n'est faite que par le dernier à parler (avant lui, on ne coinche
+que si la main le justifie).
 Coinche : même règle que CoincheBot à mon tour ; à la volée, seulement quasi sûr de la chute, belote
 adverse comprise (même règle qu'AsR).
 Pas de surcoinche.
@@ -80,7 +81,7 @@ Jeu :
 Le reste du jeu en second, troisième ou quatrième est celui de CoincheBot.
 """
 from ..core.cards import Card, Rank, Suit
-from .asr import AsRBot, answered_over_opponent, contested_answer, volley_coinche_ok
+from .asr import AsRBot, answered_over_opponent, contested_answer, last_to_speak, volley_coinche_ok
 from .bots import CoincheBot, wants_coinche
 from .engine import CAPOT, SUITS, partner_of, team_of, trick_winner
 from .inference import may_hold, shown_voids, trump_ceilings
@@ -410,7 +411,8 @@ class PapiRobertBot(CoincheBot):
     @staticmethod
     def _near_exit(game, seat, action, legal):
         """Sortie (comme AsR) : pas de contrat qui ferait sortir les adversaires devant nous ; si leur
-        contrat les fait sortir, on monte juste au-dessus dans une vraie couleur d'atout, sinon on contre."""
+        contrat les fait sortir, une vraie annonce si j'en ai une ; sinon, seulement si je suis le dernier à
+        parler, on monte juste au-dessus dans une vraie couleur d'atout, sinon on contre."""
         team, contract = team_of(seat), game.contract
         if not any(team_of(s) != team and a[0] == "bid" for s, a in game.bids):
             if action is not None and action[0] == "bid":
@@ -422,7 +424,8 @@ class PapiRobertBot(CoincheBot):
             return action
         value = contract["value"]
         if (AsRBot._wins_if_made(game, 1 - team, value) != 1 - team
-                or (action is not None and action in legal and action[0] != "pass")):
+                or (action is not None and action in legal and action[0] != "pass")
+                or not last_to_speak(game, seat)):
             return action
         hand = game.hands[seat]
         suits = [s for s in SUITS if s != contract["suit"] and trump_value(hand, s)]

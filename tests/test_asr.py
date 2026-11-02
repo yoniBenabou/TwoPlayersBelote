@@ -646,14 +646,27 @@ def check_near_exit():
         assert got[0] == "bid" and got[1] == normal[1], got
         g.totals = [0, 1450]
         assert bot.bid(g, 0) == P, bot.bid(g, 0)
-    # Ouest annonce 100 trèfle et sortirait s'il le fait (il lui manque 150) : Nord ne passe pas
-    for north, want in [(hand(H="J 7 8", S="A", D="7 8", C="7 8"), ("bid", 110, H)),     # vraie couleur : il monte
+    # Ouest annonce 100 trèfle et sortirait s'il le fait (il lui manque 150). Nord parle juste après, sans vraie
+    # annonce : son partenaire Sud parle encore après lui, il ne force rien (il passe). Est passe ; Sud est le
+    # dernier à parler : il ne passe pas.
+    for south, want in [(hand(H="J 7 8", S="A", D="7 8", C="7 8"), ("bid", 110, H)),     # vraie couleur : il monte
                         (hand(H="7 8", S="A 7", D="7 8", C="Q 8"), ("coinche",))]:       # rien : il contre
-        g = deal([hand(S="9", D="9"), hand(C="J A 10 K"), north], [])
+        g = deal([south, hand(C="J A 10 K"), hand(S="9", D="9")], [])
         g.bid(0, P); g.bid(1, ("bid", 100, C))
-        assert bot.bid(g, 2) == P, bot.bid(g, 2)                                         # score normal : il passe
         g.totals = [0, 1350]
-        assert bot.bid(g, 2) == want, bot.bid(g, 2)
+        assert bot.bid(g, 2) == P, bot.bid(g, 2)                                         # pas le dernier : il passe
+        g.bid(2, P); g.bid(3, P)
+        assert bot.bid(g, 0) == want, bot.bid(g, 0)                                      # le dernier : il force
+        g.totals = [0, 0]
+        assert bot.bid(g, 0) == P, bot.bid(g, 0)                                         # score normal : il passe
+    # ta donne : Nord 90 cœur, Est passe, Sud 100 pique, Ouest 110 trèfle (Est-Ouest à 1 420) : Nord, sans vraie
+    # annonce et pas le dernier, passe (avant : 120 cœur forcé)
+    g = table([hand(S="K A 8 J Q 7", C="A 8"), hand(C="J 9 A 10 K"), hand(S="8", H="10 J 8", D="8 J A", C="Q"), None],
+              dealer=1)
+    g.totals = [830, 1420]
+    for b in [("bid", 90, H), P, ("bid", 100, S), ("bid", 110, C)]:
+        g.bid(g.current, b)
+    assert g.current == 2 and bot.bid(g, 2) == P, bot.bid(g, 2)
 
 
 def check_full_games(n=100):

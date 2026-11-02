@@ -86,6 +86,9 @@ au moins second ; jamais mes As sans le complément.
 - sur 100 : adversaire à 110 ou 120 -> son annonce +10 par As (rien sans As) ; à 130 -> 140 avec les 3 As ;
 - sur 110 et plus : la réponse à la demande, comptée par-dessus l'annonce adverse, quoi qu'il en coûte.
 L'ouvreur ne redit plus rien après une réponse par-dessus l'adversaire (on est déjà en surannonce).
+Adversaires proches de la sortie (leur contrat, s'il passe, leur fait gagner la partie) : avec une vraie
+annonce, je la fais ; sinon l'enchère forcée (juste au-dessus dans ma meilleure couleur, sinon la coinche)
+n'est faite que par le dernier à parler ; avant lui, on ne coinche que si la main le justifie.
 Belote : jamais annoncée, sauf si mon partenaire a annoncé un vrai 100 ou plus (jusqu'à 160), que j'ai
 passé et que l'adversaire a monté de 10 : je dis exactement 20 de plus que mon partenaire, jamais plus.
 Coinche : à mon tour, la règle de CoincheBot, ou bien la défense compte ses points sûrs : les miens (atouts
@@ -381,6 +384,15 @@ def contested_answer(hand, true, suit, opp):
     return None
 
 
+def last_to_speak(game, seat):
+    """Si je passe, les annonces s'arrêtent : depuis la dernière annonce adverse, les deux autres joueurs
+    (mon partenaire et l'autre adversaire) ont passé."""
+    last = max((i for i, (s, a) in enumerate(game.bids) if a[0] != "pass"), default=None)
+    if last is None or team_of(game.bids[last][0]) == team_of(seat):
+        return False
+    return len(game.bids) - 1 - last == 2
+
+
 def answered_over_opponent(game, seat):
     """Mon partenaire a répondu à ma dernière annonce (90 ou plus) dans ma couleur après une surenchère
     adverse : l'ouvreur ne redit plus rien."""
@@ -494,8 +506,11 @@ class AsRBot(CoincheBot):
         """Adversaires proches de la sortie :
         - personne n'a annoncé chez eux : pas de contrat qui, fait tout juste, les ferait sortir (ils gardent
           environ 162 - contrat) ; je passe, sauf si ce contrat me fait sortir devant eux ;
-        - leur contrat, s'il passe, les fait sortir : je ne passe pas ; je monte juste au-dessus dans ma
-          meilleure couleur (une vraie couleur d'atout, pas la leur), sinon je contre."""
+        - leur contrat, s'il passe, les fait sortir : avec une vraie annonce, je la fais ; sinon, seulement si
+          je suis le dernier à parler (mon partenaire et l'autre adversaire ont passé), je monte juste
+          au-dessus dans ma meilleure couleur (une vraie couleur d'atout, pas la leur), sinon je contre ; si mon
+          partenaire parle encore après moi, je ne force rien (pas de coinche à la hâte : seulement si ma main
+          la justifie), c'est lui qui forcera s'il est le dernier."""
         team = team_of(seat)
         contract = game.contract
         opp_spoke = any(team_of(s) != team and a[0] == "bid" for s, a in game.bids)
@@ -509,7 +524,8 @@ class AsRBot(CoincheBot):
             return action
         value = contract["value"]
         if (self._wins_if_made(game, 1 - team, value) != 1 - team
-                or (action is not None and action in legal and action[0] != "pass")):
+                or (action is not None and action in legal and action[0] != "pass")
+                or not last_to_speak(game, seat)):
             return action
         hand = game.hands[seat]
         mine = [(trump_type(hand, s), s) for s in SUITS if s != contract["suit"] and trump_type(hand, s)]
