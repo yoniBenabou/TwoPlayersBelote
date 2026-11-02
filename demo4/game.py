@@ -9,6 +9,12 @@ Table enveloppe CoincheGame : à chaque action du joueur, elle fait jouer les
 autres places jusqu'à son tour (ou la fin de la donne) et renvoie la liste des
 événements à animer et l'état complet de la table (textes en anglais).
 
+Mode à deux humains (configure_duo puis join) : Sud et Nord sont deux joueurs
+sur deux navigateurs, contre Est et Ouest (l'IA ou une convention). Chacun voit
+la table depuis sa place (sa main en bas) : state(viewer=...) fait tourner les
+places. Tous les événements sont gardés dans self.feed (numérotés), pour que
+chaque navigateur rattrape ceux de l'autre (state(since=...)).
+
 Avec un GameLog (log=...), chaque donne (mains, annonces, plis, résultat) et
 chaque partie (terminée ou abandonnée) est ajoutée au fichier JSONL ;
 scripts.coinche_human_results en tire les résultats et les graphiques.
@@ -40,7 +46,8 @@ TEAM_KEYS = ("you", "opponents")  # équipe Sud-Nord, équipe Est-Ouest (enregis
 
 BOT_KINDS = {"simple": CoincheBot, "petitjeu": PetitJeuBot, "papirobert": PapiRobertBot, "asr": AsRBot}
 BOT_LABELS = {"simple": "Simple bots", "petitjeu": "Petit jeu", "papirobert": "Papi Robert", "asr": "AsR",
-              "ai": "AI", "ai_search": "AI + search"}
+              "ai": "AI", "ai_search": "AI + search", "human": "Human"}
+DUO_AI_NAMES = {1: "West AI", 3: "East AI"}
 SEARCH_SAMPLES = 20  # mains imaginées par la recherche avant chaque carte
 # présentation dans l'écran d'accueil (étoiles choisies par Noa)
 PLAYER_INFO = {
@@ -159,6 +166,11 @@ class Table:
         self.model = model
         self.reveal = False
         self.game_id = None
+        self.humans = {HUMAN: "You"}  # place -> nom ; deux humains en mode duo
+        self.duo = False
+        self.waiting = False  # duo : l'hôte attend son partenaire
+        self.feed = []  # tous les événements, dans l'ordre (rattrapage en mode duo)
+        self.ctx = (HUMAN, None)  # (place qui regarde, premier événement à renvoyer) : réglé par le serveur
         self.configure(name or "You", partner or bots, opponents or bots, start=False)
         self.configured = name is not None
         self.new_game()
@@ -168,7 +180,7 @@ class Table:
         return [k for k in OPPONENTS if not k.startswith("ai") or self.network is not None]
 
     def configure(self, name, partner, opponents, start=True):
-        name = " ".join("".join(ch for ch in str(name or "") if ch not in "<>&\"'").split())[:20] or "You"
+        name = self.clean_name(name) or "You"
         if partner not in STYLES:
             raise IllegalMove(f"Unknown style: {partner}")
         if opponents not in self.kinds():
@@ -177,15 +189,53 @@ class Table:
             self._record_game("abandoned")  # avec les anciens réglages
             self.game_id = None
         self.name, self.partner, self.opponents = name, partner, opponents
-        self.ai = (AIPlayer(self.network, SEARCH_SAMPLES if opponents == "ai_search" else 0)
-                   if opponents.startswith("ai") else None)
-        self.players = {PARTNER: BOT_KINDS[partner]()}
-        for seat in (1, 3):
-            self.players[seat] = self.ai if self.ai is not None else BOT_KINDS[opponents]()
+        self.humans = {HUMAN: name}
+        self.duo = self.waiting = False
+        self._make_players()
+        self.players[PARTNER] = BOT_KINDS[partner]()
         self.configured = True
         if start:
             return self.new_game()
         return None
+
+    def _make_players(self):
+        self.ai = (AIPlayer(self.network, SEARCH_SAMPLES if self.opponents == "ai_search" else 0)
+                   if self.opponents.startswith("ai") else None)
+        self.players = {}
+        for seat in (1, 3):
+            self.players[seat] = self.ai if self.ai is not None else BOT_KINDS[self.opponents]()
+
+    @staticmethod
+    def clean_name(name):
+        return " ".join("".join(ch for ch in str(name or "") if ch not in "<>&\"'").split())[:20]
+
+    def configure_duo(self, name, opponents):
+        """Mode à deux humains : je suis Sud, mon partenaire Nord rejoindra avec le lien d'invitation."""
+        if opponents not in self.kinds():
+            raise IllegalMove(f"Unknown opponents: {opponents}")
+        if self.game_id is not None and not self.game.game_over and self.human_actions > 0:
+            self._record_game("abandoned")
+            self.game_id = None
+        self.name = self.clean_name(name) or "Player 1"
+        self.partner, self.opponents = "human", opponents
+        self.humans = {HUMAN: self.name}
+        self.duo, self.waiting, self.reveal = True, True, False
+        self.feed = []
+        self.invite = None  # code d'invitation, donné par le serveur
+        self._make_players()
+        self.configured = True
+        return self.state([])
+
+    def join(self, name):
+        """Le partenaire arrive en Nord : la partie commence."""
+        if not self.duo or not self.waiting:
+            raise IllegalMove("This invitation has already been used.")
+        name = self.clean_name(name) or "Player 2"
+        if name == self.name:
+            name += " (2)"
+        self.humans[PARTNER] = name
+        self.waiting = False
+        return self.new_game()
 
     def setup(self, payload):
         payload = payload or {}
@@ -193,20 +243,26 @@ class Table:
 
     # ---------- textes ----------
     def _you(self):
-        return self.name == "You"
+        return self.name == "You" and not self.duo
 
     def label(self, seat):
-        return self.name if seat == HUMAN else SEAT_NAMES[seat]
+        if seat in self.humans:
+            return self.humans[seat]
+        return DUO_AI_NAMES.get(seat, "Your partner") if self.duo else SEAT_NAMES[seat]
 
     def _s(self, seat):
         """Accord du verbe : "You play", "Noa plays", "North plays"."""
         return "" if seat == HUMAN and self._you() else "s"
 
     def team_names(self):
+        if self.duo:
+            return (f"{self.humans[HUMAN]} & {self.humans.get(PARTNER, '…')}", "AI team" if self.ai else "Bots")
         return (f"{self.name} & North", "East & West")
 
     # ---------- actions du joueur ----------
     def new_game(self):
+        if self.waiting:
+            return self.state([])
         if self.game_id is not None and not self.game.game_over and self.human_actions > 0:
             self._record_game("abandoned")
         self.game_id = uuid.uuid4().hex[:12]
@@ -222,7 +278,7 @@ class Table:
 
     def _reset_deal(self):
         # ordre des couleurs fixé avant les annonces, puis une seule fois quand l'atout est connu
-        self.order = suit_order(self.game.hands[HUMAN])
+        self.order = {h: suit_order(self.game.hands[h]) for h in self.humans}
         self.coinche_window = False
         self.last_trick = None
         self.calls = {}
@@ -230,23 +286,24 @@ class Table:
         if self.ai is not None:
             self.ai.new_deal()
 
-    def bid_human(self, payload):
+    def bid_human(self, payload, seat=None):
+        seat = self.ctx[0] if seat is None else seat
         kind = (payload or {}).get("kind")
         if kind == "bid":
             suit = next((s for s in SUITS if SUIT_INFO[s][1] == payload.get("suit")), None)
             action = ("bid", int(payload.get("value", 0)), suit)
         else:
             action = (kind,)
-        if self.game.current != HUMAN or action not in self.game.legal_bids(HUMAN):
+        if self.waiting or seat not in self.humans or self.game.current != seat or action not in self.game.legal_bids(seat):
             raise IllegalMove("This bid is not allowed now.")
         self.human_actions += 1
-        events = self._apply_bid(HUMAN, action)
+        events = self._apply_bid(seat, action)
         return self.state(events + self._run_bots())
 
     def coinche_now(self):
         """Coinche hors de mon tour, sur l'annonce de West, avant que Nord parle."""
         game = self.game
-        if not self.coinche_window:
+        if not self.coinche_window or self.duo:
             raise IllegalMove("Too late to coinche: someone has spoken since.")
         self.coinche_window = False
         self.human_actions += 1
@@ -262,20 +319,23 @@ class Table:
     def _opens_coinche_window(self, seat, action):
         """West vient d'annoncer juste après moi : je peux le coincher avant que Nord parle."""
         game = self.game
-        return (seat == (HUMAN + 1) % 4 and action[0] == "bid" and game.phase == "bidding"
+        return (not self.duo and seat == (HUMAN + 1) % 4 and action[0] == "bid" and game.phase == "bidding"
                 and game.contract["mult"] == 1 and team_of(game.contract["seat"]) != team_of(HUMAN)
                 and game.current != HUMAN)
 
-    def play_human(self, card_id):
+    def play_human(self, card_id, seat=None):
+        seat = self.ctx[0] if seat is None else seat
         card = INDEX_CARD.get(int(card_id))
-        if self.game.current != HUMAN or card not in self.game.legal_cards(HUMAN):
+        if self.waiting or seat not in self.humans or self.game.current != seat or card not in self.game.legal_cards(seat):
             raise IllegalMove("This card is not allowed (follow suit; trump if your partner is not winning; "
                               "overtrump if you can).")
         self.human_actions += 1
-        events = self._apply_card(HUMAN, card)
+        events = self._apply_card(seat, card)
         return self.state(events + self._run_bots())
 
     def next_deal(self):
+        if self.duo and (self.waiting or self.game.phase != "done"):
+            return self.state([])  # mon partenaire a déjà lancé la donne suivante
         if self.game.phase != "done" or self.game.game_over:
             raise IllegalMove("The current deal is not finished.")
         self.game.new_deal()
@@ -283,7 +343,7 @@ class Table:
         return self.state([self._deal_event()] + self._run_bots())
 
     def set_reveal(self, on):
-        if self.study and on:
+        if (self.study or self.duo) and on:
             raise IllegalMove("The other hands stay hidden in this study.")
         self.reveal = bool(on)
         self.revealed = self.revealed or self.reveal
@@ -291,8 +351,9 @@ class Table:
 
     # ---------- enregistrement ----------
     def _record(self, record):
-        if self.log is not None and self.configured:
+        if self.log is not None and self.configured and not self.waiting:
             self.log.write(dict(record, game_id=self.game_id, player=self.name, partner=self.partner,
+                                humans=len(self.humans), players={SEAT_KEYS[s]: n for s, n in self.humans.items()},
                                 opponents=self.opponents,
                                 search=SEARCH_SAMPLES if self.opponents == "ai_search" else 0,
                                 model=self.model if self.opponents.startswith("ai") else None,
@@ -353,7 +414,7 @@ class Table:
                 if seat is not None:
                     events += self._apply_bid(seat, ("coinche",), volley=True)
                     continue
-            if game.phase not in ("bidding", "play") or game.current == HUMAN or self.coinche_window:
+            if game.phase not in ("bidding", "play") or game.current in self.humans or self.coinche_window:
                 return events
             seat = game.current
             player = self.players[seat]
@@ -392,8 +453,9 @@ class Table:
             event["text"] += f" (confidence {event['confidence']}%)"
         events = [event]
         if game.phase == "play":
-            self.order = suit_order(game.hands[HUMAN], game.trump)
-            event["hand"] = [card_json(c, game.trump) for c in sort_by_order(game.hands[HUMAN], self.order, game.trump)]
+            self.order = {h: suit_order(game.hands[h], game.trump) for h in self.humans}
+            event["hands"] = {h: [card_json(c, game.trump) for c in sort_by_order(game.hands[h], self.order[h], game.trump)]
+                              for h in self.humans}
             c = game.contract
             mult = {1: "", 2: ", coinched", 3: ", surcoinched"}[c["mult"]]
             events.append({"type": "message", "contract": True,
@@ -441,7 +503,7 @@ class Table:
         return {"type": "message", "deal": True,
                 "text": f"Deal {game.deal_no}: {self.label(game.dealer)} deal{self._s(game.dealer)}, "
                         f"{self.label(first)} speak{self._s(first)} first.",
-                "hand": [card_json(c) for c in sort_by_order(game.hands[HUMAN], self.order, None)]}
+                "hands": {h: [card_json(c) for c in sort_by_order(game.hands[h], self.order[h], None)] for h in self.humans}}
 
     def _result_text(self):
         r = self.game.result
@@ -452,33 +514,61 @@ class Table:
                 f"{teams[0]} +{r['scores'][0]}, {teams[1]} +{r['scores'][1]}.")
 
     # ---------- état ----------
-    def _bid_options(self):
+    def _bid_options(self, viewer):
         game = self.game
-        if game.phase != "bidding" or game.current != HUMAN:
+        if game.phase != "bidding" or game.current != viewer or self.waiting:
             return None
-        legal = game.legal_bids(HUMAN)
+        legal = game.legal_bids(viewer)
         values = sorted({a[1] for a in legal if a[0] == "bid"})
         return {"values": [{"value": v, "label": "Capot" if v == CAPOT else str(v)} for v in values],
                 "suits": [suit_json(s) for s in SUITS],
                 "coinche": ("coinche",) in legal, "surcoinche": ("surcoinche",) in legal}
 
-    def state(self, events):
+    @staticmethod
+    def _rot(key, viewer):
+        """Place vue depuis viewer : sa propre place est toujours en bas ("south")."""
+        return SEAT_KEYS[(SEAT_KEYS.index(key) - viewer) % 4] if key in SEAT_KEYS else key
+
+    def _view_event(self, event, viewer):
+        ev = dict(event)
+        for k in ("seat", "winner"):
+            if k in ev:
+                ev[k] = self._rot(ev[k], viewer)
+        hands = ev.pop("hands", None)
+        if hands is not None and viewer in hands:
+            ev["hand"] = hands[viewer]
+        return ev
+
+    def state(self, events, viewer=None, since=None):
+        """État de la table vu depuis la place viewer. Les nouveaux événements sont ajoutés au fil
+        (self.feed) ; avec since, on renvoie tous les événements du fil à partir de ce numéro (ceux
+        de mon partenaire compris), sinon seulement events."""
+        if viewer is None:
+            viewer, ctx_since = self.ctx
+            since = ctx_since if since is None else since
+        if self.duo:
+            self.feed.extend(events)
+        if since is not None and self.duo:
+            events = self.feed[max(0, int(since)):]
+        rot = lambda key: self._rot(key, viewer)
         game = self.game
         trump = game.trump
         teams = self.team_names()
-        my_turn = game.phase == "play" and game.current == HUMAN
-        legal = {CARD_INDEX[c] for c in game.legal_cards(HUMAN)} if my_turn else set()
+        my_turn = game.phase == "play" and game.current == viewer and not self.waiting
+        legal = {CARD_INDEX[c] for c in game.legal_cards(viewer)} if my_turn else set()
         hands = {}
         for seat in range(4):
-            cards = sort_by_order(game.hands[seat], self.order, trump) if seat == HUMAN else sort_hand(game.hands[seat], trump)
-            if seat == HUMAN or self.reveal:
-                hands[SEAT_KEYS[seat]] = [dict(card_json(c, trump), legal=CARD_INDEX[c] in legal) for c in cards]
+            mine = seat == viewer
+            order = self.order.get(seat) if mine else None
+            cards = sort_by_order(game.hands[seat], order, trump) if order else sort_hand(game.hands[seat], trump)
+            if mine or self.reveal:
+                hands[rot(SEAT_KEYS[seat])] = [dict(card_json(c, trump), legal=CARD_INDEX[c] in legal) for c in cards]
             else:
-                hands[SEAT_KEYS[seat]] = [{"hidden": True} for _ in cards]
+                hands[rot(SEAT_KEYS[seat])] = [{"hidden": True} for _ in cards]
         c = game.contract
         contract = None
         if c is not None:
-            contract = {"label": contract_label(c["value"], c["suit"]), "by": SEAT_KEYS[c["seat"]],
+            contract = {"label": contract_label(c["value"], c["suit"]), "by": rot(SEAT_KEYS[c["seat"]]),
                         "byLabel": self.label(c["seat"]), "team": teams[team_of(c["seat"])],
                         "mult": c["mult"], "suit": suit_json(c["suit"])}
         result = None
@@ -491,39 +581,48 @@ class Table:
                       "text": self._result_text()}
 
         def trick_entry(s, card):
-            entry = {"seat": SEAT_KEYS[s], "card": card_json(card, trump)}
+            entry = {"seat": rot(SEAT_KEYS[s]), "card": card_json(card, trump)}
             if CARD_INDEX[card] in self.calls:
                 entry["announce"] = self.calls[CARD_INDEX[card]]
             if CARD_INDEX[card] in self.confidence:
                 entry["confidence"] = self.confidence[CARD_INDEX[card]]
             return entry
 
+        last_trick = None
+        if self.last_trick:
+            last_trick = dict(self.last_trick, winner=rot(self.last_trick["winner"]),
+                              cards=[dict(t, seat=rot(t["seat"])) for t in self.last_trick["cards"]])
+        partner_label = BOT_LABELS[self.partner]
         return {
-            "events": events,
+            "events": [self._view_event(e, viewer) for e in events],
+            "seq": len(self.feed),
             "configured": self.configured,
-            "setup": {"name": self.name, "partner": self.partner, "opponents": self.opponents,
-                      "partnerLabel": BOT_LABELS[self.partner], "opponentsLabel": BOT_LABELS[self.opponents]},
+            "duo": self.duo,
+            "waiting": self.waiting,
+            "invite": getattr(self, "invite", None) if self.waiting else None,
+            "setup": {"name": self.humans.get(viewer, self.name), "partner": self.partner, "opponents": self.opponents,
+                      "partnerLabel": partner_label, "opponentsLabel": BOT_LABELS[self.opponents]},
             "players": {"styles": [dict(PLAYER_INFO[k], key=k) for k in STYLES],
                         "opponents": [dict(PLAYER_INFO[k], key=k) for k in self.kinds()]},
-            "names": {"south": self.name, "west": "West", "north": "North", "east": "East"},
+            "names": {rot(SEAT_KEYS[s]): self.label(s) for s in range(4)},
             "phase": game.phase,
             "dealNo": game.deal_no,
-            "dealer": SEAT_KEYS[game.dealer],
-            "current": SEAT_KEYS[game.current] if game.phase in ("bidding", "play") else None,
+            "dealer": rot(SEAT_KEYS[game.dealer]),
+            "current": rot(SEAT_KEYS[game.current]) if game.phase in ("bidding", "play") else None,
             "hands": hands,
             "reveal": self.reveal,
             "study": self.study,
-            "bids": [{"seat": SEAT_KEYS[s], "label": bid_label(a)} for s, a in game.bids],
-            "bidOptions": self._bid_options(),
+            "bids": [{"seat": rot(SEAT_KEYS[s]), "label": bid_label(a)} for s, a in game.bids],
+            "bidOptions": self._bid_options(viewer),
             "contract": contract,
             "trump": suit_json(trump) if trump is not None else None,
             "trick": [trick_entry(s, card) for s, card in game.trick],
-            "lastTrick": self.last_trick,
+            "lastTrick": last_trick,
             "trickPoints": game.trick_points,
             "tricksWon": game.tricks_won,
             "yourTurn": my_turn,
-            "yourBid": game.phase == "bidding" and game.current == HUMAN,
-            "coincheWindow": self.coinche_window,
+            "yourBid": game.phase == "bidding" and game.current == viewer and not self.waiting,
+            "coincheWindow": self.coinche_window and viewer == HUMAN,
             "teams": teams,
             "totals": game.totals,
             "target": game.target,
@@ -533,7 +632,8 @@ class Table:
                          "by": self.label(h["contract"]["seat"]), "mult": h["contract"]["mult"],
                          "made": h["made"], "scores": h["scores"]} for h in game.history],
             "rules": RULES,
-            "bots": f"{BOT_LABELS[self.partner]} partner · {BOT_LABELS[self.opponents]} opponents",
+            "bots": (f"2 players · {BOT_LABELS[self.opponents]} opponents" if self.duo
+                     else f"{partner_label} partner · {BOT_LABELS[self.opponents]} opponents"),
             "contracts": CONTRACTS,
         }
 

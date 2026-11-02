@@ -9,6 +9,11 @@ ton partenaire) et tes adversaires (une convention, ou l'IA entraînée).
     python -m demo4.server --bots asr  # robots aux conventions AsR
     python -m demo4.server --study --model chemin/ppo.pt  # parties contre des volontaires
 
+Mode à deux humains : sur l'écran d'accueil, "Partner: a friend" crée une table
+et un lien d'invitation (/?join=CODE) ; le partenaire l'ouvre sur son ordinateur
+et joue Nord. Chaque navigateur rattrape les coups de l'autre avec
+/api/state?since=N (numéro du dernier événement reçu).
+
 Chaque donne et chaque partie est ajoutée à --log (JSONL, demo4/logs/games.jsonl
 par défaut) ; scripts.coinche_human_results en tire les résultats et les
 graphiques. --study cache le bouton "Show all hands" (mains des autres jamais
@@ -23,12 +28,16 @@ import argparse
 import json
 import os
 import secrets
+import string
 import sys
 import threading
 import time
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+import torch
 
 from belote.coinche.engine import DEFAULT_TARGET
 from demo.game import GameLog
@@ -36,7 +45,7 @@ from demo4.game import BOT_KINDS, IllegalMove, Table, load_network
 
 INDEX_HTML = Path(__file__).with_name("index.html")
 COOKIE = "coinche_sid"
-MAX_TABLES = 200
+MAX_TABLES = 5000  # tables gardées en mémoire (la plus ancienne inutilisée est oubliée au-delà)
 # meilleur modèle à 4 avec la recherche (experiments/coinche_robots25_warm_asr2, 8 M de donnes dont un quart contre les robots)
 DEFAULT_MODEL = str(Path(__file__).resolve().parent.parent / "models" / "coinche_4p.pt")
 DEFAULT_LOG = str(Path(__file__).with_name("logs") / "games.jsonl")
@@ -50,21 +59,48 @@ class Tables:
         self.log = log
         self.study = study
         self.model = model
-        self.tables = {}  # sid -> [Table, verrou, dernier accès]
+        self.tables = {}  # sid -> [Table, verrou, dernier accès, ma place]
+        self.rooms = {}  # code d'invitation -> (Table, verrou)
         self.lock = threading.Lock()
 
+    def _new_table(self):
+        return Table(target=self.target, bots=self.bots, network=self.network, log=self.log,
+                     study=self.study, model=self.model)
+
     def get(self, sid):
+        """(sid, table, verrou, place) du navigateur ; nouvelle table si le cookie est inconnu."""
         with self.lock:
             if sid not in self.tables:
                 if len(self.tables) >= MAX_TABLES:
                     del self.tables[min(self.tables, key=lambda k: self.tables[k][2])]
                 sid = secrets.token_urlsafe(16)
-                self.tables[sid] = [Table(target=self.target, bots=self.bots, network=self.network, log=self.log,
-                                          study=self.study, model=self.model),
-                                    threading.Lock(), time.time()]
+                self.tables[sid] = [self._new_table(), threading.Lock(), time.time(), 0]
             entry = self.tables[sid]
             entry[2] = time.time()
-            return sid, entry[0], entry[1]
+            return sid, entry[0], entry[1], entry[3]
+
+    def fresh(self, sid):
+        """Table neuve pour ce navigateur (il quitte une table à deux)."""
+        with self.lock:
+            entry = self.tables[sid]
+            entry[0], entry[1], entry[3] = self._new_table(), threading.Lock(), 0
+            return entry[0], entry[1]
+
+    def open_room(self, table, lock):
+        alphabet = string.ascii_uppercase + string.digits
+        with self.lock:
+            code = "".join(secrets.choice(alphabet) for _ in range(6))
+            self.rooms[code] = (table, lock)
+            return code
+
+    def join_room(self, sid, code):
+        with self.lock:
+            room = self.rooms.pop(str(code or "").strip().upper(), None)
+            if room is None:
+                return None
+            entry = self.tables[sid]
+            entry[0], entry[1], entry[3] = room[0], room[1], 2
+            return room
 
 
 def make_handler(tables):
@@ -85,12 +121,14 @@ def make_handler(tables):
             self.wfile.write(data)
 
         def do_GET(self):
-            if self.path in ("/", "/index.html"):
+            url = urlparse(self.path)
+            if url.path in ("/", "/index.html"):
                 self._send(200, INDEX_HTML.read_bytes(), "text/html; charset=utf-8")
-            elif self.path == "/api/state":
-                sid, table, lock = self._table()
+            elif url.path == "/api/state":
+                since = (parse_qs(url.query).get("since") or [None])[0]
+                sid, table, lock, seat = self._table()
                 with lock:
-                    self._send(200, table.state([]), sid=sid)
+                    self._send(200, table.state([], viewer=seat, since=int(since) if since else None), sid=sid)
             else:
                 self._send(404, {"error": "not found"})
 
@@ -100,7 +138,30 @@ def make_handler(tables):
                 payload = json.loads(self.rfile.read(length) or b"{}")
             except json.JSONDecodeError:
                 return self._send(400, {"error": "invalid JSON"})
-            sid, table, lock = self._table()
+            sid, table, lock, seat = self._table()
+            since = payload.get("since")
+            since = int(since) if isinstance(since, int) or (isinstance(since, str) and since.isdigit()) else None
+            if self.path in ("/api/setup", "/api/duo/create") and table.duo:
+                table, lock = tables.fresh(sid)  # je quitte la table à deux : elle reste à mon partenaire
+                seat, since = 0, None
+            if self.path == "/api/duo/create":
+                with lock:
+                    table.ctx = (0, None)
+                    state = table.configure_duo(payload.get("name"), payload.get("opponents"))
+                    table.invite = state["invite"] = tables.open_room(table, lock)
+                return self._send(200, state, sid=sid)
+            if self.path == "/api/duo/join":
+                room = tables.join_room(sid, payload.get("code"))
+                if room is None:
+                    return self._send(400, {"error": "This invitation link is not valid any more."}, sid=sid)
+                table, lock = room
+                with lock:
+                    table.ctx = (2, None)
+                    try:
+                        table.join(payload.get("name"))
+                        return self._send(200, table.state([], viewer=2, since=0), sid=sid)
+                    except IllegalMove as exc:
+                        return self._send(400, {"error": str(exc)}, sid=sid)
             actions = {
                 "/api/new": lambda: table.new_game(),
                 "/api/setup": lambda: table.setup(payload),
@@ -114,6 +175,7 @@ def make_handler(tables):
             if self.path not in actions:
                 return self._send(404, {"error": "not found"})
             with lock:
+                table.ctx = (seat, since)
                 try:
                     self._send(200, actions[self.path](), sid=sid)
                 except (IllegalMove, TypeError, ValueError) as exc:
@@ -140,6 +202,7 @@ def main():
     if args.log:
         os.makedirs(os.path.dirname(os.path.abspath(args.log)), exist_ok=True)
         log = GameLog(args.log)
+    torch.set_num_threads(1)  # un cœur par coup de l'IA : plusieurs joueurs en même temps ne se gênent pas
     network = load_network(args.model)
     print(f"AI model: {args.model}" if network is not None else f"AI model not found ({args.model}): AI disabled",
           flush=True)

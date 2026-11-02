@@ -198,6 +198,13 @@
   .welcome .go { font-size: 20px; padding: 14px 36px; border-radius: 999px; }
   .welcome .go:hover { transform: scale(1.04); }
   .error { color: #f2545b; font-size: 13px; min-height: 16px; }
+  .mode-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .mode-row .choice { flex: 1; min-width: 200px; }
+  .invite { text-align: center; }
+  .invite .link { display: flex; gap: 8px; justify-content: center; margin: 14px 0; flex-wrap: wrap; }
+  .invite .link input { max-width: 520px; font-size: 15px; }
+  .invite .dots::after { content: "…"; animation: blink 1.2s infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
 </style>
 </head>
 <body>
@@ -290,18 +297,28 @@
       <h4 class="mono">1 · YOUR NAME</h4>
       <input id="w-name" maxlength="20" placeholder="Type your name" autocomplete="off">
     </div>
-    <div class="step">
-      <h4 class="mono">2 · YOUR WAY OF PLAYING</h4>
-      <div class="hint">Your partner North plays it too, so your bids mean the same thing to both of you.</div>
-      <div class="choices" id="w-styles"></div>
+    <div class="step" id="w-step-partner">
+      <h4 class="mono">2 · YOUR PARTNER</h4>
+      <div class="mode-row" id="w-mode"></div>
+      <div id="w-styles-box">
+        <div class="hint">Your bot partner North plays this way too, so your bids mean the same thing to both of you.</div>
+        <div class="choices" id="w-styles"></div>
+      </div>
     </div>
-    <div class="step">
+    <div class="step" id="w-step-opp">
       <h4 class="mono">3 · YOUR OPPONENTS</h4>
       <div class="hint">East and West. The stars give their strength in our bot-against-bot matches.</div>
       <div class="choices" id="w-opponents"></div>
     </div>
     <div class="versus" id="w-versus"></div>
     <div class="center-btn"><button class="primary go" id="w-go">Deal the cards ▶</button></div>
+    <div class="error center-btn" id="w-error"></div>
+    <div class="invite" id="w-wait" style="display:none">
+      <h4 class="mono" style="color:var(--accent)">SEND THIS LINK TO YOUR PARTNER</h4>
+      <div class="link"><input id="w-link" readonly><button class="primary" id="w-copy">Copy</button></div>
+      <div class="sub">They open it on their computer, type their name and sit North.</div>
+      <p class="sub">Waiting for your partner<span class="dots"></span></p>
+    </div>
   </div>
 </div>
 
@@ -316,8 +333,10 @@ function applyNames(s) {
   if (!s.names) return;
   Object.assign(NAMES, s.names);
   const you = s.names.south === "You";
-  $("name-south").textContent = you ? "You (South)" : `${s.names.south} (South)`;
-  $("title").textContent = `${s.names.south} and North against East and West`;
+  $("name-south").textContent = s.duo ? s.names.south : you ? "You (South)" : `${s.names.south} (South)`;
+  for (const seat of ["north", "east", "west"]) $(`name-${seat}`).textContent = s.names[seat];
+  $("title").textContent = s.duo ? `${s.names.south} and ${s.names.north} against ${s.teams[1]}`
+                                 : `${s.names.south} and North against East and West`;
   $("team-0").textContent = s.teams[0]; $("team-1").textContent = s.teams[1];
   $("kind-north").textContent = s.setup.partnerLabel.toUpperCase();
   for (const seat of ["east", "west"]) $(`kind-${seat}`).textContent = s.setup.opponentsLabel.toUpperCase();
@@ -434,7 +453,7 @@ function render() {
     $(`total-${t}`).textContent = s.totals[t];
     $(`bar-${t}`).style.width = Math.min(100, (100 * s.totals[t]) / s.target) + "%";
   }
-  $("reveal").style.display = s.study ? "none" : "";
+  $("reveal").style.display = s.study || s.duo ? "none" : "";
   $("reveal").classList.toggle("on", s.reveal);
   $("reveal").textContent = s.reveal ? "Hide other hands" : "Show all hands";
   for (const seat of SEATS) {
@@ -461,7 +480,8 @@ function render() {
     if (s.yourTurn && !busy) classes.push(playable ? "playable" : "illegal");
     const el = cardEl(c, { classes }); if (playable) el.onclick = () => play(c.id); mine.append(el);
   }
-  $("turn-hint").textContent = busy || s.phase === "done" ? "" : s.yourTurn ? "YOUR TURN — CLICK A HIGHLIGHTED CARD" : s.yourBid ? "YOUR BID" : "";
+  $("turn-hint").textContent = busy || s.phase === "done" ? "" : s.yourTurn ? "YOUR TURN — CLICK A HIGHLIGHTED CARD" : s.yourBid ? "YOUR BID"
+    : s.duo && s.current === "north" ? `WAITING FOR ${NAMES.north.toUpperCase()}` : "";
   renderBidding(s);
   const info = [];
   if (s.contract) {
@@ -496,7 +516,7 @@ function renderOverlay() {
   if (r.mult === 1 && r.made) notes.push("Both teams' points are rounded to the nearest 10 (up from 5).");
   if (r.mult > 1) notes.push(`${r.mult === 2 ? "Coinched" : "Surcoinched"}: contract × ${r.mult} + 160 for the ${r.made ? "bidding team" : "defence"}.`);
   if (r.beloteNeeded && r.mult > 1) notes.push("The belote was needed to make the contract, so it scores nothing.");
-  const head = s.gameOver ? (s.totals[0] > s.totals[1] ? `${s.teams[0]} win the game!` : "East and West win the game")
+  const head = s.gameOver ? (s.totals[0] > s.totals[1] ? `${s.teams[0]} win the game!` : `${s.teams[1]} win the game`)
                           : `Contract ${r.made ? "made" : "failed"}`;
   box.innerHTML = `<h3>${head}</h3><p>${r.text}</p>
     <table><tr><th></th><th>${s.teams[0]}</th><th>${s.teams[1]}</th></tr>
@@ -574,14 +594,33 @@ async function api(path, body) {
   if (!res.ok) { $("error").textContent = data.error || "Error"; throw new Error(data.error); }
   return data;
 }
-async function act(path, body) { if (busy) return; busy = true; render(); try { await replay(await api(path, body)); } catch { busy = false; render(); } }
+async function act(path, body) {
+  if (busy) return; busy = true; render();
+  if (view && view.duo) body = { ...body, since: view.seq };
+  try { await replay(await api(path, body)); } catch { busy = false; render(); }
+}
+// ---------- à deux : on rattrape les coups de l'autre joueur ----------
+let polling = false;
+setInterval(async () => {
+  if (!view || !view.duo || busy || polling) return;
+  polling = true;
+  try {
+    const s = await fetch(`/api/state?since=${view.seq || 0}`).then((r) => r.json());
+    if (busy || !view || !view.duo) return;
+    if (view.waiting && !s.waiting) {  // mon partenaire vient d'arriver
+      $("welcome").classList.remove("show"); $("log").innerHTML = "";
+      view = { ...s, bids: [], trick: [] }; render(); await replay(s);
+    } else if (!s.waiting && s.events.length) await replay(s);
+  } catch {} finally { polling = false; }
+}, 1000);
 const bid = (b) => { selectedValue = null; return act("/api/bid", b); };
 const play = (id) => act("/api/play", { card: id });
 const nextDeal = () => { $("overlay").classList.remove("show"); return act("/api/next", {}); };
 const newGame = () => { $("overlay").classList.remove("show"); $("log").innerHTML = ""; return act("/api/new", {}); };
 
 // ---------- écran d'accueil ----------
-const choice = { name: "", partner: "asr", opponents: "ai" };
+const choice = { name: "", partner: "asr", opponents: "ai", mode: "bot" };
+const joinCode = new URLSearchParams(location.search).get("join");
 const store = { get() { try { return JSON.parse(localStorage.getItem("coinche-setup") || "null"); } catch { return null; } },
                 set(v) { try { localStorage.setItem("coinche-setup", JSON.stringify(v)); } catch {} } };
 function renderChoices(id, items, key) {
@@ -597,16 +636,36 @@ function renderChoices(id, items, key) {
 }
 function renderWelcome() {
   const p = view.players;
+  const modes = [{ key: "bot", label: "A bot", stars: 0, text: "Plays North with the style you choose below." },
+                 { key: "friend", label: "A friend", stars: 0, text: "On another computer: you get a link to send them, they sit North." }];
+  const mb = $("w-mode"); mb.innerHTML = "";
+  for (const m of modes) {
+    const b = document.createElement("div"); b.className = `choice ${choice.mode === m.key ? "sel" : ""}`;
+    b.innerHTML = `<div class="t"><span>${m.label}</span></div><div class="d">${m.text}</div>`;
+    b.onclick = () => { choice.mode = m.key; renderWelcome(); }; mb.append(b);
+  }
+  $("w-styles-box").style.display = choice.mode === "friend" ? "none" : "";
   renderChoices("w-styles", p.styles, "partner");
   renderChoices("w-opponents", p.opponents, "opponents");
   const label = (list, k) => (list.find((x) => x.key === k) || {}).label || k;
   const who = ($("w-name").value.trim() || "You");
-  $("w-versus").innerHTML = `<b>${who.replace(/[<>&]/g, "")} & North</b> playing ${label(p.styles, choice.partner)} &nbsp;vs&nbsp; <i>East & West</i> playing ${label(p.opponents, choice.opponents)}`;
+  const me = who.replace(/[<>&]/g, "");
+  if (joinCode) {
+    $("w-versus").innerHTML = "You are invited to a table: you will sit North, as your friend's partner.";
+  } else if (choice.mode === "friend") {
+    $("w-versus").innerHTML = `<b>${me} & a friend</b> &nbsp;vs&nbsp; <i>${label(p.opponents, choice.opponents)}</i>`;
+  } else {
+    $("w-versus").innerHTML = `<b>${me} & North</b> playing ${label(p.styles, choice.partner)} &nbsp;vs&nbsp; <i>East & West</i> playing ${label(p.opponents, choice.opponents)}`;
+  }
+  for (const id of ["w-step-partner", "w-step-opp"]) $(id).style.display = joinCode ? "none" : "";
+  $("w-go").textContent = joinCode ? "Join the table ▶" : choice.mode === "friend" ? "Create the table ▶" : "Deal the cards ▶";
 }
 function openWelcome() {
   const saved = store.get();
   const s = view.setup;
-  Object.assign(choice, { name: s.name === "You" ? "" : s.name, partner: s.partner, opponents: s.opponents });
+  $("w-wait").style.display = "none"; $("w-go").style.display = "";
+  Object.assign(choice, { name: s.name === "You" ? "" : s.name, partner: s.partner === "human" ? choice.partner : s.partner,
+                          opponents: s.opponents, mode: view.duo ? "friend" : choice.mode });
   if (!view.configured && saved) Object.assign(choice, saved);
   if (!view.players.opponents.some((x) => x.key === choice.opponents)) choice.opponents = view.players.opponents[0].key;
   $("w-name").value = choice.name || "";
@@ -628,10 +687,35 @@ function openWelcome() {
 }
 $("w-name").oninput = renderWelcome;
 $("w-name").onkeydown = (e) => { if (e.key === "Enter") $("w-go").click(); };
+function showInvite(code) {
+  $("w-link").value = `${location.origin}${location.pathname}?join=${code}`;
+  $("w-wait").style.display = ""; $("w-go").style.display = "none";
+  for (const id of ["w-step-partner", "w-step-opp"]) $(id).style.display = "none";
+  $("welcome").classList.add("show");
+}
+$("w-copy").onclick = () => { $("w-link").select(); navigator.clipboard?.writeText($("w-link").value).catch(() => {});
+  $("w-copy").textContent = "Copied!"; setTimeout(() => ($("w-copy").textContent = "Copy"), 1500); };
 $("w-go").onclick = async () => {
   if (busy) return;
-  const body = { name: $("w-name").value.trim(), partner: choice.partner, opponents: choice.opponents };
-  store.set(body);
+  $("w-error").textContent = "";
+  const name = $("w-name").value.trim();
+  if (joinCode) {
+    try {
+      const s = await api("/api/duo/join", { code: joinCode, name });
+      history.replaceState(null, "", location.pathname);
+      $("welcome").classList.remove("show"); $("log").innerHTML = "";
+      view = { ...s, bids: [], trick: [] }; render(); await replay(s);
+    } catch (e) { $("w-error").textContent = e.message || "Could not join"; }
+    return;
+  }
+  if (choice.mode === "friend") {
+    store.set({ name, partner: choice.partner, opponents: choice.opponents, mode: "friend" });
+    try { view = await api("/api/duo/create", { name, opponents: choice.opponents }); showInvite(view.invite); }
+    catch (e) { $("w-error").textContent = e.message || "Error"; }
+    return;
+  }
+  const body = { name, partner: choice.partner, opponents: choice.opponents };
+  store.set({ ...body, mode: "bot" });
   $("welcome").classList.remove("show"); $("overlay").classList.remove("show"); $("log").innerHTML = "";
   view = null;
   busy = true;
@@ -647,6 +731,8 @@ $("reveal").onclick = async () => { if (busy || !view) return; const s = await a
 
 (async () => {
   const s = await api("/api/state");
+  if (joinCode) { view = s; render(); renderTrick(s.trick); banner("Join your friend's table"); openWelcome(); return; }
+  if (s.duo && s.waiting) { view = s; render(); openWelcome(); showInvite(s.invite); return; }
   if (!s.configured) { view = s; render(); renderTrick(s.trick); banner("Choose your players"); openWelcome(); return; }
   if (s.phase === "bidding" && s.bids.length) {
     // donne déjà distribuée par le serveur : on rejoue les annonces des robots une par une

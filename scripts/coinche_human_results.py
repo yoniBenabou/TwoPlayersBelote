@@ -3,7 +3,8 @@ partir du fichier écrit par l'appli (demo4/logs/games.jsonl par défaut).
 
 L'humain joue Sud avec un robot en Nord (sa convention) ; Est et Ouest sont
 l'adversaire choisi (« ai_search » = IA + PIMC, « ai » = réseau seul, ou une
-convention de robots). Ne compte que les parties terminées où les autres
+convention de robots). Les parties à deux humains (Sud et Nord) sont comptées à
+part (« ai_search_duo », etc.). Ne compte que les parties terminées où les autres
 mains n'ont jamais été montrées ; les parties abandonnées ("New game" en
 cours de partie) et interrompues (serveur arrêté, page fermée) sont seulement
 signalées. Taux de victoire de l'adversaire avec intervalle de Wilson à 95 %
@@ -22,7 +23,9 @@ from collections import defaultdict
 DEFAULT_LOG = "demo4/logs/games.jsonl"
 LABELS = {"ai_search": "IA + PIMC", "ai": "IA (réseau seul)", "asr": "AsR", "papirobert": "Papi Robert",
           "petitjeu": "Petit jeu", "simple": "Robots simples"}
+LABELS.update({f"{k}_duo": f"2 joueurs vs {v}" for k, v in list(LABELS.items())})
 ORDER = ["ai_search", "ai", "asr", "papirobert", "petitjeu", "simple"]
+ORDER = ORDER + [f"{k}_duo" for k in ORDER]
 
 
 def wilson(k, n, z=1.96):
@@ -78,7 +81,7 @@ def main():
     parser.add_argument("--log", default=DEFAULT_LOG)
     parser.add_argument("--exclude", nargs="*", default=[], help="joueurs à exclure (ex. les auteurs du projet)")
     parser.add_argument("--opponents", default="ai_search",
-                        help="adversaire étudié en détail : ai_search, ai, asr, papirobert, petitjeu, simple")
+                        help="adversaire étudié en détail : ai_search, ai, asr, papirobert, petitjeu, simple (+ _duo à deux)")
     parser.add_argument("--model", help="ne garder que les parties contre ce modèle (chemin du .pt, ou un bout du chemin)")
     args = parser.parse_args()
     records = load(args.log)
@@ -86,6 +89,10 @@ def main():
     keep = lambda r: ((r.get("player") or "").lower() not in excluded
                       and (not args.model or args.model in (r.get("model") or "") or not r["opponents"].startswith("ai")))
     records = [r for r in records if keep(r)]
+    for r in records:  # parties à deux humains : un adversaire à part
+        if r.get("humans") == 2:
+            r["opponents"] += "_duo"
+            r["player"] = " + ".join(r["players"].values())
 
     games = [r for r in records if r["type"] == "game"]
     finished = [g for g in games if g["status"] == "finished" and not g["revealed"]]
@@ -112,7 +119,7 @@ def main():
         if r["type"] == "deal" and r["game_id"] in ids:
             deals_by_opp[r["opponents"]].append(r)
 
-    print("\nPar adversaire (l'humain joue avec un robot partenaire) :")
+    print("\nPar adversaire (en solo, l'humain joue avec un robot partenaire) :")
     for k in [k for k in ORDER if k in by_opp] + [k for k in by_opp if k not in ORDER]:
         gs = by_opp[k]
         w = opp_wins(gs)
