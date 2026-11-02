@@ -8,8 +8,14 @@ Nord : petit jeu, Papi Robert, AsR ou robots simples) et ses adversaires
 Table enveloppe CoincheGame : à chaque action du joueur, elle fait jouer les
 autres places jusqu'à son tour (ou la fin de la donne) et renvoie la liste des
 événements à animer et l'état complet de la table (textes en anglais).
+
+Avec un GameLog (log=...), chaque donne (mains, annonces, plis, résultat) et
+chaque partie (terminée ou abandonnée) est ajoutée au fichier JSONL ;
+scripts.coinche_human_results en tire les résultats et les graphiques.
 """
 import random
+import time
+import uuid
 from itertools import permutations
 
 import torch
@@ -30,6 +36,7 @@ from demo.game import SUIT_INFO, card_json
 HUMAN = 0
 PARTNER = 2
 SEAT_KEYS = ("south", "west", "north", "east")  # sens des aiguilles d'une montre
+TEAM_KEYS = ("you", "opponents")  # équipe Sud-Nord, équipe Est-Ouest (enregistrements)
 
 BOT_KINDS = {"simple": CoincheBot, "petitjeu": PetitJeuBot, "papirobert": PapiRobertBot, "asr": AsRBot}
 BOT_LABELS = {"simple": "Simple bots", "petitjeu": "Petit jeu", "papirobert": "Papi Robert", "asr": "AsR",
@@ -139,13 +146,19 @@ class AIPlayer:
 
 class Table:
     def __init__(self, target=DEFAULT_TARGET, seed=None, bots="simple", partner=None, opponents=None,
-                 name=None, network=None):
+                 name=None, network=None, log=None, study=False, model=None):
         """partner : convention de Nord (la tienne) ; opponents : convention d'Est et Ouest, ou "ai"
-        (réseau network). bots : les deux à la fois (ancienne option --bots)."""
+        (réseau network). bots : les deux à la fois (ancienne option --bots). log : GameLog où
+        enregistrer donnes et parties (None : rien) ; study : mains des autres jamais montrées ;
+        model : chemin du modèle de l'IA, noté dans les enregistrements."""
         self.rng = random.Random(seed)
         self.target = target
         self.network = network
+        self.log = log
+        self.study = study
+        self.model = model
         self.reveal = False
+        self.game_id = None
         self.configure(name or "You", partner or bots, opponents or bots, start=False)
         self.configured = name is not None
         self.new_game()
@@ -160,6 +173,9 @@ class Table:
             raise IllegalMove(f"Unknown style: {partner}")
         if opponents not in self.kinds():
             raise IllegalMove(f"Unknown opponents: {opponents}")
+        if start and self.game_id is not None and not self.game.game_over and self.human_actions > 0:
+            self._record_game("abandoned")  # avec les anciens réglages
+            self.game_id = None
         self.name, self.partner, self.opponents = name, partner, opponents
         self.ai = (AIPlayer(self.network, SEARCH_SAMPLES if opponents == "ai_search" else 0)
                    if opponents.startswith("ai") else None)
@@ -191,6 +207,12 @@ class Table:
 
     # ---------- actions du joueur ----------
     def new_game(self):
+        if self.game_id is not None and not self.game.game_over and self.human_actions > 0:
+            self._record_game("abandoned")
+        self.game_id = uuid.uuid4().hex[:12]
+        self.started_at = time.time()
+        self.human_actions = 0
+        self.revealed = self.reveal
         self.game = CoincheGame(target=self.target, rng=random.Random(self.rng.random()))
         if self.ai is not None:
             self.ai.attach(self.game)
@@ -217,6 +239,7 @@ class Table:
             action = (kind,)
         if self.game.current != HUMAN or action not in self.game.legal_bids(HUMAN):
             raise IllegalMove("This bid is not allowed now.")
+        self.human_actions += 1
         events = self._apply_bid(HUMAN, action)
         return self.state(events + self._run_bots())
 
@@ -226,6 +249,7 @@ class Table:
         if not self.coinche_window:
             raise IllegalMove("Too late to coinche: someone has spoken since.")
         self.coinche_window = False
+        self.human_actions += 1
         game.current = HUMAN  # la coinche coupe la parole à Nord ; ensuite, West parle
         events = self._apply_bid(HUMAN, ("coinche",))
         return self.state(events + self._run_bots())
@@ -247,6 +271,7 @@ class Table:
         if self.game.current != HUMAN or card not in self.game.legal_cards(HUMAN):
             raise IllegalMove("This card is not allowed (follow suit; trump if your partner is not winning; "
                               "overtrump if you can).")
+        self.human_actions += 1
         events = self._apply_card(HUMAN, card)
         return self.state(events + self._run_bots())
 
@@ -258,8 +283,58 @@ class Table:
         return self.state([self._deal_event()] + self._run_bots())
 
     def set_reveal(self, on):
+        if self.study and on:
+            raise IllegalMove("The other hands stay hidden in this study.")
         self.reveal = bool(on)
+        self.revealed = self.revealed or self.reveal
         return self.state([])
+
+    # ---------- enregistrement ----------
+    def _record(self, record):
+        if self.log is not None and self.configured:
+            self.log.write(dict(record, game_id=self.game_id, player=self.name, partner=self.partner,
+                                opponents=self.opponents,
+                                search=SEARCH_SAMPLES if self.opponents == "ai_search" else 0,
+                                model=self.model if self.opponents.startswith("ai") else None,
+                                study=self.study, time=time.time()))
+
+    def _record_deal(self):
+        """Donne finie (ou redistribuée) : mains, annonces, plis et résultat."""
+        game = self.game
+        label = lambda c: card_json(c)["label"]
+        record = {"type": "deal", "deal": game.deal_no, "dealer": SEAT_KEYS[game.dealer],
+                  "redeal": game.phase == "redeal",
+                  "hands": {SEAT_KEYS[s]: [label(c) for c in game.dealt[s]] for s in range(4)},
+                  "bids": [{"seat": SEAT_KEYS[s], "label": bid_label(a)} for s, a in game.bids],
+                  "revealed": self.revealed}
+        if game.phase == "done":
+            r = game.result
+            c = r["contract"]
+            record.update({
+                "contract": {"seat": SEAT_KEYS[c["seat"]], "team": TEAM_KEYS[team_of(c["seat"])],
+                             "value": "capot" if c["value"] == CAPOT else c["value"],
+                             "suit": SUIT_INFO[c["suit"]][1], "mult": c["mult"]},
+                "tricks": [{"cards": [[SEAT_KEYS[s], label(card)] for s, card in trick], "winner": SEAT_KEYS[w]}
+                           for trick, w in game.tricks],
+                "made": r["made"],
+                "scores": dict(zip(TEAM_KEYS, r["scores"])),
+                "trick_points": dict(zip(TEAM_KEYS, game.trick_points)),
+                "tricks_won": dict(zip(TEAM_KEYS, r["tricks_won"])),
+                "belote_team": TEAM_KEYS[r["belote_team"]] if r["belote_team"] is not None else None,
+                "capot_team": TEAM_KEYS[r["capot_team"]] if r.get("capot_team") is not None else None,
+                "totals": dict(zip(TEAM_KEYS, game.totals)),
+            })
+        self._record(record)
+
+    def _record_game(self, status):
+        """status : "finished" ou "abandoned" (nouvelle partie lancée avant la fin)."""
+        totals = self.game.totals
+        winner = None
+        if status == "finished" and totals[0] != totals[1]:
+            winner = TEAM_KEYS[0] if totals[0] > totals[1] else TEAM_KEYS[1]
+        self._record({"type": "game", "status": status, "totals": dict(zip(TEAM_KEYS, totals)), "winner": winner,
+                      "deals": len(self.game.history), "target": self.target, "revealed": self.revealed,
+                      "started": self.started_at, "human_actions": self.human_actions})
 
     # ---------- déroulement ----------
     def _run_bots(self):
@@ -267,6 +342,7 @@ class Table:
         game = self.game
         while True:
             if game.phase == "redeal":
+                self._record_deal()
                 events.append({"type": "message", "text": "Everybody passed: the cards are redealt (next dealer)."})
                 game.new_deal()
                 self._reset_deal()
@@ -354,6 +430,9 @@ class Table:
             events.append({"type": "trick", "winner": SEAT_KEYS[winner], "text": text})
             if game.phase == "done":
                 events.append({"type": "message", "text": self._result_text()})
+                self._record_deal()
+                if game.game_over:
+                    self._record_game("finished")
         return events
 
     def _deal_event(self):
@@ -433,6 +512,7 @@ class Table:
             "current": SEAT_KEYS[game.current] if game.phase in ("bidding", "play") else None,
             "hands": hands,
             "reveal": self.reveal,
+            "study": self.study,
             "bids": [{"seat": SEAT_KEYS[s], "label": bid_label(a)} for s, a in game.bids],
             "bidOptions": self._bid_options(),
             "contract": contract,

@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 .claude/
 demo/logs/
+demo4/logs/

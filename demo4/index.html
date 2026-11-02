@@ -434,6 +434,7 @@ function render() {
     $(`total-${t}`).textContent = s.totals[t];
     $(`bar-${t}`).style.width = Math.min(100, (100 * s.totals[t]) / s.target) + "%";
   }
+  $("reveal").style.display = s.study ? "none" : "";
   $("reveal").classList.toggle("on", s.reveal);
   $("reveal").textContent = s.reveal ? "Hide other hands" : "Show all hands";
   for (const seat of SEATS) {
