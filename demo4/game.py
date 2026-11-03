@@ -300,16 +300,30 @@ class Table:
         events = self._apply_bid(seat, action)
         return self.state(events + self._run_bots())
 
-    def coinche_now(self):
-        """Coinche hors de mon tour, sur l'annonce de West, avant que Nord parle."""
+    def coinche_now(self, seat=None):
+        """Coinche hors de mon tour : seul contre les robots, sur l'annonce de West, avant que Nord
+        parle ; à deux, à tout moment des annonces pendant que mon partenaire réfléchit."""
         game = self.game
-        if not self.coinche_window or self.duo:
+        if self.duo:
+            seat = self.ctx[0] if seat is None else seat
+            if not self._can_volley(seat):
+                raise IllegalMove("You cannot coinche now.")
+            self.human_actions += 1
+            events = self._apply_bid(seat, ("coinche",), volley=True)
+            return self.state(events + self._run_bots())
+        if not self.coinche_window:
             raise IllegalMove("Too late to coinche: someone has spoken since.")
         self.coinche_window = False
         self.human_actions += 1
         game.current = HUMAN  # la coinche coupe la parole à Nord ; ensuite, West parle
         events = self._apply_bid(HUMAN, ("coinche",))
         return self.state(events + self._run_bots())
+
+    def _can_volley(self, seat):
+        """À deux : je peux coincher hors de mon tour quand c'est à mon partenaire humain de parler."""
+        game = self.game
+        return (self.duo and not self.waiting and game.phase == "bidding" and seat in self.humans
+                and game.current in self.humans and game.current != seat and seat in game.volley_seats())
 
     def continue_bidding(self):
         """Pas de coinche : Nord parle, les annonces continuent."""
@@ -623,6 +637,7 @@ class Table:
             "yourTurn": my_turn,
             "yourBid": game.phase == "bidding" and game.current == viewer and not self.waiting,
             "coincheWindow": self.coinche_window and viewer == HUMAN,
+            "canVolley": self._can_volley(viewer),
             "teams": teams,
             "totals": game.totals,
             "target": game.target,

@@ -384,7 +384,16 @@ function renderBidding(s) {
   const box = $("bid-controls"); box.innerHTML = "";
   if (s.coincheWindow && !busy) { renderCoincheWindow(s, box); return; }
   const o = s.bidOptions;
-  if (!o || busy) { box.innerHTML = `<div class="help mono">WAITING FOR ${(NAMES[s.current] || "").toUpperCase()}…</div>`; return; }
+  if (!o || busy) {
+    box.innerHTML = `<div class="help mono">WAITING FOR ${(NAMES[s.current] || "").toUpperCase()}…</div>`;
+    if (s.canVolley && !busy) {  // à deux : coinche hors de mon tour pendant que mon partenaire réfléchit
+      const acts = document.createElement("div"); acts.className = "row";
+      const c = document.createElement("button"); c.className = "primary"; c.textContent = "Coinche! (×2)";
+      c.onclick = () => act("/api/coinche-now", {});
+      acts.append(c); box.append(acts);
+    }
+    return;
+  }
   if (selectedValue !== null && !o.values.some((v) => v.value === selectedValue)) selectedValue = null;
   const help = document.createElement("div"); help.className = "help";
   help.textContent = o.values.length ? "Choose a contract, then its trump suit — or pass" : "Pass, or answer the coinche";
