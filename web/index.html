@@ -65,7 +65,7 @@ header {
 .contract-chip b { font-family: var(--display); font-size: 19px; color: var(--ink); }
 .contract-chip .red { color: #ff6b70; }
 .tools { display: flex; gap: 8px; flex-wrap: wrap; }
-main { display: grid; grid-template-columns: 1fr 320px; gap: 16px; padding: 16px 18px 18px; min-height: 0; }
+main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content: center; padding: 16px 18px 18px; min-height: 0; }
 
 /* ---------- table ---------- */
 .board { display: flex; flex-direction: column; min-width: 0; }
@@ -193,23 +193,18 @@ main { display: grid; grid-template-columns: 1fr 320px; gap: 16px; padding: 16px
 .actrow .btn { flex: 1; }
 .countdown { font-family: var(--display); font-size: 26px; color: var(--gold); }
 
-/* panneau latéral */
-aside { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
-.panel h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); font-weight: 700; }
-.mode-line { font-size: 13px; color: var(--muted); }
-.mode-line b { color: var(--ink); }
-#last { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-height: var(--sh); }
-#last .info { font-size: 12px; color: var(--muted); margin-left: 4px; }
-.log-panel { flex: 1; display: flex; flex-direction: column; min-height: 180px; }
-#log { overflow-y: auto; flex: 1; max-height: 340px; font-size: 13px; line-height: 1.45; display: flex; flex-direction: column; gap: 2px; padding-right: 4px; }
-#log div { color: var(--muted); }
-#log div.hl { color: var(--ink); }
-#log div.deal { color: var(--gold); font-weight: 600; margin-top: 6px; }
-table.hist { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-table.hist th, table.hist td { padding: 4px 4px; text-align: left; border-bottom: 1px solid var(--line); }
-table.hist th { color: var(--muted); font-weight: 600; }
-table.hist td.n { text-align: right; font-variant-numeric: tabular-nums; }
+/* dernier pli, en haut à droite de la table */
+.last-trick {
+  grid-column: 3; grid-row: 1 / span 2; justify-self: end; align-self: start; z-index: 2; margin: 14px 26px 0 0;
+  background: rgba(4, 16, 11, .6); border: 1px solid rgba(232, 185, 84, .45); border-radius: 14px; padding: 9px 12px 10px; text-align: center;
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+}
+.last-trick .lt-title { font-size: 12px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
+.last-trick .lt-cards { display: flex; gap: 5px; justify-content: center; }
+.last-trick .card { --cw: 52px; --ch: 74px; }
+.last-trick .card.win { box-shadow: 0 0 0 3px var(--gold), 0 4px 12px rgba(0,0,0,.4); transform: translateY(-4px); }
+.last-trick .info { font-size: 13px; font-weight: 600; color: var(--ink); margin-top: 8px; white-space: nowrap; }
+.last-trick .info b { color: var(--gold); }
 .ok { color: #6fd39a; } .ko { color: #ff7a7f; }
 
 /* fenêtres */
@@ -265,7 +260,6 @@ table.hist td.n { text-align: right; font-variant-numeric: tabular-nums; }
 #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #5a1d22; color: #ffe2e3; padding: 10px 16px; border-radius: 10px;
   font-size: 14px; z-index: 60; display: none; max-width: 90vw; box-shadow: 0 10px 30px rgba(0,0,0,.4); }
 #toast.show { display: block; animation: pop .25s ease-out; }
-#side-toggle { display: none; }
 
 @keyframes pop { from { transform: translate(-50%, -50%) scale(.92); opacity: 0; } }
 .modal, #toast.show, .said.fresh { --x: 0; }
@@ -279,13 +273,6 @@ table.hist td.n { text-align: right; font-variant-numeric: tabular-nums; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---------- écrans étroits ---------- */
-@media (max-width: 1040px) {
-  main { grid-template-columns: 1fr; }
-  aside { display: none; }
-  aside.open { display: flex; position: fixed; right: 0; top: 0; bottom: 0; width: min(340px, 92vw); z-index: 40; background: var(--panel-solid);
-    padding: 16px; overflow-y: auto; border-left: 1px solid var(--line); box-shadow: -20px 0 40px rgba(0,0,0,.5); }
-  #side-toggle { display: inline-block; }
-}
 @media (max-width: 720px) {
   :root { --cw: 50px; --ch: 72px; --sw: 24px; --sh: 34px; }
   header { padding: 8px 10px; gap: 8px; }
@@ -296,12 +283,21 @@ table.hist td.n { text-align: right; font-variant-numeric: tabular-nums; }
   .tools { margin-left: auto; } .tools .btn { padding: 6px 9px; font-size: 12.5px; }
   .tools .wide { display: none; }
   main { padding: 10px 8px; }
-  .table { padding: 14px 8px; border-radius: 90px / 70px; min-height: 360px; grid-template-columns: 1fr 1.6fr 1fr; }
+  .table { padding: 14px 8px; border-radius: 90px / 70px; min-height: 360px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) minmax(0, 1fr); }
   .seat.west .mini-hand, .seat.east .mini-hand { display: none; }
   .seat.west .count, .seat.east .count { display: block; }
   .plate { padding: 4px 8px 4px 4px; gap: 6px; } .avatar { width: 28px; height: 28px; font-size: 12px; }
   .plate .nm { font-size: 12px; max-width: 74px; } .plate .sub { font-size: 10px; }
   .said { font-size: 17px; padding: 5px 11px; top: calc(100% + 6px); }
+  .last-trick { position: absolute; top: 10px; right: 12px; margin: 0; padding: 4px 4px 5px; }
+  .last-trick .card { --cw: 27px; --ch: 39px; }
+  .last-trick .card .c.br, .last-trick .card .pip { display: none; }
+  .last-trick .lt-cards { gap: 0; } .last-trick .lt-cards .card + .card { margin-left: -7px; }
+  .seat { min-width: 0; }
+  .plate { max-width: 100%; min-width: 0; }
+  .plate > div:nth-child(2) { min-width: 0; }
+  .plate .nm, .plate .sub { max-width: none; overflow: hidden; text-overflow: ellipsis; }
+  .last-trick .lt-title { font-size: 9px; margin-bottom: 4px; } .last-trick .info { font-size: 10.5px; margin-top: 5px; }
   .trick { width: 170px; height: 170px; }
   .slot.south { margin-top: 42px; } .slot.north { margin-top: -42px; } .slot.west { margin-left: -54px; } .slot.east { margin-left: 54px; }
   .center { min-height: 190px; }
@@ -323,7 +319,6 @@ table.hist td.n { text-align: right; font-variant-numeric: tabular-nums; }
     <div class="tools">
       <button class="btn" id="btn-rules">Règles</button>
       <button class="btn" id="btn-menu">Nouvelle partie</button>
-      <button class="btn" id="side-toggle">Journal</button>
     </div>
   </header>
   <main>
@@ -337,6 +332,7 @@ table.hist td.n { text-align: right; font-variant-numeric: tabular-nums; }
           <div class="bidbox" id="bidbox"></div>
         </div>
         <div class="seat east" id="seat-east"></div>
+        <div class="last-trick" id="last" style="display:none"></div>
         <div class="seat south" id="seat-south"></div>
       </div>
       <div class="my-hand-wrap">
@@ -344,14 +340,6 @@ table.hist td.n { text-align: right; font-variant-numeric: tabular-nums; }
         <div id="hand"></div>
       </div>
     </section>
-    <aside id="side">
-      <div class="panel"><h3>Table</h3><div class="mode-line" id="mode-line">–</div></div>
-      <div class="panel"><h3>Dernier pli</h3><div id="last"></div></div>
-      <div class="panel log-panel"><h3>Journal</h3><div id="log"></div></div>
-      <div class="panel"><h3>Donnes</h3>
-        <table class="hist"><thead><tr><th>#</th><th>Contrat</th><th class="n" id="h-0">Nous</th><th class="n" id="h-1">Eux</th></tr></thead><tbody id="hist"></tbody></table>
-      </div>
-    </aside>
   </main>
 </div>
 
@@ -439,7 +427,6 @@ function name(seat) {
 const isVous = (seat) => name(seat) === "Vous";
 const verb = (seat, one, vous) => `${esc(name(seat))} ${isVous(seat) ? vous : one}`;
 const nextSeat = (seat) => SEATS[(SEATS.indexOf(seat) + 1) % 4];
-const frLabel = (raw) => SEAT_FR[raw] || raw;
 function bidFr(label) {
   return { Pass: "Passe", "Coinche!": "Coinche !", "Surcoinche!": "Surcoinche !" }[label] || label;
 }
@@ -529,7 +516,7 @@ function render() {
   $("hint").textContent = busy || s.phase === "done" ? "" : s.yourTurn ? (s.trick.length ? "À toi de jouer : clique sur une carte en surbrillance" : "À toi d'entamer")
     : s.yourBid ? "À toi d'annoncer" : s.coincheWindow ? "Coincher ?" : s.duo && s.current === "north" ? `En attente de ${name("north")}…` : "";
   renderBidding();
-  renderSide();
+  renderLastTrick();
   renderOverlay();
 }
 
@@ -564,22 +551,15 @@ function fitHand() {
 }
 window.addEventListener("resize", fitHand);
 
-function renderSide() {
+function renderLastTrick() {
   const s = view;
-  const opp = KIND[s.setup.opponents]?.label || s.setup.opponents;
-  $("mode-line").innerHTML = s.duo
-    ? `<b>${esc(name("south"))}</b> et <b>${esc(name("north"))}</b> contre <b>${esc(opp)}</b>`
-    : `Partenaire : <b>${esc(KIND[s.setup.partner]?.label || s.setup.partner)}</b> · Adversaires : <b>${esc(opp)}</b><br>Objectif : ${s.target.toLocaleString("fr-FR")} points`;
-  const lt = $("last"); lt.innerHTML = "";
+  const lt = $("last");
+  lt.style.display = s.lastTrick ? "" : "none";
   if (s.lastTrick) {
-    for (const t of s.lastTrick.cards) lt.append(cardEl(t.card, { small: true, classes: t.seat === s.lastTrick.winner ? ["trump"] : [] }));
-    const i = document.createElement("span"); i.className = "info";
-    i.textContent = `Pli ${s.lastTrick.trickNo} → ${name(s.lastTrick.winner)} (+${s.lastTrick.points})`; lt.append(i);
-  } else lt.innerHTML = '<span class="info" style="font-size:12px;color:var(--muted)">Aucun pli joué.</span>';
-  $("h-0").textContent = "Nous"; $("h-1").textContent = "Eux";
-  $("hist").innerHTML = s.history.map((h) =>
-    `<tr><td>${h.deal}</td><td>${esc(h.contract)}${h.mult > 1 ? " ×" + h.mult : ""} <span style="color:var(--muted)">${esc(frLabel(h.by))}</span> <span class="${h.made ? "ok" : "ko"}">${h.made ? "✓" : "✗"}</span></td>
-     <td class="n">${h.scores[0]}</td><td class="n">${h.scores[1]}</td></tr>`).join("") || '<tr><td colspan="4" style="color:var(--muted)">Aucune donne terminée.</td></tr>';
+    lt.innerHTML = '<div class="lt-title">Dernier pli</div><div class="lt-cards"></div><div class="info"></div>';
+    for (const t of s.lastTrick.cards) lt.querySelector(".lt-cards").append(cardEl(t.card, { classes: t.seat === s.lastTrick.winner ? ["win"] : [] }));
+    lt.querySelector(".info").innerHTML = `${esc(name(s.lastTrick.winner))} · <b>+${s.lastTrick.points}</b>`;
+  }
 }
 
 // ---------- pli ----------
@@ -611,16 +591,6 @@ async function gatherTrick(winner) {
   $("banner").style.display = "";
 }
 function banner(text) { $("banner").innerHTML = text; }
-
-// ---------- journal ----------
-function log(html, cls = "") {
-  const el = document.createElement("div");
-  if (cls) el.className = cls;
-  el.innerHTML = html;
-  const box = $("log"); box.append(el);
-  while (box.children.length > 300) box.firstChild.remove();
-  box.scrollTop = box.scrollHeight;
-}
 
 // ---------- annonces ----------
 function renderBidding() {
@@ -731,7 +701,7 @@ async function replay(state, { last = true } = {}) {
       }
       const d = state.dealer;
       const text = `Donne ${state.dealNo} : ${verb(d, "distribue", "distribuez")}, ${verb(nextSeat(d), "parle", "parlez")} en premier.`;
-      banner(text); log(text, "deal"); await sleep(DELAY.message);
+      banner(text); await sleep(DELAY.message);
     } else if (ev.type === "bid") {
       if (view) {
         view.bids = [...view.bids, { seat: ev.seat, label: ev.label }];
@@ -740,9 +710,7 @@ async function replay(state, { last = true } = {}) {
         render();
       }
       const volley = /out of turn/.test(ev.text || "") ? " (à la volée)" : "";
-      const conf = ev.confidence !== undefined ? ` <span style="color:var(--dim)">· confiance ${ev.confidence} %</span>` : "";
-      const text = `${esc(name(ev.seat))} : <b>${esc(bidFr(ev.label))}</b>${volley}`;
-      banner(text); log(text + conf, ev.label !== "Pass" ? "hl" : "");
+      banner(`${esc(name(ev.seat))} : <b>${esc(bidFr(ev.label))}</b>${volley}`);
       await sleep(ev.seat === "south" ? DELAY.yourBid : DELAY.bid);
     } else if (ev.type === "play") {
       if (view) {
@@ -756,16 +724,9 @@ async function replay(state, { last = true } = {}) {
       }
       if (trick.length === 4) trick = [];
       trick.push({ seat: ev.seat, card: ev.card, announce: ev.announce, confidence: ev.confidence }); renderTrick(trick);
-      const ann = ev.announce ? ` — <b style="color:var(--gold)">${ev.announce.replace("!", " !")}</b>` : "";
-      const conf = ev.confidence !== undefined ? ` <span style="color:var(--dim)">· ${ev.confidence} %</span>` : "";
-      log(`${verb(ev.seat, "joue", "jouez")} ${cardName(ev.card)}${ann}${conf}`, ev.announce ? "hl" : "");
       await sleep(ev.announce ? DELAY.announce : ev.seat === "south" ? DELAY.yourCard : DELAY.card);
     } else if (ev.type === "trick") {
       renderTrick(trick, ev.winner);
-      const m = /\(\+(\d+)/.exec(ev.text || ""), pts = m ? m[1] : "?";
-      const no = (ev.text || "").match(/trick (\d+)/);
-      const der = /last trick/.test(ev.text || "") ? " dont 10 de der" : "";
-      log(`${verb(ev.winner, "remporte", "remportez")} le pli${no ? " " + no[1] : ""} (+${pts}${der})`, "hl");
       await sleep(DELAY.trick); await gatherTrick(ev.winner); trick = [];
     } else if (ev.contract) {
       const c = state.contract;
@@ -773,15 +734,12 @@ async function replay(state, { last = true } = {}) {
         const mult = c.mult === 2 ? ", coinché" : c.mult === 3 ? ", surcoinché" : "";
         const leader = nextSeat(state.dealer);
         const text = `Contrat : <b>${esc(c.label)}</b> par ${esc(name(c.by))}${mult}. ${verb(leader, "entame", "entamez")}.`;
-        banner(text); log(text, "hl");
+        banner(text);
       }
       await sleep(DELAY.message);
     } else if (/^Everybody passed/.test(ev.text || "")) {
       const text = "Tout le monde passe : on redistribue.";
-      banner(text); log(text, "hl"); await sleep(DELAY.message);
-    } else if (state.phase === "done" && state.result) {
-      const r = state.result, c = state.contract;
-      log(`${c ? esc(c.label) + " " : ""}${r.made ? "réussi" : "chuté"} : Nous +${r.scores[0]}, Eux +${r.scores[1]}.`, "hl");
+      banner(text); await sleep(DELAY.message);
     }
   }
   view = state;
@@ -837,7 +795,7 @@ setInterval(async () => {
     const s = await api(`/api/state?since=${view.seq || 0}`);
     if (busy || !view || !view.duo) return;
     if (view.waiting && !s.waiting) {
-      $("welcome").classList.remove("show"); $("log").innerHTML = "";
+      $("welcome").classList.remove("show");
       view = { ...s, bids: [], trick: [] }; render(); await drive(s);
     } else if (!s.waiting && s.events.length) { stuck = 0; await replay(s); }
     else if (!s.waiting && s.pending && ++stuck >= 3) { stuck = 0; await drive(s); }
@@ -848,7 +806,7 @@ setInterval(async () => {
 const bid = (b) => { selectedValue = null; return act("/api/bid", b); };
 const play = (id) => act("/api/play", { card: id });
 const nextDeal = () => { closeOverlay(); return act("/api/next", {}); };
-const newGame = () => { closeOverlay(); $("log").innerHTML = ""; return act("/api/new", {}); };
+const newGame = () => { closeOverlay(); return act("/api/new", {}); };
 
 // ---------- écran d'accueil ----------
 const PARTNERS = ["asr", "papirobert", "petitjeu", "friend"];
@@ -937,7 +895,7 @@ $("w-go").onclick = async () => {
     try {
       const s = await api("/api/duo/join", { code: joinCode, name: nm });
       history.replaceState(null, "", location.pathname);
-      $("welcome").classList.remove("show"); $("log").innerHTML = "";
+      $("welcome").classList.remove("show");
       view = { ...s, bids: [], trick: [] }; render(); await drive(s);
     } catch (e) { $("w-error").textContent = e.message || "Impossible de rejoindre la table"; }
     return;
@@ -949,7 +907,7 @@ $("w-go").onclick = async () => {
     return;
   }
   const body = { name: nm || "Vous", partner: choice.partner, opponents: choice.opponents };
-  $("welcome").classList.remove("show"); closeOverlay(); $("log").innerHTML = "";
+  $("welcome").classList.remove("show"); closeOverlay();
   busy = true;
   try { const s = await api("/api/setup", body); view = { ...s, bids: [], trick: [] }; render(); await drive(s); }
   catch (e) { busy = false; toast(e.message); openWelcome(); }
@@ -957,8 +915,6 @@ $("w-go").onclick = async () => {
 
 $("btn-menu").onclick = () => { if (!busy && view) openWelcome(); };
 $("btn-rules").onclick = showRules;
-$("side-toggle").onclick = (e) => { e.stopPropagation(); $("side").classList.toggle("open"); };
-document.addEventListener("click", (e) => { if ($("side").classList.contains("open") && !$("side").contains(e.target)) $("side").classList.remove("open"); });
 
 (async () => {
   let s;
@@ -977,7 +933,6 @@ document.addEventListener("click", (e) => { if ($("side").classList.contains("op
   render(); renderTrick(s.trick);
   if (s.pending) { await drive(s); return; }
   banner(s.yourBid ? "À toi d'annoncer" : s.yourTurn ? "À toi de jouer" : "");
-  for (const b of s.bids) log(`${esc(name(b.seat))} : ${esc(bidFr(b.label))}`);
 })();
 </script>
 </body>
