@@ -321,10 +321,8 @@ table.hist td.n { text-align: right; font-variant-numeric: tabular-nums; }
       <div class="score them"><div class="top"><span class="who" id="team-1">Eux</span><span class="pts" id="total-1">0</span></div><div class="bar"><i id="bar-1"></i></div></div>
     </div>
     <div class="tools">
-      <button class="btn wide" id="btn-reveal" title="Montrer toutes les mains">Voir les mains</button>
       <button class="btn" id="btn-rules">Règles</button>
-      <button class="btn wide" id="btn-new">Nouvelle partie</button>
-      <button class="btn" id="btn-menu">Menu</button>
+      <button class="btn" id="btn-menu">Nouvelle partie</button>
       <button class="btn" id="side-toggle">Journal</button>
     </div>
   </header>
@@ -507,9 +505,6 @@ function render() {
       <b class="${red ? "red" : ""}">${esc(s.contract.label)}${s.contract.mult > 1 ? ` ×${s.contract.mult}` : ""}</b>`;
   } else chip.innerHTML = `<span>Donne ${s.dealNo}</span><b>${s.phase === "bidding" ? "Annonces" : "–"}</b>`;
 
-  $("btn-reveal").style.display = s.study || s.duo ? "none" : "";
-  $("btn-reveal").classList.toggle("on", s.reveal);
-  $("btn-reveal").textContent = s.reveal ? "Cacher les mains" : "Voir les mains";
 
   for (const seat of SEATS) {
     const box = $(`seat-${seat}`);
@@ -702,7 +697,7 @@ function renderOverlay() {
       <tr class="total"><td>Score de la donne</td><td>+${r.scores[0]}</td><td>+${r.scores[1]}</td></tr>
       <tr><td>Total de la partie</td><td>${s.totals[0]}</td><td>${s.totals[1]}</td></tr></table>
     ${notes.map((n) => `<p>${n}</p>`).join("")}
-    <div class="foot">${s.gameOver ? '<button class="btn" id="ov-menu">Menu</button>' : ""}<button class="btn gold" id="ov-btn">${s.gameOver ? "Rejouer" : "Donne suivante"}</button></div>`;
+    <div class="foot">${s.gameOver ? '<button class="btn" id="ov-menu">Nouvelle partie</button>' : ""}<button class="btn gold" id="ov-btn">${s.gameOver ? "Rejouer" : "Donne suivante"}</button></div>`;
   $("ov-btn").onclick = s.gameOver ? newGame : nextDeal;
   if (s.gameOver) $("ov-menu").onclick = () => { closeOverlay(); openWelcome(); };
   $("overlay").dataset.kind = "result";
@@ -961,13 +956,7 @@ $("w-go").onclick = async () => {
 };
 
 $("btn-menu").onclick = () => { if (!busy && view) openWelcome(); };
-$("btn-new").onclick = () => { if (!busy && view && confirm("Abandonner la partie en cours et en commencer une nouvelle ?")) newGame(); };
 $("btn-rules").onclick = showRules;
-$("btn-reveal").onclick = async () => {
-  if (busy || !view) return;
-  try { const s = await api("/api/reveal", { on: !view.reveal }); view.hands = s.hands; view.reveal = s.reveal; render(); }
-  catch (e) { toast(e.message); }
-};
 $("side-toggle").onclick = (e) => { e.stopPropagation(); $("side").classList.toggle("open"); };
 document.addEventListener("click", (e) => { if ($("side").classList.contains("open") && !$("side").contains(e.target)) $("side").classList.remove("open"); });
 
