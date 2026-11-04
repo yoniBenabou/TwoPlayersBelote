@@ -363,7 +363,7 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
         <input type="text" id="w-name" maxlength="20" placeholder="Ex. : Yoni" autocomplete="nickname">
       </div>
       <div class="wbox full" id="w-partner-box">
-        <h3>Ton partenaire (Nord)</h3>
+        <h3>Ton partenaire</h3>
         <div class="choices pgrid" id="w-partner"></div>
         <div class="styles" id="w-styles"></div>
       </div>
@@ -396,7 +396,7 @@ const RANK = { J: "V", Q: "D", K: "R" };
 const SEAT_FR = { South: "Sud", West: "Yoni", North: "Nord", East: "Noa", "Your partner": "Partenaire",
                   "West AI": "Yoni", "East AI": "Noa", You: "Vous" };
 const KIND = {
-  ai: { label: "IA", stars: 5, text: "Notre réseau entraîné : il a appris seul en jouant des millions de donnes. Il affiche sa confiance à chaque coup." },
+  ai: { label: "IA", stars: 5, text: "Notre réseau entraîné : il a appris seul en jouant des millions de donnes." },
   ai_search: { label: "IA + recherche", stars: 5, text: "Le même réseau, mais avant chaque carte il imagine 20 répartitions possibles des cartes cachées et les joue jusqu'au bout. Plus fort, un peu plus lent." },
   asr: { label: "AsR", stars: 4, text: "80 montre deux As, 90 demande l'autre majeure, 110 à 140 demandent des As et des 10 précis, appels en défausse." },
   papirobert: { label: "Papi Robert", stars: 2, text: "« Belote au miel » : 80 avec deux As, 90 cherche la deuxième majeure, 100 à 120 selon le nombre de couleurs." },
@@ -594,9 +594,7 @@ function renderTrick(trick, winner) {
     slot.style.setProperty("--fx", fx); slot.style.setProperty("--fy", fy);
     const trump = view && view.trump && t.card.suitName === view.trump.name;
     slot.append(cardEl(t.card, { classes: trump ? ["trump"] : [] }));
-    if (t.announce) slot.insertAdjacentHTML("beforeend", `<span class="badge ann">${t.announce.replace("!", " !")}</span>`);
-    else if (t.confidence !== undefined) slot.insertAdjacentHTML("beforeend", `<span class="badge" title="Confiance de l'IA">${t.confidence} %</span>`);
-    box.append(slot);
+    if (t.announce) slot.insertAdjacentHTML("beforeend", `<span class="badge ann">${t.announce.replace("!", " !")}</span>`);    box.append(slot);
   }
   shownTrick = trick.slice();
   $("banner").style.display = trick.length ? "none" : "";
@@ -741,7 +739,7 @@ async function replay(state, { last = true } = {}) {
         render();
       }
       if (trick.length === 4) trick = [];
-      trick.push({ seat: ev.seat, card: ev.card, announce: ev.announce, confidence: ev.confidence }); renderTrick(trick);
+      trick.push({ seat: ev.seat, card: ev.card, announce: ev.announce }); renderTrick(trick);
       await sleep(ev.announce ? DELAY.announce : ev.seat === "south" ? DELAY.yourCard : DELAY.card);
     } else if (ev.type === "trick") {
       renderTrick(trick, ev.winner);
@@ -837,7 +835,7 @@ const newGame = () => { closeOverlay(); return act("/api/new", {}); };
 const PARTNERS = ["asr", "papirobert", "petitjeu", "friend"];
 const OPPONENTS = "ai_search";  // adversaires imposés : l'IA + recherche
 const choice = { name: "", partner: "asr", opponents: OPPONENTS };
-const robotName = (k) => (k === "simple" ? KIND.simple.label : `Robot ${KIND[k].label}`);
+const robotName = (k) => PARTNER_NAMES[k] || KIND[k].label;  // Ruben, Papi Robert, Claude
 const joinCode = new URLSearchParams(location.search).get("join");
 const store = {
   get() { try { return JSON.parse(localStorage.getItem("coinche-web") || "null"); } catch { return null; } },
@@ -867,9 +865,9 @@ function renderWelcome() {
   choice.opponents = opps.includes(OPPONENTS) ? OPPONENTS : opps[0];
 
   const me = esc($("w-name").value.trim() || "Toi");
-  const pl = choice.partner === "friend" ? "un ami" : `un ${robotName(choice.partner).replace(/^R/, "r")}`;
+  const pl = choice.partner === "friend" ? "un ami" : robotName(choice.partner);
   $("w-versus").innerHTML = joinCode ? "Tu es invité à une table : tu joueras en Nord, avec ton ami comme partenaire."
-    : `<b>${me}</b> avec <b>${pl}</b> &nbsp;contre&nbsp; <b>${KIND[choice.opponents].label}</b>`;
+    : `<b>${me}</b> avec <b>${pl}</b> &nbsp;contre&nbsp; <b>${SEAT_FR.West}</b> et <b>${SEAT_FR.East}</b>`;
   $("w-partner-box").style.display = joinCode ? "none" : "";
   $("w-name-box").style.display = "";
   $("w-go").textContent = joinCode ? "Rejoindre la table ▶" : choice.partner === "friend" ? "Créer la table ▶" : "Distribuer les cartes ▶";
