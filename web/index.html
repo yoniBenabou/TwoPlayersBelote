@@ -575,7 +575,9 @@ function renderLastTrick() {
   if (s.lastTrick) {
     lt.innerHTML = '<div class="lt-cards"></div>';
     lt.title = "Dernier pli";
-    for (const t of s.lastTrick.cards) lt.querySelector(".lt-cards").append(cardEl(t.card, { classes: t.seat === s.lastTrick.winner ? ["win"] : [] }));
+    // ordre fixe des places : moi, Ouest, Nord, Est (quel que soit l'ordre où les cartes ont été jouées)
+    const cards = [...s.lastTrick.cards].sort((a, b) => SEATS.indexOf(a.seat) - SEATS.indexOf(b.seat));
+    for (const t of cards) lt.querySelector(".lt-cards").append(cardEl(t.card, { classes: t.seat === s.lastTrick.winner ? ["win"] : [] }));
   }
 }
 
