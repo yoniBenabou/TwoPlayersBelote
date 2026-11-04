@@ -97,9 +97,9 @@ main { display: grid; grid-template-columns: 1fr 320px; gap: 16px; padding: 16px
 .tag { font-size: 9.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; padding: 2px 6px; border-radius: 6px; background: #2b3b33; color: var(--muted); }
 .tag.taker { background: var(--gold); color: #2a1d04; }
 .said {
-  position: absolute; left: 50%; bottom: -30px; transform: translateX(-50%); white-space: nowrap; z-index: 3;
-  background: var(--card); color: var(--card-ink); font-weight: 700; font-size: 13px; padding: 4px 10px; border-radius: 10px;
-  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+  position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); white-space: nowrap; z-index: 3;
+  background: var(--card); color: var(--card-ink); font-family: var(--display); font-weight: 800; font-size: 22px; line-height: 1.1;
+  padding: 6px 16px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,.45);
 }
 .said.red { color: var(--card-red); }
 .said.pass { background: #44534b; color: var(--muted); }
@@ -301,6 +301,7 @@ table.hist td.n { text-align: right; font-variant-numeric: tabular-nums; }
   .seat.west .count, .seat.east .count { display: block; }
   .plate { padding: 4px 8px 4px 4px; gap: 6px; } .avatar { width: 28px; height: 28px; font-size: 12px; }
   .plate .nm { font-size: 12px; max-width: 74px; } .plate .sub { font-size: 10px; }
+  .said { font-size: 17px; padding: 5px 11px; top: calc(100% + 6px); }
   .trick { width: 170px; height: 170px; }
   .slot.south { margin-top: 42px; } .slot.north { margin-top: -42px; } .slot.west { margin-left: -54px; } .slot.east { margin-left: 54px; }
   .center { min-height: 190px; }
