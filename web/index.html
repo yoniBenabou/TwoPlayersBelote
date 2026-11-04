@@ -125,8 +125,6 @@ main { display: grid; grid-template-columns: 1fr 320px; gap: 16px; padding: 16px
 .card .c.tl { top: 6%; left: 8%; } .card .c.br { bottom: 6%; right: 8%; transform: rotate(180deg); }
 .card .c .r { font-size: calc(var(--cw) * .26); } .card .c .s { font-size: calc(var(--cw) * .22); font-family: var(--font); }
 .card .pip { position: absolute; inset: 0; display: grid; place-items: center; font-size: calc(var(--cw) * .55); font-family: var(--font); }
-.card .pip.face { font-family: var(--display); font-size: calc(var(--cw) * .5); font-weight: 800; }
-.card .pip.face span { display: grid; place-items: center; width: 58%; height: 52%; border-radius: 8px; border: 1.5px solid currentColor; opacity: .9; }
 .card.back {
   background: repeating-linear-gradient(45deg, #8f2330 0 6px, #7a1c28 6px 12px); border: 3px solid #f6f1e4;
 }
@@ -253,6 +251,7 @@ table.hist td.n { text-align: right; font-variant-numeric: tabular-nums; }
 .choice .t { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; font-size: 14.5px; }
 .choice .d { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
 .stars { color: var(--gold); font-size: 12px; letter-spacing: 1px; white-space: nowrap; }
+.choices.pgrid { grid-template-columns: 1fr 1fr; }
 .styles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
 .styles .choice { padding: 7px 10px; }
 .versus { text-align: center; margin: 16px 0 10px; color: var(--muted); font-size: 15px; }
@@ -306,7 +305,7 @@ table.hist td.n { text-align: right; font-variant-numeric: tabular-nums; }
   .slot.south { margin-top: 42px; } .slot.north { margin-top: -42px; } .slot.west { margin-left: -54px; } .slot.east { margin-left: 54px; }
   .center { min-height: 190px; }
   .card.trump::before { font-size: 7px; top: -7px; }
-  .wgrid { grid-template-columns: 1fr; } .styles { grid-template-columns: 1fr; }
+  .wgrid { grid-template-columns: 1fr; } .styles, .choices.pgrid { grid-template-columns: 1fr; }
   .vals button { padding: 7px 0; font-size: 13px; }
 }
 </style>
@@ -371,14 +370,10 @@ table.hist td.n { text-align: right; font-variant-numeric: tabular-nums; }
         <h3>Ton prénom</h3>
         <input type="text" id="w-name" maxlength="20" placeholder="Ex. : Yoni" autocomplete="nickname">
       </div>
-      <div class="wbox" id="w-partner-box">
+      <div class="wbox full" id="w-partner-box">
         <h3>Ton partenaire (Nord)</h3>
-        <div class="choices" id="w-partner"></div>
+        <div class="choices pgrid" id="w-partner"></div>
         <div class="styles" id="w-styles"></div>
-      </div>
-      <div class="wbox" id="w-opp-box">
-        <h3>Vos adversaires (Est et Ouest)</h3>
-        <div class="choices" id="w-opp"></div>
       </div>
       <div class="wbox full" id="w-wait" style="display:none">
         <h3>Invite ton partenaire</h3>
@@ -405,7 +400,6 @@ const SEATS = ["south", "west", "north", "east"]; // sens des aiguilles d'une mo
 const SIDE = ["north", "west", "east", "south"];
 const DELAY = { message: 1000, bid: 750, yourBid: 250, card: 650, yourCard: 280, trick: 1050, announce: 1300 };
 const RANK = { J: "V", Q: "D", K: "R" };
-const FACE = { J: "V", Q: "D", K: "R" };
 const SEAT_FR = { South: "Sud", West: "Ouest", North: "Nord", East: "Est", "Your partner": "Partenaire",
                   "West AI": "IA Ouest", "East AI": "IA Est", You: "Vous" };
 const KIND = {
@@ -472,8 +466,7 @@ function cardEl(c, { small = false, classes = [] } = {}) {
   if (c.color === "red") el.classList.add("red");
   const r = RANK[c.rank] || c.rank;
   const corner = (cls) => `<div class="c ${cls}"><span class="r">${r}</span><span class="s">${c.suit}</span></div>`;
-  const center = FACE[c.rank] ? `<div class="pip face"><span>${c.suit}</span></div>` : `<div class="pip">${c.suit}</div>`;
-  el.innerHTML = corner("tl") + center + corner("br");
+  el.innerHTML = corner("tl") + `<div class="pip">${c.suit}</div>` + corner("br");
   el.title = cardName(c);
   return el;
 }
@@ -862,7 +855,10 @@ const nextDeal = () => { closeOverlay(); return act("/api/next", {}); };
 const newGame = () => { closeOverlay(); $("log").innerHTML = ""; return act("/api/new", {}); };
 
 // ---------- écran d'accueil ----------
-const choice = { name: "", partner: "ai", style: "asr", opponents: "ai" };
+const PARTNERS = ["asr", "papirobert", "petitjeu", "friend"];
+const OPPONENTS = "ai_search";  // adversaires imposés : l'IA + recherche
+const choice = { name: "", partner: "asr", opponents: OPPONENTS };
+const robotName = (k) => (k === "simple" ? KIND.simple.label : `Robot ${KIND[k].label}`);
 const joinCode = new URLSearchParams(location.search).get("join");
 const store = {
   get() { try { return JSON.parse(localStorage.getItem("coinche-web") || "null"); } catch { return null; } },
@@ -879,38 +875,34 @@ function choiceEl(key, title, text, sel, onclick, n = 0) {
 function renderWelcome() {
   const ai = view.aiAvailable;
   const pbox = $("w-partner"); pbox.innerHTML = "";
-  const partners = [
-    ...(ai ? [["ai", "L'IA", "Le même réseau que vos adversaires, mais dans ton équipe."]] : []),
-    ["robot", "Un robot à convention", "Il annonce et joue selon une convention connue (choisis-la ci-dessous)."],
-    ["friend", "Un ami", "Sur un autre appareil : tu reçois un lien à lui envoyer, il s'assied en Nord."],
-  ];
-  if (!ai && choice.partner === "ai") choice.partner = "robot";
-  for (const [k, t, d] of partners) pbox.append(choiceEl(k, t, d, choice.partner === k, () => { choice.partner = k; renderWelcome(); }));
-  const sbox = $("w-styles"); sbox.innerHTML = "";
-  sbox.style.display = choice.partner === "robot" ? "" : "none";
-  for (const k of ["asr", "papirobert", "petitjeu", "simple"]) {
-    sbox.append(choiceEl(k, KIND[k].label, "", choice.style === k, () => { choice.style = k; renderWelcome(); }, KIND[k].stars));
+  if (!PARTNERS.includes(choice.partner)) choice.partner = PARTNERS[0];
+  for (const k of PARTNERS) {
+    const [t, d, n] = k === "friend"
+      ? ["Un ami", "Sur un autre appareil : tu reçois un lien à lui envoyer, il s'assied en Nord.", 0]
+      : [robotName(k), KIND[k].text, KIND[k].stars];
+    pbox.append(choiceEl(k, t, d, choice.partner === k, () => { choice.partner = k; renderWelcome(); }, n));
   }
-  const sel = sbox.querySelector(".sel");
-  if (sel && choice.partner === "robot") sel.title = KIND[choice.style].text;
-  const obox = $("w-opp"); obox.innerHTML = "";
-  const opps = ai ? ["ai", "ai_search"] : ["asr", "papirobert", "petitjeu", "simple"];
-  if (!opps.includes(choice.opponents)) choice.opponents = opps[0];
-  for (const k of opps) obox.append(choiceEl(k, KIND[k].label, KIND[k].text, choice.opponents === k, () => { choice.opponents = k; renderWelcome(); }, KIND[k].stars));
-  if (!ai) obox.insertAdjacentHTML("afterbegin", '<div class="d" style="color:#ff8a8f;font-size:12.5px">Modèle de l\'IA introuvable sur le serveur : adversaires robots.</div>');
+  $("w-styles").style.display = "none";
+  // adversaires imposés (l'IA + recherche) ; repli sur le premier disponible si le modèle manque
+  const opps = view.players.opponents.map((o) => o.key);
+  choice.opponents = opps.includes(OPPONENTS) ? OPPONENTS : opps[0];
 
   const me = esc($("w-name").value.trim() || "Toi");
-  const pl = choice.partner === "ai" ? "l'IA" : choice.partner === "friend" ? "un ami" : `un robot ${KIND[choice.style].label}`;
+  const pl = choice.partner === "friend" ? "un ami" : `un ${robotName(choice.partner).replace(/^R/, "r")}`;
   $("w-versus").innerHTML = joinCode ? "Tu es invité à une table : tu joueras en Nord, avec ton ami comme partenaire."
     : `<b>${me}</b> avec <b>${pl}</b> &nbsp;contre&nbsp; <b>${KIND[choice.opponents].label}</b>`;
-  for (const id of ["w-partner-box", "w-opp-box"]) $(id).style.display = joinCode ? "none" : "";
+  $("w-partner-box").style.display = joinCode ? "none" : "";
+  $("w-name-box").style.display = "";
   $("w-go").textContent = joinCode ? "Rejoindre la table ▶" : choice.partner === "friend" ? "Créer la table ▶" : "Distribuer les cartes ▶";
   $("w-back").style.display = view.configured && !view.waiting && !joinCode && !view.gameOver ? "" : "none";
 }
 function openWelcome() {
   const saved = store.get();
   $("w-wait").style.display = "none"; $("w-go").style.display = ""; $("w-error").textContent = "";
-  if (saved) Object.assign(choice, saved);
+  if (saved) {
+    Object.assign(choice, saved);
+    if (choice.partner === "robot" && saved.style) choice.partner = saved.style;  // ancien format enregistré
+  }
   else if (view.configured) {
     const s = view.setup;
     if (s.name && s.name !== "You") choice.name = s.name;
@@ -929,7 +921,7 @@ function openWelcome() {
 function showInvite(code) {
   $("w-link").value = `${location.origin}${location.pathname}?join=${code}`;
   $("w-wait").style.display = ""; $("w-go").style.display = "none"; $("w-back").style.display = "none";
-  for (const id of ["w-partner-box", "w-opp-box", "w-name-box"]) $(id).style.display = "none";
+  for (const id of ["w-partner-box", "w-name-box"]) $(id).style.display = "none";
   $("w-versus").innerHTML = "";
   $("welcome").classList.add("show");
 }
@@ -954,13 +946,13 @@ $("w-go").onclick = async () => {
     } catch (e) { $("w-error").textContent = e.message || "Impossible de rejoindre la table"; }
     return;
   }
-  store.set({ name: nm, partner: choice.partner, style: choice.style, opponents: choice.opponents });
+  store.set({ name: nm, partner: choice.partner, opponents: choice.opponents });
   if (choice.partner === "friend") {
     try { view = await api("/api/duo/create", { name: nm, opponents: choice.opponents }); render(); showInvite(view.invite); }
     catch (e) { $("w-error").textContent = e.message; }
     return;
   }
-  const body = { name: nm || "Vous", partner: choice.partner === "ai" ? "ai" : choice.style, opponents: choice.opponents };
+  const body = { name: nm || "Vous", partner: choice.partner, opponents: choice.opponents };
   $("welcome").classList.remove("show"); closeOverlay(); $("log").innerHTML = "";
   busy = true;
   try { const s = await api("/api/setup", body); view = { ...s, bids: [], trick: [] }; render(); await drive(s); }
