@@ -1,0 +1,777 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coinche for Four</title>
+<style>
+  :root {
+    --bg: #0a0e13; --panel: #121922; --line: #243140; --text: #e6ebf0; --muted: #8c99a8;
+    --accent: #2de2a6; --red-suit: #c8282e; --black-suit: #11161c; --gold: #f5c542;
+    --felt: #0f2a22; --felt-edge: #0b1f19;
+    --cw: clamp(52px, 9vh, 84px); --ch: calc(var(--cw) * 1.413);
+    --sw: calc(var(--cw) * .62); --sh: calc(var(--sw) * 1.413);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: Arial, Helvetica, sans-serif; }
+  .mono { font-family: "Courier New", monospace; letter-spacing: .08em; }
+  header { display: flex; align-items: center; gap: 12px; padding: 10px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 19px; margin: 0; }
+  header .kicker { color: var(--accent); font-size: 11px; font-weight: bold; }
+  header .spacer { flex: 1; }
+  .badge { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 5px 11px; font-size: 14px; }
+  .badge b { font-size: 17px; }
+  button { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 13px;
+           font-size: 14px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #062b1f; border-color: var(--accent); font-weight: bold; }
+  button.on { border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: .35; cursor: default; }
+
+  main { display: grid; grid-template-columns: 1fr 300px; gap: 16px; padding: 12px 20px; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+  @media (min-width: 1001px) {
+    body { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    main { flex: 1; min-height: 0; }
+    .table { height: 100%; min-height: 0 !important; }
+    aside { min-height: 0; overflow-y: auto; }
+  }
+
+  /* table */
+  .table { position: relative; min-height: 640px; border: 1px solid var(--line); border-radius: 22px; padding: 12px 16px 20px;
+           background: radial-gradient(ellipse at center, #154536 0%, var(--felt) 55%, var(--felt-edge) 100%);
+           display: grid; grid-template-columns: minmax(130px, 1fr) minmax(300px, 2.2fr) minmax(130px, 1fr);
+           grid-template-rows: auto 1fr auto; gap: 8px; }
+  .seat { display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; }
+  .seat.north { grid-column: 2; grid-row: 1; }
+  .seat.west { grid-column: 1; grid-row: 2; justify-content: center; }
+  .seat.east { grid-column: 3; grid-row: 2; justify-content: center; }
+  .seat.south { grid-column: 1 / 4; grid-row: 3; }
+  .center { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 0; }
+  .seat-label { font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: center; }
+  .seat-label .name { color: var(--text); font-weight: bold; }
+  .seat.turn .seat-label .name { color: var(--accent); }
+  .chip { font: bold 10px "Courier New", monospace; letter-spacing: .08em; border-radius: 4px; padding: 2px 6px; }
+  .chip.dealer { background: #2a3442; color: var(--text); }
+  .chip.taker { background: var(--accent); color: #062b1f; }
+  .chip.bid { background: rgba(10,14,19,.75); border: 1px solid var(--accent); color: var(--text); font-size: 11px; }
+  .chip.bid.pass { border-color: var(--line); color: var(--muted); }
+  .chip.bid.fresh { animation: pop .3s ease; }
+  .chip.team { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+  .bubble { position: absolute; z-index: 5; background: var(--panel); border: 1px solid var(--accent); color: var(--text);
+            border-radius: 999px; padding: 3px 10px; font-size: 13px; white-space: nowrap; animation: pop .3s ease; }
+  .seat.north .bubble { bottom: -14px; } .seat.south .bubble { top: -26px; }
+  .seat.west .bubble, .seat.east .bubble { top: -6px; }
+  .hand { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; min-height: var(--ch); }
+  .mini-hand { display: flex; justify-content: center; flex-wrap: wrap; max-width: 100%; min-height: var(--sh); }
+  .mini-hand .card { margin: 0 -10px; }
+  .seat.west .mini-hand, .seat.east .mini-hand { flex-wrap: nowrap; padding: 0 16px; }
+  .seat.west .mini-hand .card, .seat.east .mini-hand .card { margin: 0 calc(var(--sw) * -.38); }
+  .seat.west .mini-hand.open, .seat.east .mini-hand.open { flex-wrap: wrap; max-width: calc(var(--sw) * 4.6); gap: 4px; padding: 0; }
+  .seat.west .mini-hand.open .card, .seat.east .mini-hand.open .card { margin: 0; }
+  .mini-hand.open .card { margin: 0 2px; }
+
+  .trick { display: grid; grid-template-columns: repeat(3, calc(var(--cw) + 10px)); grid-template-rows: repeat(3, calc(var(--ch) * .62));
+           gap: 0 8px; align-items: center; justify-items: center; }
+  .slot { position: relative; width: calc(var(--cw) + 10px); height: calc(var(--ch) + 8px); display: flex; align-items: center;
+          justify-content: center; }
+  .slot.north { grid-column: 2; grid-row: 1 / 3; align-self: start; }
+  .slot.south { grid-column: 2; grid-row: 2 / 4; align-self: end; }
+  .slot.west { grid-column: 1; grid-row: 1 / 4; }
+  .slot.east { grid-column: 3; grid-row: 1 / 4; }
+  .slot .announce { position: absolute; top: -12px; z-index: 6; font: bold 13px Arial; color: #062b1f; background: var(--gold);
+                    border-radius: 999px; padding: 2px 9px; white-space: nowrap; animation: pop .3s ease; }
+  .slot.win .card { box-shadow: 0 0 0 3px var(--gold), 0 4px 10px rgba(0,0,0,.45); }
+  .banner { min-height: 26px; font-size: 15px; text-align: center; padding: 5px 14px; border-radius: 999px; max-width: 100%;
+            background: rgba(10,14,19,.6); border: 1px solid rgba(45,226,166,.25); }
+  .turn-hint { font-size: 12px; color: var(--accent); min-height: 16px; }
+
+  /* annonces */
+  .bidding { display: none; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+  .bidding.show { display: flex; }
+  .bid-history { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 520px; font-size: 12px; }
+  .bid-history span { border: 1px solid var(--line); background: rgba(10,14,19,.55); border-radius: 999px; padding: 3px 9px; }
+  .bid-controls { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .val { min-width: 48px; padding: 6px 8px; }
+  .val.sel { background: var(--accent); color: #062b1f; border-color: var(--accent); font-weight: bold; }
+  .suit-btn { font-size: 22px; min-width: 52px; padding: 4px 10px; }
+  .suit-btn.red { color: #f2545b; }
+  .help { font-size: 12px; color: var(--muted); text-align: center; }
+
+  /* cartes */
+  .card { width: var(--cw); height: var(--ch); border-radius: 9px; background: linear-gradient(160deg, #fff 0%, #f1f3f5 100%);
+          box-shadow: 0 4px 10px rgba(0,0,0,.45); position: relative; user-select: none; flex: none;
+          transition: transform .15s ease, box-shadow .15s ease, opacity .15s; }
+  .card.red { color: var(--red-suit); } .card.black { color: var(--black-suit); }
+  .card .corner { position: absolute; font-weight: bold; line-height: 1; text-align: center; font-size: calc(var(--cw) * .19); }
+  .card .corner span { display: block; font-size: calc(var(--cw) * .18); }
+  .card .tl { top: 6px; left: 7px; } .card .br { bottom: 6px; right: 7px; transform: rotate(180deg); }
+  .card .pip { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: calc(var(--cw) * .5); }
+  .card .face { position: absolute; inset: calc(var(--cw) * .24) calc(var(--cw) * .2); border: 1.5px solid currentColor; border-radius: 6px;
+                display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; }
+  .card .face .big { font-size: calc(var(--cw) * .37); } .card .face .s { font-size: calc(var(--cw) * .24); }
+  .card.small { width: var(--sw); height: var(--sh); border-radius: 6px; }
+  .card.small .corner { font-size: calc(var(--sw) * .22); } .card.small .corner span { font-size: calc(var(--sw) * .2); }
+  .card.small .tl { top: 3px; left: 4px; } .card.small .br { bottom: 3px; right: 4px; }
+  .card.small .pip { font-size: calc(var(--sw) * .46); } .card.small .face { inset: calc(var(--sw) * .27) calc(var(--sw) * .19); }
+  .card.small .face .big { font-size: calc(var(--sw) * .34); } .card.small .face .s { font-size: calc(var(--sw) * .22); }
+  .card.trump::after { content: "TRUMP"; position: absolute; bottom: -16px; left: 0; right: 0; text-align: center;
+                       font: bold 10px "Courier New", monospace; color: var(--accent); letter-spacing: .1em; }
+  .card.small.trump::after { content: none; }
+  .card.playable { cursor: pointer; box-shadow: 0 0 0 2px var(--accent), 0 6px 14px rgba(0,0,0,.5); }
+  .card.playable:hover { transform: translateY(-12px); }
+  .card.illegal { opacity: .38; }
+  .card.back { background: repeating-linear-gradient(45deg, #1d3b6b 0 5px, #24497f 5px 10px); border: 3px solid #f1f3f5; }
+  .card.pop { animation: pop .3s ease; }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  /* panneau latéral */
+  aside { display: flex; flex-direction: column; gap: 12px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .panel h2 { margin: 0 0 10px; font-size: 12px; color: var(--accent); }
+  .score-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; font-size: 14px; }
+  .score-row b { font-size: 24px; font-family: "Courier New", monospace; }
+  .bar { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; margin-bottom: 10px; }
+  .bar div { height: 100%; background: var(--muted); transition: width .4s; } .bar.us div { background: var(--accent); }
+  .info { font-size: 13px; color: var(--muted); line-height: 1.5; } .info b { color: var(--text); }
+  .last-trick { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .log { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto; font-size: 13px; }
+  .log li { padding: 5px 0; border-bottom: 1px solid var(--line); color: var(--muted); }
+  .log li.strong { color: var(--text); }
+  table.hist { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.hist td, table.hist th { padding: 4px 5px; border-bottom: 1px solid var(--line); text-align: right; }
+  table.hist th { color: var(--muted); font-weight: normal; } table.hist td:nth-child(-n+2), table.hist th:nth-child(-n+2) { text-align: left; }
+
+  .overlay { position: absolute; inset: 0; background: rgba(10,14,19,.75); border-radius: 22px; display: none; z-index: 20;
+             align-items: center; justify-content: center; padding: 20px; }
+  .overlay.show { display: flex; }
+  .overlay .box { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px 28px; max-width: 640px;
+                  max-height: 100%; overflow-y: auto; }
+  .overlay h3 { margin: 0 0 8px; font-size: 22px; text-align: center; }
+  .overlay p { color: var(--muted); margin: 6px 0 14px; text-align: center; }
+  .overlay table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 14px; }
+  .overlay td, .overlay th { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; }
+  .overlay th { color: var(--muted); font-weight: normal; } .overlay td:first-child, .overlay th:first-child { text-align: left; }
+  .overlay ol { padding-left: 20px; margin: 0 0 16px; } .overlay li { margin-bottom: 8px; line-height: 1.45; font-size: 14px; }
+  .center-btn { text-align: center; }
+
+  /* confiance de l'IA */
+  .slot .conf { position: absolute; bottom: -10px; z-index: 6; font: bold 11px "Courier New", monospace; color: var(--text);
+                background: rgba(10,14,19,.85); border: 1px solid var(--gold); border-radius: 999px; padding: 1px 7px; }
+  .chip.kind { background: transparent; border: 1px solid var(--gold); color: var(--gold); }
+
+  /* écran d'accueil */
+  .welcome { position: fixed; inset: 0; z-index: 50; display: none; overflow-y: auto;
+             background: radial-gradient(ellipse at 50% 0%, #1a4d3d 0%, #0d241d 45%, var(--bg) 100%); }
+  .welcome.show { display: block; }
+  .welcome .floaters { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .welcome .floaters span { position: absolute; font-size: 64px; opacity: .08; animation: drift 18s linear infinite; }
+  @keyframes drift { from { transform: translateY(110vh) rotate(0deg); } to { transform: translateY(-20vh) rotate(360deg); } }
+  .welcome .wrap { position: relative; max-width: 980px; margin: 0 auto; padding: 48px 20px 60px; }
+  .welcome .hero { text-align: center; margin-bottom: 34px; }
+  .welcome .hero .fan { display: flex; justify-content: center; margin-bottom: 18px; height: 120px; }
+  .welcome .hero .fan .card { margin: 0 -16px; transform-origin: 50% 120%; animation: fanin .8s cubic-bezier(.2,.9,.3,1.2) both; }
+  @keyframes fanin { from { transform: rotate(0deg) translateY(30px); opacity: 0; } }
+  .welcome h2.title { font-size: clamp(38px, 7vw, 72px); margin: 0; letter-spacing: .06em;
+                      background: linear-gradient(90deg, var(--accent), var(--gold)); -webkit-background-clip: text;
+                      background-clip: text; color: transparent; }
+  .welcome .sub { color: var(--muted); margin-top: 8px; font-size: 15px; }
+  .welcome .step { margin: 0 0 26px; }
+  .welcome .step h4 { margin: 0 0 4px; font-size: 13px; color: var(--accent); letter-spacing: .12em; }
+  .welcome .step .hint { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .welcome input { width: 100%; max-width: 360px; font-size: 20px; padding: 12px 16px; border-radius: 12px;
+                   border: 1px solid var(--line); background: var(--panel); color: var(--text); outline: none; }
+  .welcome input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(45,226,166,.2); }
+  .choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+  .choice { text-align: left; border: 1px solid var(--line); background: var(--panel); border-radius: 14px; padding: 14px;
+            cursor: pointer; transition: transform .15s, border-color .15s, box-shadow .15s; display: flex; flex-direction: column; gap: 6px; }
+  .choice:hover { transform: translateY(-3px); border-color: var(--accent); }
+  .choice.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 10px 24px rgba(0,0,0,.4);
+                background: linear-gradient(160deg, #163a2f, var(--panel)); }
+  .choice .t { font-weight: bold; font-size: 17px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .choice .stars { color: var(--gold); font-size: 13px; letter-spacing: 1px; white-space: nowrap; }
+  .choice .d { color: var(--muted); font-size: 12px; line-height: 1.4; }
+  .choice.ai .t { color: var(--gold); }
+  .welcome .versus { text-align: center; font-size: 18px; margin: 30px 0 16px; }
+  .welcome .versus b { color: var(--accent); } .welcome .versus i { color: var(--gold); font-style: normal; font-weight: bold; }
+  .welcome .go { font-size: 20px; padding: 14px 36px; border-radius: 999px; }
+  .welcome .go:hover { transform: scale(1.04); }
+  .error { color: #f2545b; font-size: 13px; min-height: 16px; }
+  .mode-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .mode-row .choice { flex: 1; min-width: 200px; }
+  .invite { text-align: center; }
+  .invite .link { display: flex; gap: 8px; justify-content: center; margin: 14px 0; flex-wrap: wrap; }
+  .invite .link input { max-width: 520px; font-size: 15px; }
+  .invite .dots::after { content: "…"; animation: blink 1.2s infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="kicker mono">COINCHE · 4 PLAYERS · <span id="bots-name">–</span></div>
+    <h1 id="title">You and North against East and West</h1>
+  </div>
+  <div class="spacer"></div>
+  <div class="badge">Deal <b id="deal">–</b></div>
+  <div class="badge">Contract <b id="contract">–</b></div>
+  <button id="setup-btn">Players</button>
+  <button id="rules">Rules</button>
+  <button id="reveal">Show all hands</button>
+  <button id="new-game">New game</button>
+</header>
+
+<main>
+  <section class="table" id="table">
+    <div class="seat north" id="seat-north">
+      <div class="seat-label"><span class="name" id="name-north">North</span><span class="chip team mono">PARTNER</span><span class="chip kind mono" id="kind-north"></span><span class="chip dealer mono" id="dealer-north"></span><span class="chip taker mono" id="taker-north"></span><span class="chip bid mono" id="bid-north"></span></div>
+      <div class="mini-hand" id="hand-north"></div>
+    </div>
+    <div class="seat west" id="seat-west">
+      <div class="seat-label"><span class="name" id="name-west">West</span><span class="chip kind mono" id="kind-west"></span><span class="chip dealer mono" id="dealer-west"></span><span class="chip taker mono" id="taker-west"></span><span class="chip bid mono" id="bid-west"></span></div>
+      <div class="mini-hand" id="hand-west"></div>
+    </div>
+    <div class="center">
+      <div class="bidding" id="bidding">
+        <div class="bid-history" id="bid-history"></div>
+        <div class="bid-controls" id="bid-controls"></div>
+      </div>
+      <div class="trick" id="trick">
+        <div class="slot north" id="slot-north"></div>
+        <div class="slot west" id="slot-west"></div>
+        <div class="slot east" id="slot-east"></div>
+        <div class="slot south" id="slot-south"></div>
+      </div>
+      <div class="banner" id="banner">Loading…</div>
+      <div class="turn-hint mono" id="turn-hint"></div>
+      <div class="error" id="error"></div>
+    </div>
+    <div class="seat east" id="seat-east">
+      <div class="seat-label"><span class="name" id="name-east">East</span><span class="chip kind mono" id="kind-east"></span><span class="chip dealer mono" id="dealer-east"></span><span class="chip taker mono" id="taker-east"></span><span class="chip bid mono" id="bid-east"></span></div>
+      <div class="mini-hand" id="hand-east"></div>
+    </div>
+    <div class="seat south" id="seat-south">
+      <div class="seat-label"><span class="name" id="name-south">You (South)</span><span class="chip dealer mono" id="dealer-south"></span><span class="chip taker mono" id="taker-south"></span><span class="chip bid mono" id="bid-south"></span></div>
+      <div class="hand" id="hand-south"></div>
+    </div>
+    <div class="overlay" id="overlay"><div class="box" id="overlay-box"></div></div>
+  </section>
+
+  <aside>
+    <div class="panel">
+      <h2 class="mono">SCORE · FIRST TO <span id="target">1000</span></h2>
+      <div class="score-row"><span id="team-0">You &amp; North</span><b id="total-0">0</b></div>
+      <div class="bar us"><div id="bar-0" style="width:0"></div></div>
+      <div class="score-row"><span id="team-1">East &amp; West</span><b id="total-1">0</b></div>
+      <div class="bar"><div id="bar-1" style="width:0"></div></div>
+    </div>
+    <div class="panel">
+      <h2 class="mono">THIS DEAL</h2>
+      <div class="info" id="deal-info">–</div>
+    </div>
+    <div class="panel">
+      <h2 class="mono">LAST TRICK</h2>
+      <div class="last-trick" id="last-trick"><span class="info">No trick played yet.</span></div>
+    </div>
+    <div class="panel">
+      <h2 class="mono">GAME LOG</h2>
+      <ul class="log" id="log"></ul>
+    </div>
+    <div class="panel">
+      <h2 class="mono">DEALS</h2>
+      <table class="hist" id="hist"><tr><th>#</th><th>Contract</th><th>Us</th><th>Them</th></tr></table>
+    </div>
+  </aside>
+</main>
+
+<div class="welcome" id="welcome">
+  <div class="floaters" id="floaters"></div>
+  <div class="wrap">
+    <div class="hero">
+      <div class="fan" id="fan"></div>
+      <h2 class="title">COINCHE</h2>
+      <div class="sub">Four players · first to 1,500 · you sit South</div>
+    </div>
+    <div class="step">
+      <h4 class="mono">1 · YOUR NAME</h4>
+      <input id="w-name" maxlength="20" placeholder="Type your name" autocomplete="off">
+    </div>
+    <div class="step" id="w-step-partner">
+      <h4 class="mono">2 · YOUR PARTNER</h4>
+      <div class="mode-row" id="w-mode"></div>
+      <div id="w-styles-box">
+        <div class="hint">Your bot partner North plays this way too, so your bids mean the same thing to both of you.</div>
+        <div class="choices" id="w-styles"></div>
+      </div>
+    </div>
+    <div class="step" id="w-step-opp">
+      <h4 class="mono">3 · YOUR OPPONENTS</h4>
+      <div class="hint">East and West. The stars give their strength in our bot-against-bot matches.</div>
+      <div class="choices" id="w-opponents"></div>
+    </div>
+    <div class="versus" id="w-versus"></div>
+    <div class="center-btn"><button class="primary go" id="w-go">Deal the cards ▶</button></div>
+    <div class="error center-btn" id="w-error"></div>
+    <div class="invite" id="w-wait" style="display:none">
+      <h4 class="mono" style="color:var(--accent)">SEND THIS LINK TO YOUR PARTNER</h4>
+      <div class="link"><input id="w-link" readonly><button class="primary" id="w-copy">Copy</button></div>
+      <div class="sub">They open it on their computer, type their name and sit North.</div>
+      <p class="sub">Waiting for your partner<span class="dots"></span></p>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Temps d'affichage de chaque événement (ms).
+const DELAY = { bid: 1100, yourBid: 500, card: 1000, yourCard: 450, announce: 1800, trick: 1700, message: 1400 };
+const SEATS = ["south", "west", "north", "east"];
+const NAMES = { south: "You", east: "East", north: "North", west: "West" };
+function applyNames(s) {
+  if (!s.names) return;
+  Object.assign(NAMES, s.names);
+  const you = s.names.south === "You";
+  $("name-south").textContent = s.duo ? s.names.south : you ? "You (South)" : `${s.names.south} (South)`;
+  for (const seat of ["north", "east", "west"]) $(`name-${seat}`).textContent = s.names[seat];
+  $("title").textContent = s.duo ? `${s.names.south} and ${s.names.north} against ${s.teams[1]}`
+                                 : `${s.names.south} and North against East and West`;
+  $("team-0").textContent = s.teams[0]; $("team-1").textContent = s.teams[1];
+  $("kind-north").textContent = s.setup.partnerLabel.toUpperCase();
+  for (const seat of ["east", "west"]) $(`kind-${seat}`).textContent = s.setup.opponentsLabel.toUpperCase();
+}
+let view = null, busy = false, selectedValue = null;
+
+function cardEl(c, { small = false, classes = [] } = {}) {
+  const el = document.createElement("div");
+  if (c.hidden) { el.className = ["card back", small ? "small" : "", ...classes].join(" "); return el; }
+  el.className = ["card", c.color, small ? "small" : "", ...classes].join(" ");
+  const face = ["J", "Q", "K"].includes(c.rank);
+  el.innerHTML = `<div class="corner tl">${c.rank}<span>${c.suit}</span></div>
+    ${face ? `<div class="face"><span class="big">${c.rank}</span><span class="s">${c.suit}</span></div>` : `<div class="pip">${c.suit}</div>`}
+    <div class="corner br">${c.rank}<span>${c.suit}</span></div>`;
+  el.title = `${c.label}${c.points !== undefined ? ` · ${c.points} pts` : ""}`;
+  return el;
+}
+function log(text, strong = false) { const li = document.createElement("li"); li.textContent = text; if (strong) li.className = "strong"; $("log").prepend(li); }
+function banner(text) { $("banner").textContent = text; }
+function bubble(seat, text, ms = 1600) {
+  const s = $(`seat-${seat}`); const b = document.createElement("div"); b.className = "bubble"; b.textContent = text;
+  s.append(b); setTimeout(() => b.remove(), ms);
+}
+
+function renderTrick(trick, winner = null) {
+  for (const seat of SEATS) {
+    const slot = $(`slot-${seat}`); slot.innerHTML = ""; slot.classList.toggle("win", winner === seat);
+    const e = trick.find((t) => t.seat === seat);
+    if (e) {
+      slot.append(cardEl(e.card, { classes: ["pop"] }));
+      if (e.announce) { const a = document.createElement("span"); a.className = "announce"; a.textContent = e.announce; slot.append(a); }
+      if (e.confidence !== undefined) { const k = document.createElement("span"); k.className = "conf"; k.title = "AI confidence"; k.textContent = `${e.confidence}%`; slot.append(k); }
+    }
+  }
+}
+
+function renderBidding(s) {
+  const show = s.phase === "bidding";
+  $("bidding").classList.toggle("show", show);
+  $("trick").style.display = show ? "none" : "grid";
+  if (!show) return;
+  $("bid-history").innerHTML = s.bids.length
+    ? s.bids.map((b) => `<span>${NAMES[b.seat]}: ${b.label}</span>`).join("")
+    : '<span>No bid yet</span>';
+  const box = $("bid-controls"); box.innerHTML = "";
+  if (s.coincheWindow && !busy) { renderCoincheWindow(s, box); return; }
+  const o = s.bidOptions;
+  if (!o || busy) { box.innerHTML = `<div class="help mono">WAITING FOR ${(NAMES[s.current] || "").toUpperCase()}…</div>`; return; }
+  if (selectedValue !== null && !o.values.some((v) => v.value === selectedValue)) selectedValue = null;
+  const help = document.createElement("div"); help.className = "help";
+  help.textContent = o.values.length ? "Choose a contract, then its trump suit — or pass" : "Pass, or answer the coinche";
+  box.append(help);
+  if (o.values.length) {
+    const vals = document.createElement("div"); vals.className = "row";
+    for (const v of o.values) {
+      const b = document.createElement("button"); b.className = "val" + (selectedValue === v.value ? " sel" : "");
+      b.textContent = v.label; b.onclick = () => { selectedValue = v.value; renderBidding(view); };
+      vals.append(b);
+    }
+    box.append(vals);
+    const suits = document.createElement("div"); suits.className = "row";
+    for (const su of o.suits) {
+      const b = document.createElement("button"); b.className = "suit-btn" + (su.color === "red" ? " red" : "");
+      b.textContent = su.symbol; b.title = su.name; b.disabled = selectedValue === null;
+      b.onclick = () => bid({ kind: "bid", value: selectedValue, suit: su.name });
+      suits.append(b);
+    }
+    box.append(suits);
+  }
+  const acts = document.createElement("div"); acts.className = "row";
+  const pass = document.createElement("button"); pass.textContent = "Pass"; pass.onclick = () => bid({ kind: "pass" }); acts.append(pass);
+  if (o.coinche) { const b = document.createElement("button"); b.className = "primary"; b.textContent = "Coinche! (×2)"; b.onclick = () => bid({ kind: "coinche" }); acts.append(b); }
+  if (o.surcoinche) { const b = document.createElement("button"); b.className = "primary"; b.textContent = "Surcoinche! (×3)"; b.onclick = () => bid({ kind: "surcoinche" }); acts.append(b); }
+  box.append(acts);
+}
+
+// ---------- coinche hors tour : West vient d'annoncer, Nord n'a pas encore parlé ----------
+const COINCHE_WINDOW_MS = 3000;
+let coincheTimer = null, coincheDeadline = 0;
+function stopCoincheTimer() { if (coincheTimer) clearInterval(coincheTimer); coincheTimer = null; }
+function startCoincheTimer() {
+  stopCoincheTimer();
+  coincheDeadline = Date.now() + COINCHE_WINDOW_MS;
+  coincheTimer = setInterval(() => {
+    const left = coincheDeadline - Date.now();
+    const el = $("coinche-count");
+    if (el) el.textContent = Math.max(0, Math.ceil(left / 1000));
+    if (left <= 0) { stopCoincheTimer(); act("/api/continue", {}); }
+  }, 100);
+}
+function renderCoincheWindow(s, box) {
+  const last = s.bids[s.bids.length - 1];
+  const help = document.createElement("div"); help.className = "help";
+  help.innerHTML = `${NAMES[last.seat]} bid ${last.label}. Coinche before North speaks? <b id="coinche-count">${Math.max(0, Math.ceil((coincheDeadline - Date.now()) / 1000))}</b>`;
+  box.append(help);
+  const acts = document.createElement("div"); acts.className = "row";
+  const c = document.createElement("button"); c.className = "primary"; c.textContent = "Coinche! (×2)";
+  c.onclick = () => { stopCoincheTimer(); act("/api/coinche-now", {}); };
+  const go = document.createElement("button"); go.textContent = "Continue";
+  go.onclick = () => { stopCoincheTimer(); act("/api/continue", {}); };
+  acts.append(c, go); box.append(acts);
+}
+
+function render() {
+  const s = view;
+  $("deal").textContent = s.dealNo;
+  $("bots-name").textContent = (s.bots || "–").toUpperCase();
+  applyNames(s);
+  $("contract").innerHTML = s.contract
+    ? `<span style="color:${s.contract.suit.color === "red" ? "#f2545b" : "inherit"}">${s.contract.label}</span>${s.contract.mult > 1 ? ` ×${s.contract.mult}` : ""}`
+    : "–";
+  $("target").textContent = s.target;
+  for (const t of [0, 1]) {
+    $(`total-${t}`).textContent = s.totals[t];
+    $(`bar-${t}`).style.width = Math.min(100, (100 * s.totals[t]) / s.target) + "%";
+  }
+  $("reveal").style.display = s.study || s.duo ? "none" : "";
+  $("reveal").classList.toggle("on", s.reveal);
+  $("reveal").textContent = s.reveal ? "Hide other hands" : "Show all hands";
+  for (const seat of SEATS) {
+    $(`dealer-${seat}`).textContent = s.dealer === seat ? "DEALER" : "";
+    $(`dealer-${seat}`).style.display = s.dealer === seat ? "" : "none";
+    const taker = s.contract && s.contract.by === seat && s.phase !== "bidding";
+    $(`taker-${seat}`).textContent = taker ? "TAKER" : ""; $(`taker-${seat}`).style.display = taker ? "" : "none";
+    // pendant les annonces : la dernière annonce de chaque joueur reste affichée à côté de son nom
+    const said = s.phase === "bidding" ? [...s.bids].reverse().find((b) => b.seat === seat) : null;
+    const tag = $(`bid-${seat}`);
+    if (tag.textContent !== (said ? said.label : "")) tag.classList.remove("fresh"), void tag.offsetWidth, tag.classList.add("fresh");
+    tag.textContent = said ? said.label : ""; tag.style.display = said ? "" : "none";
+    tag.classList.toggle("pass", !!said && said.label === "Pass");
+    $(`seat-${seat}`).classList.toggle("turn", s.current === seat && !busy);
+    if (seat === "south") continue;
+    const h = $(`hand-${seat}`); h.innerHTML = ""; h.classList.toggle("open", s.reveal);
+    for (const c of s.hands[seat]) h.append(cardEl(c, { small: true, classes: c.isTrump ? ["trump"] : [] }));
+  }
+  const mine = $("hand-south"); mine.innerHTML = "";
+  for (const c of s.hands.south) {
+    const playable = s.yourTurn && !busy && c.legal;
+    const classes = [];
+    if (s.trump && c.suitName === s.trump.name) classes.push("trump");
+    if (s.yourTurn && !busy) classes.push(playable ? "playable" : "illegal");
+    const el = cardEl(c, { classes }); if (playable) el.onclick = () => play(c.id); mine.append(el);
+  }
+  $("turn-hint").textContent = busy || s.phase === "done" ? "" : s.yourTurn ? "YOUR TURN — CLICK A HIGHLIGHTED CARD" : s.yourBid ? "YOUR BID"
+    : s.duo && s.current === "north" ? `WAITING FOR ${NAMES.north.toUpperCase()}` : "";
+  renderBidding(s);
+  const info = [];
+  if (s.contract) {
+    info.push(`Contract: <b>${s.contract.label}</b>${s.contract.mult > 1 ? ` <b>×${s.contract.mult}</b>` : ""} by <b>${s.contract.byLabel}</b> (${s.contract.team})`);
+    if (s.phase !== "bidding") info.push(`Tricks: us <b>${s.tricksWon[0]}</b> (${s.trickPoints[0]} pts) · them <b>${s.tricksWon[1]}</b> (${s.trickPoints[1]} pts)`);
+  } else info.push("Bidding in progress");
+  $("deal-info").innerHTML = info.join("<br>");
+  const lt = $("last-trick"); lt.innerHTML = "";
+  if (s.lastTrick) {
+    for (const t of s.lastTrick.cards) lt.append(cardEl(t.card, { small: true }));
+    const i = document.createElement("span"); i.className = "info";
+    i.textContent = `Trick ${s.lastTrick.trickNo} → ${NAMES[s.lastTrick.winner]} (+${s.lastTrick.points})`; lt.append(i);
+  } else lt.innerHTML = '<span class="info">No trick played yet.</span>';
+  const hist = $("hist"); hist.querySelectorAll("tr.r").forEach((r) => r.remove());
+  for (const h of s.history) {
+    const tr = document.createElement("tr"); tr.className = "r";
+    tr.innerHTML = `<td>${h.deal}</td><td>${h.contract}${h.mult > 1 ? " ×" + h.mult : ""} ${h.by} ${h.made ? "✓" : "✗"}</td><td>${h.scores[0]}</td><td>${h.scores[1]}</td>`;
+    hist.append(tr);
+  }
+  renderOverlay();
+}
+
+function renderOverlay() {
+  const s = view, ov = $("overlay"), box = $("overlay-box");
+  if (ov.dataset.rules === "1") return;
+  if (s.phase !== "done" || busy) { ov.classList.remove("show"); return; }
+  const r = s.result;
+  const rows = [["Tricks won", r.tricksWon[0], r.tricksWon[1]], ["Trick points" + (r.capot ? " (capot = 250)" : ""), r.points[0], r.points[1]],
+                ["Belote-rebelote", r.belote[0], r.belote[1]], ["Total for the contract", r.total[0], r.total[1]],
+                ["<b>Score this deal</b>", `<b>${r.scores[0]}</b>`, `<b>${r.scores[1]}</b>`]];
+  const notes = [];
+  if (r.mult === 1 && r.made) notes.push("Both teams' points are rounded to the nearest 10 (up from 5).");
+  if (r.mult > 1) notes.push(`${r.mult === 2 ? "Coinched" : "Surcoinched"}: contract × ${r.mult} + 160 for the ${r.made ? "bidding team" : "defence"}.`);
+  if (r.beloteNeeded && r.mult > 1) notes.push("The belote was needed to make the contract, so it scores nothing.");
+  const head = s.gameOver ? (s.totals[0] > s.totals[1] ? `${s.teams[0]} win the game!` : `${s.teams[1]} win the game`)
+                          : `Contract ${r.made ? "made" : "failed"}`;
+  box.innerHTML = `<h3>${head}</h3><p>${r.text}</p>
+    <table><tr><th></th><th>${s.teams[0]}</th><th>${s.teams[1]}</th></tr>
+    ${rows.map((x) => `<tr><td>${x[0]}</td><td>${x[1]}</td><td>${x[2]}</td></tr>`).join("")}</table>
+    ${notes.map((n) => `<p>${n}</p>`).join("")}
+    ${s.gameOver ? `<p>Final score: ${s.totals[0]} – ${s.totals[1]}</p>` : ""}
+    <div class="center-btn"><button class="primary" id="ov-btn">${s.gameOver ? "New game" : "Next deal"}</button></div>`;
+  $("ov-btn").onclick = s.gameOver ? newGame : nextDeal;
+  ov.classList.add("show");
+}
+
+function showRules() {
+  const ov = $("overlay"), box = $("overlay-box");
+  ov.dataset.rules = "1";
+  box.innerHTML = `<h3>Rules used at this table</h3><ol>${view.rules.map((r) => `<li>${r}</li>`).join("")}</ol>
+    <div class="center-btn"><button class="primary" id="ov-close">Close</button></div>`;
+  $("ov-close").onclick = () => { delete ov.dataset.rules; ov.classList.remove("show"); renderOverlay(); };
+  ov.classList.add("show");
+}
+
+// last : false quand d'autres coups suivent (step en cours) : on garde la main jusqu'au dernier.
+async function replay(state, { last = true } = {}) {
+  busy = true;
+  let trick = view ? [...view.trick] : [];
+  for (const ev of state.events) {
+    if (ev.deal) {
+      if (view) {
+        view.hands = { south: ev.hand.map((c) => ({ ...c, legal: false })) };
+        for (const s of ["east", "north", "west"]) view.hands[s] = Array.from({ length: 8 }, () => ({ hidden: true }));
+        Object.assign(view, { bids: [], contract: null, trump: null, phase: "bidding", lastTrick: null, trick: [], result: null,
+                              tricksWon: [0, 0], trickPoints: [0, 0], dealNo: state.dealNo, dealer: state.dealer });
+        trick = []; renderTrick(trick); render();
+      }
+      banner(ev.text); log(ev.text, true); await sleep(DELAY.message);
+    } else if (ev.type === "bid") {
+      if (view) {
+        view.bids = [...view.bids, { seat: ev.seat, label: ev.label }];
+        if (ev.hand) view.hands.south = ev.hand.map((c) => ({ ...c, legal: false }));  // atout connu : nouvel ordre
+        render();
+      }
+      bubble(ev.seat, ev.confidence !== undefined ? `${ev.label} · ${ev.confidence}%` : ev.label, ev.seat === "south" ? 900 : DELAY.bid + 300);
+      banner(ev.text); log(ev.text, ev.label !== "Pass");
+      await sleep(ev.seat === "south" ? DELAY.yourBid : DELAY.bid);
+    } else if (ev.type === "play") {
+      if (view) {
+        if (view.phase === "bidding") { view.phase = "play"; view.trump = { name: ev.card.suitName }; }
+        const h = view.hands[ev.seat];
+        const i = h.findIndex((c) => c.hidden || c.id === ev.card.id);
+        if (i >= 0) view.hands[ev.seat] = h.filter((_, k) => k !== i);
+        render();
+      }
+      if (trick.length === 4) trick = [];
+      trick.push({ seat: ev.seat, card: ev.card, announce: ev.announce, confidence: ev.confidence }); renderTrick(trick);
+      const text = ev.text; banner(text); log(text, !!ev.announce);
+      await sleep(ev.announce ? DELAY.announce : ev.seat === "south" ? DELAY.yourCard : DELAY.card);
+    } else if (ev.type === "trick") {
+      renderTrick(trick, ev.winner); banner(ev.text); log(ev.text, true);
+      await sleep(DELAY.trick); trick = []; renderTrick(trick);
+    } else {
+      banner(ev.text); log(ev.text, true); await sleep(DELAY.message);
+    }
+  }
+  view = state;
+  if (!last) { render(); renderTrick(state.trick); return; }
+  busy = false;
+  if (state.coincheWindow) startCoincheTimer();
+  render(); renderTrick(state.trick);
+  if (state.coincheWindow) banner("Coinche West?");
+  else if (state.yourBid) banner("Your bid");
+  else if (state.yourTurn) banner(state.trick.length ? "Your turn" : "Your turn: lead a card");
+}
+
+async function api(path, body) {
+  $("error").textContent = "";
+  const res = await fetch(path, { method: body === undefined ? "GET" : "POST", headers: { "Content-Type": "application/json" },
+                                  body: body === undefined ? undefined : JSON.stringify(body) });
+  const data = await res.json();
+  if (!res.ok) { $("error").textContent = data.error || "Error"; throw new Error(data.error); }
+  return data;
+}
+// Les robots et l'IA jouent un coup par requête (/api/step) : on demande le coup suivant dès qu'une réponse
+// arrive, puis on anime celle-ci pendant que le serveur calcule. Chaque carte s'affiche dès qu'elle est prête.
+async function drive(state) {
+  busy = true;
+  for (;;) {
+    let next = null, ready = false;
+    if (state.pending) {
+      next = api("/api/step", state.duo ? { since: state.seq } : {});
+      next.then(() => (ready = true), () => (ready = true));
+    }
+    await replay(state, { last: !next });
+    if (!next) return;
+    if (!ready && state.current) {  // le serveur réfléchit encore : on montre qui doit jouer
+      $(`seat-${state.current}`).classList.add("turn");
+      banner(`${NAMES[state.current]} is thinking…`);
+    }
+    try { state = await next; } catch { busy = false; render(); return; }
+  }
+}
+async function act(path, body) {
+  if (busy) return; busy = true; render();
+  if (view && view.duo) body = { ...body, since: view.seq };
+  let state;
+  try { state = await api(path, body); } catch { busy = false; render(); return; }
+  await drive(state);
+}
+// ---------- à deux : on rattrape les coups de l'autre joueur ----------
+let polling = false, stuck = 0;
+setInterval(async () => {
+  if (!view || !view.duo || busy || polling) return;
+  polling = true;
+  try {
+    const s = await fetch(`/api/state?since=${view.seq || 0}`).then((r) => r.json());
+    if (busy || !view || !view.duo) return;
+    if (view.waiting && !s.waiting) {  // mon partenaire vient d'arriver
+      $("welcome").classList.remove("show"); $("log").innerHTML = "";
+      view = { ...s, bids: [], trick: [] }; render(); await drive(s);
+    } else if (!s.waiting && s.events.length) { stuck = 0; await replay(s); }
+    else if (!s.waiting && s.pending && ++stuck >= 3) { stuck = 0; await drive(s); }
+    else if (!s.pending) stuck = 0;
+  } catch {} finally { polling = false; }
+}, 1000);
+const bid = (b) => { selectedValue = null; return act("/api/bid", b); };
+const play = (id) => act("/api/play", { card: id });
+const nextDeal = () => { $("overlay").classList.remove("show"); return act("/api/next", {}); };
+const newGame = () => { $("overlay").classList.remove("show"); $("log").innerHTML = ""; return act("/api/new", {}); };
+
+// ---------- écran d'accueil ----------
+const choice = { name: "", partner: "asr", opponents: "ai", mode: "bot" };
+const joinCode = new URLSearchParams(location.search).get("join");
+const store = { get() { try { return JSON.parse(localStorage.getItem("coinche-setup") || "null"); } catch { return null; } },
+                set(v) { try { localStorage.setItem("coinche-setup", JSON.stringify(v)); } catch {} } };
+function renderChoices(id, items, key) {
+  const box = $(id); box.innerHTML = "";
+  for (const it of items) {
+    const b = document.createElement("div");
+    b.className = `choice ${it.key.startsWith("ai") ? "ai" : ""} ${choice[key] === it.key ? "sel" : ""}`;
+    b.innerHTML = `<div class="t"><span>${it.label}</span><span class="stars">${"★".repeat(it.stars)}${"☆".repeat(5 - it.stars)}</span></div>
+                   <div class="d">${it.text}</div>`;
+    b.onclick = () => { choice[key] = it.key; renderWelcome(); };
+    box.append(b);
+  }
+}
+function renderWelcome() {
+  const p = view.players;
+  const modes = [{ key: "bot", label: "A bot", stars: 0, text: "Plays North with the style you choose below." },
+                 { key: "friend", label: "A friend", stars: 0, text: "On another computer: you get a link to send them, they sit North." }];
+  const mb = $("w-mode"); mb.innerHTML = "";
+  for (const m of modes) {
+    const b = document.createElement("div"); b.className = `choice ${choice.mode === m.key ? "sel" : ""}`;
+    b.innerHTML = `<div class="t"><span>${m.label}</span></div><div class="d">${m.text}</div>`;
+    b.onclick = () => { choice.mode = m.key; renderWelcome(); }; mb.append(b);
+  }
+  $("w-styles-box").style.display = choice.mode === "friend" ? "none" : "";
+  renderChoices("w-styles", p.styles, "partner");
+  renderChoices("w-opponents", p.opponents, "opponents");
+  const label = (list, k) => (list.find((x) => x.key === k) || {}).label || k;
+  const who = ($("w-name").value.trim() || "You");
+  const me = who.replace(/[<>&]/g, "");
+  if (joinCode) {
+    $("w-versus").innerHTML = "You are invited to a table: you will sit North, as your friend's partner.";
+  } else if (choice.mode === "friend") {
+    $("w-versus").innerHTML = `<b>${me} & a friend</b> &nbsp;vs&nbsp; <i>${label(p.opponents, choice.opponents)}</i>`;
+  } else {
+    $("w-versus").innerHTML = `<b>${me} & North</b> playing ${label(p.styles, choice.partner)} &nbsp;vs&nbsp; <i>East & West</i> playing ${label(p.opponents, choice.opponents)}`;
+  }
+  for (const id of ["w-step-partner", "w-step-opp"]) $(id).style.display = joinCode ? "none" : "";
+  $("w-go").textContent = joinCode ? "Join the table ▶" : choice.mode === "friend" ? "Create the table ▶" : "Deal the cards ▶";
+}
+function openWelcome() {
+  const saved = store.get();
+  const s = view.setup;
+  $("w-wait").style.display = "none"; $("w-go").style.display = "";
+  Object.assign(choice, { name: s.name === "You" ? "" : s.name, partner: s.partner === "human" ? choice.partner : s.partner,
+                          opponents: s.opponents, mode: view.duo ? "friend" : choice.mode });
+  if (!view.configured && saved) Object.assign(choice, saved);
+  if (!view.players.opponents.some((x) => x.key === choice.opponents)) choice.opponents = view.players.opponents[0].key;
+  $("w-name").value = choice.name || "";
+  const fan = $("fan"); fan.innerHTML = "";
+  const demo = [["A", "♠", "black"], ["10", "♥", "red"], ["J", "♣", "black"], ["9", "♦", "red"], ["K", "♥", "red"]];
+  demo.forEach(([rank, suit, color], i) => {
+    const el = cardEl({ rank, suit, color, label: `${rank}${suit}` });
+    el.style.transform = `rotate(${(i - 2) * 9}deg)`; el.style.animationDelay = `${i * 0.08}s`; fan.append(el);
+  });
+  const fl = $("floaters"); fl.innerHTML = "";
+  for (let i = 0; i < 14; i++) {
+    const sp = document.createElement("span"); sp.textContent = "♠♥♣♦"[i % 4];
+    sp.style.left = `${(i * 73) % 100}%`; sp.style.animationDelay = `${-i * 1.3}s`; sp.style.animationDuration = `${14 + (i % 5) * 3}s`;
+    if (i % 2) sp.style.color = "#f2545b"; fl.append(sp);
+  }
+  renderWelcome();
+  $("welcome").classList.add("show");
+  setTimeout(() => $("w-name").focus(), 50);
+}
+$("w-name").oninput = renderWelcome;
+$("w-name").onkeydown = (e) => { if (e.key === "Enter") $("w-go").click(); };
+function showInvite(code) {
+  $("w-link").value = `${location.origin}${location.pathname}?join=${code}`;
+  $("w-wait").style.display = ""; $("w-go").style.display = "none";
+  for (const id of ["w-step-partner", "w-step-opp"]) $(id).style.display = "none";
+  $("welcome").classList.add("show");
+}
+$("w-copy").onclick = () => { $("w-link").select(); navigator.clipboard?.writeText($("w-link").value).catch(() => {});
+  $("w-copy").textContent = "Copied!"; setTimeout(() => ($("w-copy").textContent = "Copy"), 1500); };
+$("w-go").onclick = async () => {
+  if (busy) return;
+  $("w-error").textContent = "";
+  const name = $("w-name").value.trim();
+  if (joinCode) {
+    try {
+      const s = await api("/api/duo/join", { code: joinCode, name });
+      history.replaceState(null, "", location.pathname);
+      $("welcome").classList.remove("show"); $("log").innerHTML = "";
+      view = { ...s, bids: [], trick: [] }; render(); await drive(s);
+    } catch (e) { $("w-error").textContent = e.message || "Could not join"; }
+    return;
+  }
+  if (choice.mode === "friend") {
+    store.set({ name, partner: choice.partner, opponents: choice.opponents, mode: "friend" });
+    try { view = await api("/api/duo/create", { name, opponents: choice.opponents }); showInvite(view.invite); }
+    catch (e) { $("w-error").textContent = e.message || "Error"; }
+    return;
+  }
+  const body = { name, partner: choice.partner, opponents: choice.opponents };
+  store.set({ ...body, mode: "bot" });
+  $("welcome").classList.remove("show"); $("overlay").classList.remove("show"); $("log").innerHTML = "";
+  view = null;
+  busy = true;
+  try { const s = await api("/api/setup", body); view = { ...s, bids: [], trick: [] }; render(); await drive(s); }
+  catch { busy = false; if (view) render(); }
+};
+$("setup-btn").onclick = () => { if (!busy && view) openWelcome(); };
+
+$("new-game").onclick = newGame;
+$("rules").onclick = () => { if (view) showRules(); };
+$("reveal").onclick = async () => { if (busy || !view) return; const s = await api("/api/reveal", { on: !view.reveal });
+  view.hands = s.hands; view.reveal = s.reveal; render(); };
+
+(async () => {
+  const s = await api("/api/state");
+  if (joinCode) { view = s; render(); renderTrick(s.trick); banner("Join your friend's table"); openWelcome(); return; }
+  if (s.duo && s.waiting) { view = s; render(); openWelcome(); showInvite(s.invite); return; }
+  if (!s.configured) { view = s; render(); renderTrick(s.trick); banner("Choose your players"); openWelcome(); return; }
+  if (s.phase === "bidding" && s.bids.length) {
+    // donne déjà distribuée par le serveur : on rejoue les annonces des robots une par une
+    view = { ...s, bids: [] }; render(); renderTrick(s.trick);
+    const events = s.bids.map((b) => ({ type: "bid", seat: b.seat, label: b.label, text: `${NAMES[b.seat]}: ${b.label}` }));
+    await drive({ ...s, events });
+    return;
+  }
+  view = s; render(); renderTrick(s.trick);
+  if (s.pending) { await drive(s); return; }  // page rechargée pendant que les robots jouaient
+  banner(s.yourBid ? "Your bid" : s.yourTurn ? "Your turn" : "Click “New game” to start");
+  for (const b of s.bids) log(`${NAMES[b.seat]}: ${b.label}`);
+})();
+</script>
+</body>
+</html>
