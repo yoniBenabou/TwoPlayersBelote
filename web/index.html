@@ -208,12 +208,9 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
   background: rgba(4, 16, 11, .6); border: 1px solid rgba(232, 185, 84, .45); border-radius: 14px; padding: 9px 12px 10px; text-align: center;
   box-shadow: 0 8px 24px rgba(0,0,0,.35);
 }
-.last-trick .lt-title { font-size: 12px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
 .last-trick .lt-cards { display: flex; gap: 5px; justify-content: center; }
 .last-trick .card { --cw: 52px; --ch: 74px; }
 .last-trick .card.win { box-shadow: 0 0 0 3px var(--gold), 0 4px 12px rgba(0,0,0,.4); transform: translateY(-4px); }
-.last-trick .info { font-size: 13px; font-weight: 600; color: var(--ink); margin-top: 8px; white-space: nowrap; }
-.last-trick .info b { color: var(--gold); }
 .ok { color: #6fd39a; } .ko { color: #ff7a7f; }
 
 /* fenêtres */
@@ -307,7 +304,6 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
   .plate > div:nth-child(2) { min-width: 0; }
   .plate .nm, .plate .sub { max-width: none; overflow: hidden; text-overflow: ellipsis; }
   .seat-pts { min-width: 30px; height: 28px; font-size: 14px; padding: 0 4px; } .seat-pts small { font-size: 7px; }
-  .last-trick .lt-title { font-size: 9px; margin-bottom: 4px; } .last-trick .info { font-size: 10.5px; margin-top: 5px; }
   .trick { width: 170px; height: 170px; }
   .slot.south { margin-top: 42px; } .slot.north { margin-top: -42px; } .slot.west { margin-left: -54px; } .slot.east { margin-left: 54px; }
   .center { min-height: 190px; }
@@ -397,8 +393,9 @@ const SEATS = ["south", "west", "north", "east"]; // sens des aiguilles d'une mo
 const SIDE = ["north", "west", "east", "south"];
 const DELAY = { message: 1000, bid: 750, yourBid: 250, card: 650, yourCard: 280, trick: 1050, announce: 1300 };
 const RANK = { J: "V", Q: "D", K: "R" };
-const SEAT_FR = { South: "Sud", West: "Ouest", North: "Nord", East: "Est", "Your partner": "Partenaire",
-                  "West AI": "IA Ouest", "East AI": "IA Est", You: "Vous" };
+// les deux IA adverses portent un prénom : Yoni en Ouest, Noa en Est
+const SEAT_FR = { South: "Sud", West: "Yoni", North: "Nord", East: "Noa", "Your partner": "Partenaire",
+                  "West AI": "Yoni", "East AI": "Noa", You: "Vous" };
 const KIND = {
   ai: { label: "IA", stars: 5, text: "Notre réseau entraîné : il a appris seul en jouant des millions de donnes. Il affiche sa confiance à chaque coup." },
   ai_search: { label: "IA + recherche", stars: 5, text: "Le même réseau, mais avant chaque carte il imagine 20 répartitions possibles des cartes cachées et les joue jusqu'au bout. Plus fort, un peu plus lent." },
@@ -429,13 +426,17 @@ let view = null, busy = false, selectedValue = null;
 const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 // ---------- textes ----------
+// prénom du robot partenaire (Nord) selon sa convention
+const PARTNER_NAMES = { asr: "Ruben", papirobert: "Papi Robert", petitjeu: "Claude" };
 function name(seat) {
   if (!view) return seat;
+  if (seat === "north" && !view.duo && PARTNER_NAMES[view.setup.partner]) return PARTNER_NAMES[view.setup.partner];
   const raw = view.names[seat];
   return SEAT_FR[raw] || raw;
 }
 const isVous = (seat) => name(seat) === "Vous";
 const verb = (seat, one, vous) => `${esc(name(seat))} ${isVous(seat) ? vous : one}`;
+const teamOf = (seat) => (seat === "south" || seat === "north" ? 0 : 1);  // 0 : mon équipe
 const nextSeat = (seat) => SEATS[(SEATS.indexOf(seat) + 1) % 4];
 function bidFr(label) {
   return { Pass: "Passe", "Coinche!": "Coinche !", "Surcoinche!": "Surcoinche !" }[label] || label;
@@ -471,18 +472,16 @@ function cardEl(c, { small = false, classes = [] } = {}) {
 function seatHTML(seat) {
   const s = view;
   const kind = kindOf(seat);
-  const info = KIND[kind] || { label: kind };
   const nm = name(seat);
-  const avatarCls = kind.startsWith && kind.startsWith("ai") ? "ai" : kind === "human" ? "" : "bot";
+  const avatarCls = kind === "human" ? "" : "ai";  // robots et IA : pastille « IA »
   const initial = avatarCls === "ai" ? "IA" : esc(nm.trim().charAt(0).toUpperCase() || "?");
-  const sub = seat === "south" ? (view.duo ? "Toi" : "Toi") : kind === "human" ? "Ton partenaire" : info.label;
   const tags = [];
   if (s.dealer === seat) tags.push('<span class="tag">Donneur</span>');
   if (s.contract && s.contract.by === seat && s.phase !== "bidding") tags.push('<span class="tag taker">Preneur</span>');
-  const pts = s.phase !== "bidding" && s.seatPoints ? s.seatPoints[seat] : null;
+  const pts = s.phase !== "bidding" && s.trickPoints ? s.trickPoints[teamOf(seat)] : null;
   return `<div class="plate"><div class="avatar ${avatarCls}">${initial}</div>
-    <div><div class="nm">${esc(nm)}</div><div class="sub">${esc(sub)}</div><div class="thinking">réfléchit<i>.</i><i>.</i><i>.</i></div></div>
-    ${pts !== null && pts !== undefined ? `<div class="seat-pts${pts ? "" : " zero"}" title="Points remportés dans cette donne">${pts}<small>pts</small></div>` : ""}
+    <div><div class="nm">${esc(nm)}</div><div class="thinking">réfléchit<i>.</i><i>.</i><i>.</i></div></div>
+    ${pts !== null && pts !== undefined ? `<div class="seat-pts${pts ? "" : " zero"}" title="Points de l'équipe dans cette donne">${pts}<small>pts</small></div>` : ""}
     <div class="tags">${tags.join("")}</div><span class="said" style="display:none"></span></div>
     ${seat === "south" ? "" : `<div class="mini-hand"></div><div class="count"></div>`}`;
 }
@@ -510,7 +509,7 @@ function render() {
     box.innerHTML = seatHTML(seat);
     const ptsEl = box.querySelector(".seat-pts");
     if (ptsEl) {
-      const v = s.seatPoints[seat];
+      const v = s.trickPoints[teamOf(seat)];
       if (lastPts[seat] !== undefined && v > lastPts[seat]) ptsEl.classList.add("bump");
       lastPts[seat] = v;
     } else delete lastPts[seat];
@@ -574,9 +573,9 @@ function renderLastTrick() {
   const lt = $("last");
   lt.style.display = s.lastTrick ? "" : "none";
   if (s.lastTrick) {
-    lt.innerHTML = '<div class="lt-title">Dernier pli</div><div class="lt-cards"></div><div class="info"></div>';
+    lt.innerHTML = '<div class="lt-cards"></div>';
+    lt.title = "Dernier pli";
     for (const t of s.lastTrick.cards) lt.querySelector(".lt-cards").append(cardEl(t.card, { classes: t.seat === s.lastTrick.winner ? ["win"] : [] }));
-    lt.querySelector(".info").innerHTML = `${esc(name(s.lastTrick.winner))} · <b>+${s.lastTrick.points}</b>`;
   }
 }
 
@@ -714,7 +713,7 @@ async function replay(state, { last = true } = {}) {
         view.hands = { south: ev.hand.map((c) => ({ ...c, legal: false })) };
         for (const s of ["east", "north", "west"]) view.hands[s] = Array.from({ length: 8 }, () => ({ hidden: true }));
         Object.assign(view, { bids: [], contract: null, trump: null, phase: "bidding", lastTrick: null, trick: [], result: null,
-                              tricksWon: [0, 0], trickPoints: [0, 0], seatPoints: null, dealNo: state.dealNo, dealer: state.dealer, current: null });
+                              tricksWon: [0, 0], trickPoints: [0, 0], dealNo: state.dealNo, dealer: state.dealer, current: null });
         trick = []; renderTrick(trick); render();
       }
       const d = state.dealer;
@@ -749,8 +748,8 @@ async function replay(state, { last = true } = {}) {
       // points du pli ajoutés tout de suite au gagnant (le texte du serveur se termine par "(+N")
       const m = /\(\+(\d+)/.exec(ev.text || "");
       if (view && m) {
-        view.seatPoints = { south: 0, west: 0, north: 0, east: 0, ...(view.seatPoints || {}) };
-        view.seatPoints[ev.winner] += +m[1];
+        view.trickPoints = [...(view.trickPoints || [0, 0])];
+        view.trickPoints[teamOf(ev.winner)] += +m[1];
         render();
       }
     } else if (ev.contract) {
