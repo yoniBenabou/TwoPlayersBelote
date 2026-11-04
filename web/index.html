@@ -93,6 +93,15 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
 .avatar.bot { background: linear-gradient(135deg, #b6c3bb, #6d7e74); color: #14211a; }
 .plate .nm { font-weight: 700; font-size: 14px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
 .plate .sub { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.seat-pts {
+  flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 40px; height: 36px;
+  padding: 0 7px; margin-left: 2px; border-radius: 10px; background: rgba(232, 185, 84, .16); border: 1px solid rgba(232, 185, 84, .5);
+  color: var(--gold); font-family: var(--display); font-weight: 800; font-size: 18px; line-height: 1;
+}
+.seat-pts small { font-family: var(--font); font-size: 9px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; opacity: .8; margin-top: 1px; }
+.seat-pts.zero { background: rgba(255,255,255,.05); border-color: var(--line); color: var(--dim); }
+.seat-pts.bump { animation: bump .5s ease-out; }
+@keyframes bump { 40% { transform: scale(1.25); } }
 .tags { display: flex; gap: 4px; position: absolute; top: -9px; right: 8px; }
 .tag { font-size: 9.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; padding: 2px 6px; border-radius: 6px; background: #2b3b33; color: var(--muted); }
 .tag.taker { background: var(--gold); color: #2a1d04; }
@@ -297,6 +306,7 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
   .plate { max-width: 100%; min-width: 0; }
   .plate > div:nth-child(2) { min-width: 0; }
   .plate .nm, .plate .sub { max-width: none; overflow: hidden; text-overflow: ellipsis; }
+  .seat-pts { min-width: 30px; height: 28px; font-size: 14px; padding: 0 4px; } .seat-pts small { font-size: 7px; }
   .last-trick .lt-title { font-size: 9px; margin-bottom: 4px; } .last-trick .info { font-size: 10.5px; margin-top: 5px; }
   .trick { width: 170px; height: 170px; }
   .slot.south { margin-top: 42px; } .slot.north { margin-top: -42px; } .slot.west { margin-left: -54px; } .slot.east { margin-left: 54px; }
@@ -469,13 +479,15 @@ function seatHTML(seat) {
   const tags = [];
   if (s.dealer === seat) tags.push('<span class="tag">Donneur</span>');
   if (s.contract && s.contract.by === seat && s.phase !== "bidding") tags.push('<span class="tag taker">Preneur</span>');
+  const pts = s.phase !== "bidding" && s.seatPoints ? s.seatPoints[seat] : null;
   return `<div class="plate"><div class="avatar ${avatarCls}">${initial}</div>
     <div><div class="nm">${esc(nm)}</div><div class="sub">${esc(sub)}</div><div class="thinking">réfléchit<i>.</i><i>.</i><i>.</i></div></div>
+    ${pts !== null && pts !== undefined ? `<div class="seat-pts${pts ? "" : " zero"}" title="Points remportés dans cette donne">${pts}<small>pts</small></div>` : ""}
     <div class="tags">${tags.join("")}</div><span class="said" style="display:none"></span></div>
     ${seat === "south" ? "" : `<div class="mini-hand"></div><div class="count"></div>`}`;
 }
 
-let lastSaid = {};
+let lastSaid = {}, lastPts = {};
 function render() {
   const s = view;
   if (!s) return;
@@ -496,6 +508,12 @@ function render() {
   for (const seat of SEATS) {
     const box = $(`seat-${seat}`);
     box.innerHTML = seatHTML(seat);
+    const ptsEl = box.querySelector(".seat-pts");
+    if (ptsEl) {
+      const v = s.seatPoints[seat];
+      if (lastPts[seat] !== undefined && v > lastPts[seat]) ptsEl.classList.add("bump");
+      lastPts[seat] = v;
+    } else delete lastPts[seat];
     box.classList.toggle("turn", s.current === seat && (s.phase === "bidding" || s.phase === "play") && !s.coincheWindow);
     const said = s.phase === "bidding" ? [...s.bids].reverse().find((b) => b.seat === seat) : null;
     const tag = box.querySelector(".said");
@@ -696,7 +714,7 @@ async function replay(state, { last = true } = {}) {
         view.hands = { south: ev.hand.map((c) => ({ ...c, legal: false })) };
         for (const s of ["east", "north", "west"]) view.hands[s] = Array.from({ length: 8 }, () => ({ hidden: true }));
         Object.assign(view, { bids: [], contract: null, trump: null, phase: "bidding", lastTrick: null, trick: [], result: null,
-                              tricksWon: [0, 0], trickPoints: [0, 0], dealNo: state.dealNo, dealer: state.dealer, current: null });
+                              tricksWon: [0, 0], trickPoints: [0, 0], seatPoints: null, dealNo: state.dealNo, dealer: state.dealer, current: null });
         trick = []; renderTrick(trick); render();
       }
       const d = state.dealer;
@@ -728,6 +746,13 @@ async function replay(state, { last = true } = {}) {
     } else if (ev.type === "trick") {
       renderTrick(trick, ev.winner);
       await sleep(DELAY.trick); await gatherTrick(ev.winner); trick = [];
+      // points du pli ajoutés tout de suite au gagnant (le texte du serveur se termine par "(+N")
+      const m = /\(\+(\d+)/.exec(ev.text || "");
+      if (view && m) {
+        view.seatPoints = { south: 0, west: 0, north: 0, east: 0, ...(view.seatPoints || {}) };
+        view.seatPoints[ev.winner] += +m[1];
+        render();
+      }
     } else if (ev.contract) {
       const c = state.contract;
       if (c && view) {

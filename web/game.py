@@ -5,7 +5,7 @@ L'IA est indépendante de la place (son observation est construite depuis game.c
 le même AIPlayer joue donc Est, Ouest et, si on le choisit, Nord. L'interface (web/index.html)
 construit tous ses textes en français à partir des données des événements.
 """
-from coinche4.game import PARTNER, AIPlayer, IllegalMove, SEARCH_SAMPLES, STYLES, Table
+from coinche4.game import PARTNER, SEAT_KEYS, AIPlayer, IllegalMove, SEARCH_SAMPLES, STYLES, Table
 
 AI_PARTNER = "ai"
 PARTNERS = (AI_PARTNER,) + STYLES
@@ -32,8 +32,18 @@ class WebTable(Table):
             return self.new_game()
         return None
 
+    def seat_points(self):
+        """Points des plis remportés par chaque place dans la donne en cours (10 de der compris)."""
+        game = self.game
+        points = [0, 0, 0, 0]
+        for i, (trick, winner) in enumerate(game.tricks):
+            points[winner] += sum(c.points(game.trump) for _, c in trick) + (10 if i == 7 else 0)
+        return points
+
     def state(self, events, viewer=None, since=None):
         data = super().state(events, viewer=viewer, since=since)
+        seat = self.ctx[0] if viewer is None else viewer
         data["aiAvailable"] = self.network is not None
         data["searchSamples"] = SEARCH_SAMPLES
+        data["seatPoints"] = {self._rot(SEAT_KEYS[s], seat): p for s, p in enumerate(self.seat_points())}
         return data
