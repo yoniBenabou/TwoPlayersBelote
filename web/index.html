@@ -344,11 +344,14 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
   .banner { font-size: 12px; max-width: 70%; }
   .bidbox { width: calc(100% - 16px); padding: 12px; }
   /* dernier pli : petit, dans le coin */
-  .last-trick { position: absolute; top: 8px; right: 8px; margin: 0; padding: 3px 4px 4px; border-radius: 10px; }
-  .last-trick .card { --cw: 24px; --ch: 34px; }
+  /* dernier pli sur téléphone : 2 × 2 cartes (moi, Ouest / Nord, Est), valeur et couleur en gros au centre */
+  .last-trick { position: absolute; top: 8px; right: 8px; margin: 0; padding: 5px; border-radius: 10px; }
+  .last-trick .lt-cards { display: grid; grid-template-columns: repeat(2, auto); gap: 4px; }
+  .last-trick .card { --cw: 34px; --ch: 40px; border-radius: 6px; }
   .last-trick .card .c.br, .last-trick .card .pip { display: none; }
-  .last-trick .lt-cards { gap: 0; } .last-trick .lt-cards .card + .card { margin-left: -6px; }
-  .last-trick .card.win { transform: translateY(-2px); }
+  .last-trick .card .c.tl { inset: 0; flex-direction: row; justify-content: center; align-items: center; gap: 1px; }
+  .last-trick .card .c .r { font-size: 15px; } .last-trick .card .c .s { font-size: 12px; }
+  .last-trick .card.win { transform: none; box-shadow: 0 0 0 2.5px var(--gold), 0 3px 8px rgba(0,0,0,.4); }
   /* ma main */
   .my-hand-wrap { padding: 8px 0 0; gap: 2px; }
   .hint { font-size: 12px; min-height: 16px; }
@@ -588,7 +591,7 @@ function render() {
     h.classList.toggle("open", s.reveal);
     for (const c of s.hands[seat] || []) h.append(cardEl(c, { small: true, classes: c.isTrump ? ["trump"] : [] }));
     const n = (s.hands[seat] || []).length;
-    box.querySelector(".count").textContent = `${n} carte${n > 1 ? "s" : ""}`;
+    box.querySelector(".count").textContent = n ? `${n} carte${n > 1 ? "s" : ""}` : "";
   }
   renderHand();
   $("hint").textContent = busy || s.phase === "done" ? "" : s.yourTurn ? (s.trick.length ? "À toi de jouer : clique sur une carte en surbrillance" : "À toi d'entamer")
