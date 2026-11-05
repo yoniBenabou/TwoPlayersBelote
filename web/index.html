@@ -20,6 +20,7 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
+html { overflow-x: hidden; }  /* les cartes qui arrivent en glissant ne doivent pas élargir la page sur téléphone */
 body {
   font-family: var(--font); color: var(--ink); background: var(--felt-3);
   background-image: radial-gradient(ellipse at 50% 35%, var(--felt-1) 0%, var(--felt-2) 45%, var(--felt-3) 100%);
@@ -279,36 +280,60 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
 
 /* ---------- écrans étroits ---------- */
 @media (max-width: 720px) {
-  :root { --cw: 50px; --ch: 72px; --sw: 24px; --sh: 34px; }
+  :root { --cw: 54px; --ch: 78px; --sw: 20px; --sh: 28px; }
+  /* en-tête : une ligne titre + boutons, une ligne de scores, rien ne dépasse */
   header { padding: 8px 10px; gap: 8px; }
-  .brand { font-size: 18px; } .brand .suits { display: none; }
-  .scores { order: 3; width: 100%; flex-basis: 100%; }
-  .score { min-width: 0; flex: 1; padding: 5px 9px; } .score .pts { font-size: 18px; }
-  .contract-chip { min-width: 84px; padding: 3px 8px; } .contract-chip b { font-size: 15px; }
-  .tools { margin-left: auto; } .tools .btn { padding: 6px 9px; font-size: 12.5px; }
-  .tools .wide { display: none; }
-  main { padding: 10px 8px; }
-  .table { padding: 14px 8px; border-radius: 90px / 70px; min-height: 360px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) minmax(0, 1fr); }
-  .seat.west .mini-hand, .seat.east .mini-hand { display: none; }
-  .seat.west .count, .seat.east .count { display: block; }
-  .plate { padding: 4px 8px 4px 4px; gap: 6px; } .avatar { width: 28px; height: 28px; font-size: 12px; }
-  .plate .nm { font-size: 12px; max-width: 74px; } .plate .sub { font-size: 10px; }
-  .said { font-size: 17px; padding: 5px 11px; top: calc(100% + 6px); }
-  .last-trick { position: absolute; top: 10px; right: 12px; margin: 0; padding: 4px 4px 5px; }
-  .last-trick .card { --cw: 27px; --ch: 39px; }
-  .last-trick .card .c.br, .last-trick .card .pip { display: none; }
-  .last-trick .lt-cards { gap: 0; } .last-trick .lt-cards .card + .card { margin-left: -7px; }
-  .seat { min-width: 0; }
-  .plate { max-width: 100%; min-width: 0; }
+  .brand { font-size: 19px; } .brand .suits { display: none; }
+  .tools { margin-left: auto; gap: 6px; } .tools .btn { padding: 6px 10px; font-size: 13px; }
+  .scores { order: 3; flex-basis: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px; }
+  .score { min-width: 0; padding: 5px 9px; } .score .pts { font-size: 18px; }
+  .score .who { font-size: 11px; max-width: none; min-width: 0; letter-spacing: .3px; }
+  .contract-chip { min-width: 0; padding: 3px 8px; font-size: 11px; } .contract-chip b { font-size: 15px; }
+  main { padding: 10px 8px 12px; }
+  /* table : hauteur fixée par son contenu, colonnes latérales étroites */
+  .board { gap: 0; }
+  .table { flex: none; min-height: 0; height: min(440px, 58vh); padding: 12px 6px; border-radius: 34px;
+    grid-template-columns: 76px minmax(0, 1fr) 76px; box-shadow: inset 0 0 0 6px #3b2416, inset 0 0 0 7px #5b3a22, inset 0 0 40px rgba(0,0,0,.45), 0 12px 30px rgba(0,0,0,.4); }
+  .seat { min-width: 0; gap: 4px; }
+  .plate { padding: 4px 8px 4px 4px; gap: 6px; max-width: 100%; min-width: 0; }
   .plate > div:nth-child(2) { min-width: 0; }
-  .plate .nm, .plate .sub { max-width: none; overflow: hidden; text-overflow: ellipsis; }
-  .seat-pts { min-width: 26px; height: 20px; font-size: 11px; padding: 0 4px; }
-  .trick { width: 170px; height: 170px; }
-  .slot.south { margin-top: 42px; } .slot.north { margin-top: -42px; } .slot.west { margin-left: -54px; } .slot.east { margin-left: 54px; }
-  .center { min-height: 190px; }
+  .avatar { width: 28px; height: 28px; font-size: 12px; }
+  .plate .nm { font-size: 13px; max-width: none; overflow: hidden; text-overflow: ellipsis; }
+  /* Ouest et Est : plaque en colonne (pastille, prénom, points) pour garder le prénom entier */
+  .seat.west .plate, .seat.east .plate { flex-direction: column; gap: 3px; padding: 6px 4px; border-radius: 14px; width: 70px; }
+  .seat.west .plate .nm, .seat.east .plate .nm { font-size: 12px; text-align: center; white-space: normal; line-height: 1.15; }
+  .seat.west .plate .seat-pts, .seat.east .plate .seat-pts { margin-left: 0; }
+  .seat.west .mini-hand, .seat.east .mini-hand { display: none; }
+  .seat.west .count, .seat.east .count { display: block; font-size: 10.5px; }
+  .tags { top: -8px; right: 50%; transform: translateX(50%); }
+  .seat.north .tags, .seat.south .tags { right: 6px; transform: none; }
+  .tag { font-size: 8.5px; padding: 1px 5px; }
+  .seat-pts { min-width: 26px; height: 20px; font-size: 11.5px; padding: 0 5px; }
+  .said { font-size: 16px; padding: 4px 10px; top: calc(100% + 5px); }
+  .thinking { font-size: 10px; }
+  /* pli au centre */
+  .center { min-height: 0; position: static; }
+  .trick { width: 150px; height: 190px; }
+  .slot .card { --cw: 46px; --ch: 66px; }
+  .slot.south { margin-top: 48px; } .slot.north { margin-top: -48px; } .slot.west { margin-left: -40px; } .slot.east { margin-left: 40px; }
+  .banner { font-size: 12px; max-width: 70%; }
+  .bidbox { width: calc(100% - 16px); padding: 12px; }
+  /* dernier pli : petit, dans le coin */
+  .last-trick { position: absolute; top: 8px; right: 8px; margin: 0; padding: 3px 4px 4px; border-radius: 10px; }
+  .last-trick .card { --cw: 24px; --ch: 34px; }
+  .last-trick .card .c.br, .last-trick .card .pip { display: none; }
+  .last-trick .lt-cards { gap: 0; } .last-trick .lt-cards .card + .card { margin-left: -6px; }
+  .last-trick .card.win { transform: translateY(-2px); }
+  /* ma main */
+  .my-hand-wrap { padding: 8px 0 0; gap: 2px; }
+  .hint { font-size: 12px; min-height: 16px; }
+  #hand { padding-top: 12px; }
+  #hand .card.playable:hover { transform: translateY(-10px); }
   .card.trump::before { font-size: 7px; top: -7px; }
   .wgrid { grid-template-columns: 1fr; } .styles, .choices.pgrid { grid-template-columns: 1fr; }
   .vals button { padding: 7px 0; font-size: 13px; }
+  .modal { padding: 18px 16px; } .modal h2 { font-size: 22px; }
+  .modal table { font-size: 13px; } .modal td, .modal th { padding: 6px 4px; }
 }
 </style>
 </head>
@@ -526,7 +551,8 @@ function render() {
     const h = box.querySelector(".mini-hand");
     h.classList.toggle("open", s.reveal);
     for (const c of s.hands[seat] || []) h.append(cardEl(c, { small: true, classes: c.isTrump ? ["trump"] : [] }));
-    box.querySelector(".count").textContent = `${(s.hands[seat] || []).length} cartes`;
+    const n = (s.hands[seat] || []).length;
+    box.querySelector(".count").textContent = `${n} carte${n > 1 ? "s" : ""}`;
   }
   renderHand();
   $("hint").textContent = busy || s.phase === "done" ? "" : s.yourTurn ? (s.trick.length ? "À toi de jouer : clique sur une carte en surbrillance" : "À toi d'entamer")
