@@ -22,6 +22,7 @@ import torch
 from belote.coinche.bots import CoincheBot
 from belote.coinche.asr import AsRBot
 from belote.coinche.papi_robert import PapiRobertBot
+from belote.coinche.conventions import CONVENTIONS
 from belote.coinche.pimc import CoinchePIMC
 from belote.coinche.petit_jeu import PetitJeuBot
 from belote.coinche.engine import CAPOT, DEFAULT_TARGET, SEAT_NAMES, team_of
@@ -37,12 +38,12 @@ BOTS = {"bots": CoincheBot, "petitjeu": PetitJeuBot, "papirobert": PapiRobertBot
 class Side:
     """Une équipe : réseau (coup le plus probable), robot ou hasard."""
 
-    def __init__(self, spec, search=0, candidates=10, temperature=2.0):
+    def __init__(self, spec, search=0, candidates=10, temperature=2.0, conventions=tuple(CONVENTIONS)):
         self.name = spec + (f" + recherche {search}" if search else "")
         if search:
-            self.name += (f" (annonces : {candidates} candidates, température {temperature})" if candidates > 1
-                          else " (sans les annonces)")
-        self.search = None
+            self.name += (f" (annonces : {candidates} candidates, température {temperature}, conventions "
+                          f"{','.join(conventions) or 'aucune'})" if candidates > 1 else " (sans les annonces)")
+        self.search = None  # {équipe jouée : recherche} (chacune suit les joueurs vus depuis ses places)
         self.agent = None
         self.bot = None
         self.rng = random.Random(1)
@@ -57,8 +58,8 @@ class Side:
             if search:
                 if not self.bids:
                     raise ValueError("la recherche demande un modèle qui fait aussi les annonces")
-                self.search = CoinchePIMC(network, n_samples=search, seed=1, candidates=candidates,
-                                          temperature=temperature)
+                self.search = {t: CoinchePIMC(network, n_samples=search, seed=1 + t, candidates=candidates,
+                                              temperature=temperature, conventions=conventions) for t in (0, 1)}
 
     def act(self, env, obs):
         game = env.game
@@ -69,7 +70,7 @@ class Side:
                 return self.rng.choice([i for i, ok in enumerate(env.legal_mask()) if ok])
             return CARD_INDEX[self.bot.play(game, game.current)]
         if self.search is not None:
-            return self.search.act(env)
+            return self.search[team_of(env.current)].act(env)
         mask = env.legal_mask()
         if not self.bids:
             mask = mask[:NUM_ACTIONS_PLAY]
@@ -80,10 +81,17 @@ def play_deal(env, sides, deal=None):
     """sides[t] joue l'équipe t. Retourne env.game.result (None si redistribution)."""
     bid_seats = {s for s in range(4) if sides[team_of(s)].bids}
     obs = env.reset(deal=deal, bid_seats=bid_seats)
+    totals = list(env.game.totals)
     done = env.done
     while not done:
         obs, _rewards, done = env.step(sides[team_of(env.current)].act(env, obs))
-    return None if env.game.phase == "redeal" else env.game.result
+    if env.game.phase == "redeal":
+        return None
+    hands = {s: list(env.game.played[s]) for s in range(4)}  # donne finie : toutes les cartes sont connues
+    for t, side in enumerate(sides):
+        if side.search is not None:
+            side.search[t].end_deal(env, hands, totals)
+    return env.game.result
 
 
 def main():
@@ -97,14 +105,18 @@ def main():
     parser.add_argument("--b-candidates", type=int, default=10, help="pareil pour B")
     parser.add_argument("--a-temperature", type=float, default=2.0, help="recherche de A : poids des annonces adoucis")
     parser.add_argument("--b-temperature", type=float, default=2.0, help="pareil pour B")
+    parser.add_argument("--a-conventions", default=",".join(CONVENTIONS),
+                        help="conventions d'annonce connues de la recherche de A (vide : le réseau seul)")
+    parser.add_argument("--b-conventions", default=",".join(CONVENTIONS), help="pareil pour B")
     parser.add_argument("--deals", type=int, default=2000, help="donnes dupliquées (jouées 2 fois chacune)")
     parser.add_argument("--games", type=int, default=200, help="parties en 1 500 points")
     parser.add_argument("--seed", type=int, default=777)
     parser.add_argument("--show", type=int, default=0, help="affiche le déroulé des N premières donnes")
     args = parser.parse_args()
     torch.set_num_threads(1)
-    a = Side(args.a, args.a_search, args.a_candidates, args.a_temperature)
-    b = Side(args.b, args.b_search, args.b_candidates, args.b_temperature)
+    conv = lambda text: tuple(c for c in text.split(",") if c)
+    a = Side(args.a, args.a_search, args.a_candidates, args.a_temperature, conv(args.a_conventions))
+    b = Side(args.b, args.b_search, args.b_candidates, args.b_temperature, conv(args.b_conventions))
     env = CoincheEnv(bidding=True, seed=args.seed)
     # stats par équipe ("A" / "B")
     takes, made, coinched, capots = Counter(), Counter(), Counter(), Counter()

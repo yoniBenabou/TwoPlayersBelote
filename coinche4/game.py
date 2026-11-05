@@ -138,6 +138,12 @@ class AIPlayer:
         self.env._update_belief(seat, card)
         if self.env.game.belote_call(seat, card):
             self.env.belote_seen = seat
+        game = self.env.game
+        if self.search is not None and sum(len(p) for p in game.played) == 31:
+            # dernière carte : toutes les mains sont connues, la recherche apprend comment chacun annonce
+            hands = {s: list(game.played[s]) for s in range(4)}
+            hands[seat].append(card)
+            self.search.end_deal(self.env, hands)
 
     def act(self):
         """(action du jeu, confiance) : le coup le plus probable du réseau et sa probabilité."""
