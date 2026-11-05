@@ -50,6 +50,14 @@ python -m demo4.server
 
 Then open `http://localhost:8100`. Engine: [belote/coinche/engine.py](belote/coinche/engine.py) (bidding 80 to 160 or capot, coinche ×2, surcoinche ×3, follow suit, overtrump, free card when your partner is winning, the table's scoring with rounding and the "useful belote" rule, 1,500-point games); tests: `python -m tests.test_coinche`.
 
+**Coinche website (`web/`)**: the new French-language site. You play South; your partner (North) is the trained AI, a convention bot (AsR, Papi Robert, Petit jeu, simple) or a friend invited by link. East and West are the trained AI (with or without PIMC search). It reuses the coinche4 engine, API and logging; [web/game.py](web/game.py) adds the AI as a possible partner.
+
+```bash
+python -m web.server
+```
+
+Then open `http://localhost:8200`. Deals and games are logged to `web/logs/games.jsonl` (and to Supabase when `SUPABASE_URL` and `SUPABASE_SECRET_KEY` are set).
+
 ## Main rules
 
 - Each round deals 8 cards per player (16 cards are left unused).

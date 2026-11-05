@@ -41,6 +41,7 @@ import torch
 
 from belote.coinche.engine import DEFAULT_TARGET
 from demo.game import GameLog
+from demo4.supabase_log import SupabaseGameLog
 from demo4.game import BOT_KINDS, IllegalMove, Table, load_network
 
 INDEX_HTML = Path(__file__).with_name("index.html")
@@ -201,7 +202,12 @@ def main():
     log = None
     if args.log:
         os.makedirs(os.path.dirname(os.path.abspath(args.log)), exist_ok=True)
-        log = GameLog(args.log)
+        if os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SECRET_KEY"):
+            log = SupabaseGameLog(args.log)
+            print("Supabase logging enabled", flush=True)
+        else:
+            log = GameLog(args.log)
+            print("Local JSONL logging only", flush=True)
     torch.set_num_threads(1)  # un cœur par coup de l'IA : plusieurs joueurs en même temps ne se gênent pas
     network = load_network(args.model)
     print(f"AI model: {args.model}" if network is not None else f"AI model not found ({args.model}): AI disabled",
