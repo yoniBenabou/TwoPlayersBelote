@@ -602,11 +602,23 @@ function render() {
 }
 
 let handKey = "";
+// force des cartes : à l'atout V 9 A 10 R D 8 7, ailleurs A 10 R D V 9 8 7
+const TRUMP_ORDER = ["J", "9", "A", "10", "K", "Q", "8", "7"];
+const PLAIN_ORDER = ["A", "10", "K", "Q", "J", "9", "8", "7"];
+// ma main de gauche à droite : l'atout d'abord, puis les autres couleurs (dans l'ordre du serveur,
+// rouge et noir en alternance), et dans chaque couleur la carte la plus forte à gauche
+function sortHand(cards, trump) {
+  const suits = [];
+  for (const c of cards) if (!suits.includes(c.suitName)) suits.push(c.suitName);
+  if (trump && suits.includes(trump)) suits.splice(suits.indexOf(trump), 1), suits.unshift(trump);
+  const strength = (c) => (c.suitName === trump ? TRUMP_ORDER : PLAIN_ORDER).indexOf(c.rank);
+  return [...cards].sort((a, b) => suits.indexOf(a.suitName) - suits.indexOf(b.suitName) || strength(a) - strength(b));
+}
 function renderHand() {
   const s = view, box = $("hand");
   box.innerHTML = "";
-  const cards = s.hands.south || [];
-  const key = cards.map((c) => c.id).join(",");
+  const cards = sortHand(s.hands.south || [], s.trump && s.trump.name);
+  const key = cards.map((c) => c.id).sort((a, b) => a - b).join(",");
   const fresh = cards.length === 8 && key !== handKey && s.phase === "bidding";
   handKey = key;
   cards.forEach((c, i) => {
