@@ -227,6 +227,32 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
 .modal ol { padding-left: 20px; line-height: 1.55; color: var(--muted); font-size: 14px; }
 .modal ol li { margin-bottom: 6px; }
 .modal .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+/* écran de fin de donne : les 8 plis */
+.modal.wide { width: min(720px, 100%); }
+.tricks-wrap { margin: 12px 0 4px; }
+.modal table.tricks { margin: 0; font-size: 13px; }
+.modal table.tricks th { text-align: center; font-size: 11.5px; color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px; padding: 4px 3px; }
+.modal table.tricks td { text-align: center; padding: 4px 3px; vertical-align: middle; }
+.modal table.tricks td.no { color: var(--dim); font-weight: 700; text-align: center; width: 28px; }
+.modal table.tricks td { padding: 3px 3px; }
+.modal table.tricks .cardcell .card { --cw: 36px; --ch: 44px; margin: 0 auto; border-radius: 6px; }
+.modal table.tricks .cardcell .card .c.br, .modal table.tricks .cardcell .card .pip { display: none; }
+/* mini-carte lisible : valeur et couleur en gros, au centre */
+.modal table.tricks .cardcell .card .c.tl { inset: 0; flex-direction: row; justify-content: center; align-items: center; gap: 1px; }
+.modal table.tricks .cardcell .card .c .r { font-size: 16px; } .modal table.tricks .cardcell .card .c .s { font-size: 14px; }
+.modal table.tricks .cardcell .card.win { box-shadow: 0 0 0 2.5px var(--gold), 0 3px 8px rgba(0,0,0,.35); }
+.modal table.tricks .cardcell.lead { position: relative; }
+.modal table.tricks .cardcell.lead::after { content: ""; position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: 5px; height: 5px; border-radius: 50%; background: var(--muted); }
+.modal table.tricks td.winner { font-weight: 700; white-space: nowrap; }
+.modal table.tricks td.pts { font-weight: 700; color: var(--ink); white-space: nowrap; text-align: right; }
+.modal table.tricks td.pts small { display: block; font-size: 10px; font-weight: 500; color: var(--dim); }
+.modal table.tricks tfoot td { border-bottom: none; padding-top: 10px; font-weight: 700; color: var(--ink); text-align: left; }
+.modal table.tricks tfoot td.pts { text-align: right; }
+.modal .us { color: var(--gold); } .modal .them { color: var(--blue); }
+.modal table.summary { margin: 6px 0 4px; }
+.modal table.summary td, .modal table.summary th { padding: 5px 6px; }
+.modal.wide { padding-top: 18px; padding-bottom: 16px; }
+.modal.wide .foot { margin-top: 8px; }
 .verdict { display: inline-block; font-weight: 700; padding: 3px 10px; border-radius: 8px; font-size: 13px; margin-bottom: 6px; }
 .verdict.ok { background: rgba(111,211,154,.15); } .verdict.ko { background: rgba(255,122,127,.15); }
 
@@ -334,6 +360,16 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
   .vals button { padding: 7px 0; font-size: 13px; }
   .modal { padding: 18px 16px; } .modal h2 { font-size: 22px; }
   .modal table { font-size: 13px; } .modal td, .modal th { padding: 6px 4px; }
+  .modal table.tricks { font-size: 11.5px; }
+  .modal table.tricks th { font-size: 10px; max-width: 46px; padding: 3px 1px; }
+  .modal table.tricks td { padding: 3px 1px; }
+  .modal table.tricks td.no { width: 18px; }
+  .modal table.tricks .cardcell .card { --cw: 29px; --ch: 34px; border-radius: 5px; }
+  .modal table.tricks .cardcell .card .c .r { font-size: 12px; } .modal table.tricks .cardcell .card .c .s { font-size: 10px; }
+  .modal.wide { padding-left: 12px; padding-right: 12px; }
+  .tricks-wrap { overflow-x: auto; }
+  .modal table.tricks td.winner { max-width: 48px; overflow: hidden; text-overflow: ellipsis; }
+  .modal table.tricks td.pts small { display: none; }
 }
 </style>
 </head>
@@ -683,7 +719,7 @@ function renderCoincheWindow(box) {
 }
 
 // ---------- fenêtres ----------
-function closeOverlay() { $("overlay").classList.remove("show"); delete $("overlay").dataset.kind; }
+function closeOverlay() { $("overlay").classList.remove("show"); $("modal").classList.remove("wide"); delete $("overlay").dataset.kind; }
 function renderOverlay() {
   const s = view, ov = $("overlay");
   if (ov.dataset.kind === "rules") return;
@@ -691,10 +727,23 @@ function renderOverlay() {
   const r = s.result, c = s.contract;
   const ourContract = c && (c.by === "south" || c.by === "north");
   const good = ourContract ? r.made : !r.made;
-  const rows = [["Plis remportés", r.tricksWon[0], r.tricksWon[1]],
-                ["Points des plis" + (r.capot ? " (capot = 250)" : ""), r.points[0], r.points[1]],
+  // les points des plis sont déjà au bas du tableau des plis ; on ne les répète que pour un capot (250)
+  const rows = [...(r.capot ? [["Points des plis (capot = 250)", r.points[0], r.points[1]]] : []),
                 ["Belote-rebelote", r.belote[0], r.belote[1]],
                 ["Total pour le contrat", r.total[0], r.total[1]]];
+  // les 8 plis : une ligne par pli, les cartes dans l'ordre des places (moi, Ouest, Nord, Est)
+  const tricks = s.dealTricks || [];
+  const trickRows = tricks.map((t, i) => `<tr>
+      <td class="no">${i + 1}</td>
+      ${SEATS.map((seat) => `<td class="cardcell" data-t="${i}" data-seat="${seat}"></td>`).join("")}
+      <td class="winner ${teamOf(t.winner) === 0 ? "us" : "them"}">${esc(name(t.winner))}</td>
+      <td class="pts">+${t.points}${i === 7 ? '<small>dont 10 de der</small>' : ""}</td></tr>`).join("");
+  const sumTeam = (team) => tricks.filter((t) => teamOf(t.winner) === team).reduce((a, t) => a + t.points, 0);
+  const tricksTable = tricks.length ? `<div class="tricks-wrap"><table class="tricks">
+      <thead><tr><th>Pli</th>${SEATS.map((seat) => `<th>${esc(name(seat))}</th>`).join("")}<th>Gagnant</th><th>Points</th></tr></thead>
+      <tbody>${trickRows}</tbody>
+      <tfoot><tr><td colspan="6">Total des plis : <span class="us">Nous ${sumTeam(0)}</span> · <span class="them">Eux ${sumTeam(1)}</span></td>
+        <td class="pts">${sumTeam(0) + sumTeam(1)}</td></tr></tfoot></table></div>` : "";
   const notes = [];
   if (r.mult === 1 && r.made) notes.push("Les points des deux équipes sont arrondis à la dizaine la plus proche.");
   if (r.mult > 1) notes.push(`${r.mult === 2 ? "Coinché" : "Surcoinché"} : contrat × ${r.mult} + 160 pour ${r.made ? "l'équipe du contrat" : "la défense"}.`);
@@ -705,12 +754,24 @@ function renderOverlay() {
   $("modal").innerHTML = `<h2>${head}</h2>
     ${c ? `<span class="verdict ${good ? "ok" : "ko"}">${esc(c.label)}${c.mult > 1 ? " ×" + c.mult : ""} par ${esc(name(c.by))} : ${r.made ? "réussi" : "chuté"}</span>` : ""}
     ${r.capot ? `<p>Capot pour ${r.capot === s.teams[0] ? "nous" : "eux"} !</p>` : ""}
-    <table><tr><th></th><th>Nous</th><th>Eux</th></tr>
+    ${tricksTable}
+    <table class="summary"><tr><th></th><th>Nous</th><th>Eux</th></tr>
       ${rows.map((x) => `<tr><td>${x[0]}</td><td>${x[1]}</td><td>${x[2]}</td></tr>`).join("")}
       <tr class="total"><td>Score de la donne</td><td>+${r.scores[0]}</td><td>+${r.scores[1]}</td></tr>
       <tr><td>Total de la partie</td><td>${s.totals[0]}</td><td>${s.totals[1]}</td></tr></table>
     ${notes.map((n) => `<p>${n}</p>`).join("")}
     <div class="foot">${s.gameOver ? '<button class="btn" id="ov-menu">Nouvelle partie</button>' : ""}<button class="btn gold" id="ov-btn">${s.gameOver ? "Rejouer" : "Donne suivante"}</button></div>`;
+  $("modal").querySelectorAll(".cardcell").forEach((td) => {
+    const t = tricks[+td.dataset.t];
+    const played = t.cards.find((x) => x.seat === td.dataset.seat);
+    if (!played) return;
+    const classes = [];
+    if (td.dataset.seat === t.winner) classes.push("win");
+    if (s.trump && played.card.suitName === s.trump.name) classes.push("is-trump");
+    td.append(cardEl(played.card, { classes }));
+    if (td.dataset.seat === t.leader) td.classList.add("lead");
+  });
+  $("modal").classList.add("wide");
   $("ov-btn").onclick = s.gameOver ? newGame : nextDeal;
   if (s.gameOver) $("ov-menu").onclick = () => { closeOverlay(); openWelcome(); };
   $("overlay").dataset.kind = "result";
@@ -718,6 +779,7 @@ function renderOverlay() {
 }
 function showRules() {
   $("overlay").dataset.kind = "rules";
+  $("modal").classList.remove("wide");
   $("modal").innerHTML = `<h2>Règles de la table</h2><ol>${RULES(view ? view.target : 1500).map((r) => `<li>${r}</li>`).join("")}</ol>
     <div class="foot"><button class="btn gold" id="ov-close">Fermer</button></div>`;
   $("ov-close").onclick = () => { closeOverlay(); if (view) renderOverlay(); };

@@ -5,7 +5,8 @@ L'IA est indépendante de la place (son observation est construite depuis game.c
 le même AIPlayer joue donc Est, Ouest et, si on le choisit, Nord. L'interface (web/index.html)
 construit tous ses textes en français à partir des données des événements.
 """
-from coinche4.game import PARTNER, AIPlayer, IllegalMove, SEARCH_SAMPLES, STYLES, Table
+from coinche4.game import PARTNER, SEAT_KEYS, AIPlayer, IllegalMove, SEARCH_SAMPLES, STYLES, Table
+from demo.game import card_json
 
 AI_PARTNER = "ai"
 PARTNERS = (AI_PARTNER,) + STYLES
@@ -32,8 +33,22 @@ class WebTable(Table):
             return self.new_game()
         return None
 
+    def deal_tricks(self, viewer):
+        """Plis finis de la donne, vus depuis viewer : cartes par place, gagnant et points (10 de der compris)."""
+        game = self.game
+        tricks = []
+        for i, (trick, winner) in enumerate(game.tricks):
+            tricks.append({
+                "cards": [{"seat": self._rot(SEAT_KEYS[s], viewer), "card": card_json(c, game.trump)} for s, c in trick],
+                "leader": self._rot(SEAT_KEYS[trick[0][0]], viewer),
+                "winner": self._rot(SEAT_KEYS[winner], viewer),
+                "points": sum(c.points(game.trump) for _, c in trick) + (10 if i == 7 else 0),
+            })
+        return tricks
+
     def state(self, events, viewer=None, since=None):
         data = super().state(events, viewer=viewer, since=since)
         data["aiAvailable"] = self.network is not None
         data["searchSamples"] = SEARCH_SAMPLES
+        data["dealTricks"] = self.deal_tricks(self.ctx[0] if viewer is None else viewer)
         return data
