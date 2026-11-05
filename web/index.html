@@ -156,7 +156,11 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
 #hand .card { transition: transform .15s, box-shadow .15s, filter .15s; }
 #hand .card + .card { margin-left: var(--overlap, 6px); }
 #hand .card.playable { cursor: pointer; }
-#hand .card.playable:hover { transform: translateY(-14px); box-shadow: 0 0 0 3px var(--gold), 0 12px 24px rgba(0,0,0,.4); z-index: 2; }
+/* survol seulement à la souris : au doigt, le survol reste collé à la place touchée et une carte
+   ressortait au tour suivant, comme une carte conseillée */
+@media (hover: hover) and (pointer: fine) {
+  #hand .card.playable:hover { transform: translateY(-14px); box-shadow: 0 0 0 3px var(--gold), 0 12px 24px rgba(0,0,0,.4); z-index: 2; }
+}
 #hand .card.illegal { filter: brightness(.55) saturate(.6); }
 #hand .card.deal-in { animation: dealin .35s ease-out backwards; }
 
@@ -356,7 +360,7 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
   .my-hand-wrap { padding: 8px 0 0; gap: 2px; }
   .hint { font-size: 12px; min-height: 16px; }
   #hand { padding-top: 12px; }
-  #hand .card.playable:hover { transform: translateY(-10px); }
+  @media (hover: hover) and (pointer: fine) { #hand .card.playable:hover { transform: translateY(-10px); } }
   .card.trump::before { font-size: 7px; top: -7px; }
   .wgrid { grid-template-columns: 1fr; } .styles, .choices.pgrid { grid-template-columns: 1fr; }
   .vals button { padding: 7px 0; font-size: 13px; }
@@ -688,9 +692,10 @@ function banner(text) { $("banner").innerHTML = text; }
 // ---------- annonces ----------
 function renderBidding() {
   const s = view, box = $("bidbox");
-  if (busy || !(s.yourBid && s.bidOptions) && !s.coincheWindow) { box.classList.remove("show"); return; }
+  if (busy || !(s.yourBid && s.bidOptions) && !s.coincheWindow && !s.canVolley) { box.classList.remove("show"); return; }
   box.classList.add("show");
   if (s.coincheWindow) return renderCoincheWindow(box);
+  if (!s.yourBid && s.canVolley) return renderVolley(box);
   const o = s.bidOptions;
   const cur = s.contract ? `Annonce en cours : <b>${esc(s.contract.label)}</b>${s.contract.mult > 1 ? ` ×${s.contract.mult}` : ""} (${esc(name(s.contract.by))})`
     : "Personne n'a encore annoncé.";
@@ -730,6 +735,15 @@ function renderCoincheWindow(box) {
     <button class="btn red" id="cw-yes">Coinche ! ×2</button><button class="btn" id="cw-no">Laisser parler</button></div>`;
   $("cw-yes").onclick = () => { stopCoincheTimer(); act("/api/coinche-now", {}); };
   $("cw-no").onclick = () => { stopCoincheTimer(); act("/api/continue", {}); };
+}
+
+// à deux : coinche à la volée, hors de mon tour, tant que le contrat adverse n'est pas coinché
+function renderVolley(box) {
+  const c = view.contract;
+  box.innerHTML = `<h4>Coincher à la volée ?</h4>
+    <div class="help">${esc(name(c.by))} a annoncé <b>${esc(c.label)}</b>. C'est à ${esc(name(view.current))} de parler, mais tu peux coincher tout de suite.</div>
+    <div class="actrow"><button class="btn red" id="v-coinche">Coinche ! ×2</button></div>`;
+  $("v-coinche").onclick = () => act("/api/coinche-now", {});
 }
 
 // ---------- fenêtres ----------
