@@ -462,7 +462,7 @@ const SEAT_FR = { South: "Sud", West: "Yoni", North: "Nord", East: "Noa", "Your 
 const KIND = {
   ai: { label: "IA", stars: 5, text: "Notre réseau entraîné : il a appris seul en jouant des millions de donnes." },
   ai_search: { label: "IA + recherche", stars: 5, text: "Le même réseau, mais avant chaque carte il imagine 20 répartitions possibles des cartes cachées et les joue jusqu'au bout. Plus fort, un peu plus lent." },
-  asr: { label: "AsR", stars: 4, text: "80 montre deux As, 90 demande l'autre majeure, 110 à 140 demandent des As et des 10 précis, appels en défausse." },
+  asr: { label: "AsR", stars: 4, text: "<b>80</b> : deux As (même sans atout).<br><b>90</b> : Valet ou 9 d'atout + un As → réponds +10 avec l'autre majeure, puis +10 par As.<br><b>100</b> : Valet et 9 d'atout → réponds +10 par As hors atout.<br><b>110</b> : demande les As de l'autre famille · <b>120</b> : l'As de la couleur sœur · <b>130/140</b> : les 10." },
   papirobert: { label: "Papi Robert", stars: 2, text: "« Belote au miel » : 80 avec deux As, 90 cherche la deuxième majeure, 100 à 120 selon le nombre de couleurs." },
   petitjeu: { label: "Petit jeu", stars: 2, text: "80 avec le Valet ou le 9 et deux atouts, 90 avec les deux, 100 à 120 quand il est maître à l'atout." },
   simple: { label: "Robot simple", stars: 1, text: "Robot écrit à la main : il annonce selon ses points et joue sans convention." },
