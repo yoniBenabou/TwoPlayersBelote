@@ -397,6 +397,7 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
         <p style="margin:0;color:var(--muted);font-size:14px">Envoie-lui ce lien. Il s'assiéra en face de toi (Nord) et la partie commencera dès son arrivée.</p>
         <div class="invite"><input type="text" id="w-link" readonly><button class="btn gold" id="w-copy">Copier</button></div>
         <p style="margin:10px 0 0;color:var(--muted);font-size:14px"><span class="spinner"></span>En attente de ton partenaire…</p>
+        <button class="btn" id="w-cancel" style="margin-top:14px">← Retour</button>
       </div>
     </div>
     <div class="versus" id="w-versus"></div>
@@ -935,6 +936,8 @@ $("w-copy").onclick = () => {
   $("w-copy").textContent = "Copié !"; setTimeout(() => ($("w-copy").textContent = "Copier"), 1500);
 };
 $("w-back").onclick = () => $("welcome").classList.remove("show");
+// retour au choix du partenaire depuis l'écran d'invitation (une nouvelle partie remplacera la table en attente)
+$("w-cancel").onclick = () => openWelcome();
 $("w-go").onclick = async () => {
   if (busy) return;
   $("w-error").textContent = "";
