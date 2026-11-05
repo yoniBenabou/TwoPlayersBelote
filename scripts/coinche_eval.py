@@ -37,8 +37,11 @@ BOTS = {"bots": CoincheBot, "petitjeu": PetitJeuBot, "papirobert": PapiRobertBot
 class Side:
     """Une équipe : réseau (coup le plus probable), robot ou hasard."""
 
-    def __init__(self, spec, search=0):
+    def __init__(self, spec, search=0, candidates=10, temperature=2.0):
         self.name = spec + (f" + recherche {search}" if search else "")
+        if search:
+            self.name += (f" (annonces : {candidates} candidates, température {temperature})" if candidates > 1
+                          else " (sans les annonces)")
         self.search = None
         self.agent = None
         self.bot = None
@@ -54,7 +57,8 @@ class Side:
             if search:
                 if not self.bids:
                     raise ValueError("la recherche demande un modèle qui fait aussi les annonces")
-                self.search = CoinchePIMC(network, n_samples=search, seed=1)
+                self.search = CoinchePIMC(network, n_samples=search, seed=1, candidates=candidates,
+                                          temperature=temperature)
 
     def act(self, env, obs):
         game = env.game
@@ -88,13 +92,19 @@ def main():
     parser.add_argument("--b", default="bots")
     parser.add_argument("--a-search", type=int, default=0, help="recherche PIMC pour A : nombre de mains imaginées")
     parser.add_argument("--b-search", type=int, default=0, help="recherche PIMC pour B")
+    parser.add_argument("--a-candidates", type=int, default=10,
+                        help="recherche de A : mains tirées par main gardée, pondérées par les annonces (1 : sans)")
+    parser.add_argument("--b-candidates", type=int, default=10, help="pareil pour B")
+    parser.add_argument("--a-temperature", type=float, default=2.0, help="recherche de A : poids des annonces adoucis")
+    parser.add_argument("--b-temperature", type=float, default=2.0, help="pareil pour B")
     parser.add_argument("--deals", type=int, default=2000, help="donnes dupliquées (jouées 2 fois chacune)")
     parser.add_argument("--games", type=int, default=200, help="parties en 1 500 points")
     parser.add_argument("--seed", type=int, default=777)
     parser.add_argument("--show", type=int, default=0, help="affiche le déroulé des N premières donnes")
     args = parser.parse_args()
     torch.set_num_threads(1)
-    a, b = Side(args.a, args.a_search), Side(args.b, args.b_search)
+    a = Side(args.a, args.a_search, args.a_candidates, args.a_temperature)
+    b = Side(args.b, args.b_search, args.b_candidates, args.b_temperature)
     env = CoincheEnv(bidding=True, seed=args.seed)
     # stats par équipe ("A" / "B")
     takes, made, coinched, capots = Counter(), Counter(), Counter(), Counter()

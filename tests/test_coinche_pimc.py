@@ -1,11 +1,12 @@
-"""Recherche PIMC à 4 : mains tirées compatibles avec les déductions, pas de triche, parties complètes."""
+"""Recherche PIMC à 4 : mains tirées compatibles avec les déductions, annonces revues comme le réseau les a vues,
+pas de triche, parties complètes."""
 import random
 import sys
 
 import numpy as np
 
-from belote.coinche.pimc import CoinchePIMC, clone_env, make_world, sample_hidden_hands
-from belote.coinche.rl_env import CARD_INDEX, NUM_ACTIONS_BIDDING, CoincheEnv
+from belote.coinche.pimc import CoinchePIMC, auction_log_weights, auction_steps, clone_env, make_world, sample_hidden_hands
+from belote.coinche.rl_env import CARD_INDEX, NUM_ACTIONS_BIDDING, OFFSET, CoincheEnv
 from belote.rl.networks import ActorCriticNetwork
 
 
@@ -41,6 +42,48 @@ def check_samples():
                 assert all(allowed[CARD_INDEX[c]] for c in h), "déduction violée"
             n += 1
     return n
+
+
+def check_auction_replay():
+    """Les annonces revues par la recherche (avec la vraie main) donnent l'observation et les annonces
+    légales que le joueur avait au moment d'annoncer."""
+    rng = random.Random(4)
+    n = 0
+    for k in range(200):
+        env = CoincheEnv(bidding=True, seed=900 + k)
+        env.reset()
+        seen = []
+        while env.game.phase == "bidding" and not env.done:
+            legal = np.flatnonzero(env.legal_mask())
+            seen.append((env.game.current, env._observe(), env.legal_mask()))
+            env.step(int(rng.choice(legal)))
+        if env.game.phase != "play":
+            continue
+        me = rng.randrange(4)
+        steps = auction_steps(env, me)
+        expected = [x for x in seen if x[0] != me]
+        assert len(steps) == len(expected)
+        for (seat, obs, mask, _a), (seat2, obs2, mask2) in zip(steps, expected):
+            obs = obs.copy()
+            for c in env.game.dealt[seat]:
+                obs[OFFSET["hand"] + CARD_INDEX[c]] = 1
+            assert seat == seat2 and np.array_equal(obs, obs2) and np.array_equal(mask, mask2)
+            n += 1
+    return n
+
+
+def check_auction_weights(network):
+    """Poids finis ; la vraie répartition n'est jamais impossible."""
+    rng = random.Random(5)
+    for k in range(20):
+        env = play_until(CoincheEnv(bidding=True, seed=300 + k), rng, rng.randrange(0, 20))
+        if env is None:
+            continue
+        me = env.game.current
+        true = {s: list(env.game.hands[s]) for s in range(4) if s != me}
+        pool = [sample_hidden_hands(env, me, rng) for _ in range(10)] + [true]
+        logw = auction_log_weights(network, env, me, pool, temperature=2.0)
+        assert logw.shape == (11,) and np.all(np.isfinite(logw)) and np.all(logw <= 0)
 
 
 def check_clone_independent():
@@ -91,10 +134,13 @@ def main():
                                  hidden_size=32)
     network.eval()
     n = check_samples()
+    b = check_auction_replay()
+    check_auction_weights(network)
     check_clone_independent()
     t = check_no_cheating(network)
     check_full_deals(network)
-    print(f"Recherche PIMC à 4 ({n} tirages conformes aux déductions, {t} décisions sans triche, donnes complètes) : OK")
+    print(f"Recherche PIMC à 4 ({n} tirages conformes aux déductions, {b} annonces revues à l'identique, "
+          f"{t} décisions sans triche, donnes complètes) : OK")
 
 
 if __name__ == "__main__":
