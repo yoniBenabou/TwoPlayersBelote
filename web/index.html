@@ -243,14 +243,13 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
 .modal table.tricks .cardcell .card.win { box-shadow: 0 0 0 2.5px var(--gold), 0 3px 8px rgba(0,0,0,.35); }
 .modal table.tricks .cardcell.lead { position: relative; }
 .modal table.tricks .cardcell.lead::after { content: ""; position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: 5px; height: 5px; border-radius: 50%; background: var(--muted); }
-.modal table.tricks td.winner { font-weight: 700; white-space: nowrap; }
+.modal table.tricks td.pts.us { color: var(--gold); } .modal table.tricks td.pts.them { color: var(--blue); }
 .modal table.tricks td.pts { font-weight: 700; color: var(--ink); white-space: nowrap; text-align: right; }
 .modal table.tricks td.pts small { display: block; font-size: 10px; font-weight: 500; color: var(--dim); }
 .modal table.tricks tfoot td { border-bottom: none; padding-top: 10px; font-weight: 700; color: var(--ink); text-align: left; }
 .modal table.tricks tfoot td.pts { text-align: right; }
 .modal .us { color: var(--gold); } .modal .them { color: var(--blue); }
-.modal table.summary { margin: 6px 0 4px; }
-.modal table.summary td, .modal table.summary th { padding: 5px 6px; }
+.modal table.tricks tfoot tr.score td { padding-top: 4px; font-size: 16px; font-weight: 800; }
 .modal.wide { padding-top: 18px; padding-bottom: 16px; }
 .modal.wide .foot { margin-top: 8px; }
 .verdict { display: inline-block; font-weight: 700; padding: 3px 10px; border-radius: 8px; font-size: 13px; margin-bottom: 6px; }
@@ -368,7 +367,7 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
   .modal table.tricks .cardcell .card .c .r { font-size: 12px; } .modal table.tricks .cardcell .card .c .s { font-size: 10px; }
   .modal.wide { padding-left: 12px; padding-right: 12px; }
   .tricks-wrap { overflow-x: auto; }
-  .modal table.tricks td.winner { max-width: 48px; overflow: hidden; text-overflow: ellipsis; }
+  .modal table.tricks tfoot td { font-size: 12.5px; } .modal table.tricks tfoot tr.score td { font-size: 14px; }
   .modal table.tricks td.pts small { display: none; }
 }
 </style>
@@ -727,27 +726,21 @@ function renderOverlay() {
   const r = s.result, c = s.contract;
   const ourContract = c && (c.by === "south" || c.by === "north");
   const good = ourContract ? r.made : !r.made;
-  // les points des plis sont déjà au bas du tableau des plis ; on ne les répète que pour un capot (250)
-  const rows = [...(r.capot ? [["Points des plis (capot = 250)", r.points[0], r.points[1]]] : []),
-                ["Belote-rebelote", r.belote[0], r.belote[1]],
-                ["Total pour le contrat", r.total[0], r.total[1]]];
   // les 8 plis : une ligne par pli, les cartes dans l'ordre des places (moi, Ouest, Nord, Est)
   const tricks = s.dealTricks || [];
   const trickRows = tricks.map((t, i) => `<tr>
       <td class="no">${i + 1}</td>
       ${SEATS.map((seat) => `<td class="cardcell" data-t="${i}" data-seat="${seat}"></td>`).join("")}
-      <td class="winner ${teamOf(t.winner) === 0 ? "us" : "them"}">${esc(name(t.winner))}</td>
-      <td class="pts">+${t.points}${i === 7 ? '<small>dont 10 de der</small>' : ""}</td></tr>`).join("");
-  const sumTeam = (team) => tricks.filter((t) => teamOf(t.winner) === team).reduce((a, t) => a + t.points, 0);
+      <td class="pts ${teamOf(t.winner) === 0 ? "us" : "them"}">+${t.points}${i === 7 ? '<small>dont 10 de der</small>' : ""}</td></tr>`).join("");
+  // total des plis par équipe (250 pour un capot), avec la mention « belote » quand elle compte
+  const teamLine = (t) => `<span class="${t ? "them" : "us"}">${t ? "Eux" : "Nous"} ${r.points[t]}${r.belote[t] ? " (belote)" : ""}</span>`;
   const tricksTable = tricks.length ? `<div class="tricks-wrap"><table class="tricks">
-      <thead><tr><th>Pli</th>${SEATS.map((seat) => `<th>${esc(name(seat))}</th>`).join("")}<th>Gagnant</th><th>Points</th></tr></thead>
+      <thead><tr><th>Pli</th>${SEATS.map((seat) => `<th>${esc(name(seat))}</th>`).join("")}<th>Points</th></tr></thead>
       <tbody>${trickRows}</tbody>
-      <tfoot><tr><td colspan="6">Total des plis : <span class="us">Nous ${sumTeam(0)}</span> · <span class="them">Eux ${sumTeam(1)}</span></td>
-        <td class="pts">${sumTeam(0) + sumTeam(1)}</td></tr></tfoot></table></div>` : "";
-  const notes = [];
-  if (r.mult === 1 && r.made) notes.push("Les points des deux équipes sont arrondis à la dizaine la plus proche.");
-  if (r.mult > 1) notes.push(`${r.mult === 2 ? "Coinché" : "Surcoinché"} : contrat × ${r.mult} + 160 pour ${r.made ? "l'équipe du contrat" : "la défense"}.`);
-  if (r.beloteNeeded && r.mult > 1) notes.push("La belote était nécessaire pour faire le contrat : elle ne rapporte rien.");
+      <tfoot>
+        <tr><td colspan="6">Total des plis : ${teamLine(0)} · ${teamLine(1)}</td></tr>
+        <tr class="score"><td colspan="6">Score de la manche : <span class="us">Nous +${r.scores[0]}</span> · <span class="them">Eux +${r.scores[1]}</span></td></tr>
+      </tfoot></table></div>` : "";
   let head;
   if (s.gameOver) head = s.totals[0] > s.totals[1] ? "Victoire ! 🎉" : "Défaite";
   else head = `Contrat ${r.made ? "réussi" : "chuté"}`;
@@ -755,11 +748,6 @@ function renderOverlay() {
     ${c ? `<span class="verdict ${good ? "ok" : "ko"}">${esc(c.label)}${c.mult > 1 ? " ×" + c.mult : ""} par ${esc(name(c.by))} : ${r.made ? "réussi" : "chuté"}</span>` : ""}
     ${r.capot ? `<p>Capot pour ${r.capot === s.teams[0] ? "nous" : "eux"} !</p>` : ""}
     ${tricksTable}
-    <table class="summary"><tr><th></th><th>Nous</th><th>Eux</th></tr>
-      ${rows.map((x) => `<tr><td>${x[0]}</td><td>${x[1]}</td><td>${x[2]}</td></tr>`).join("")}
-      <tr class="total"><td>Score de la donne</td><td>+${r.scores[0]}</td><td>+${r.scores[1]}</td></tr>
-      <tr><td>Total de la partie</td><td>${s.totals[0]}</td><td>${s.totals[1]}</td></tr></table>
-    ${notes.map((n) => `<p>${n}</p>`).join("")}
     <div class="foot">${s.gameOver ? '<button class="btn" id="ov-menu">Nouvelle partie</button>' : ""}<button class="btn gold" id="ov-btn">${s.gameOver ? "Rejouer" : "Donne suivante"}</button></div>`;
   $("modal").querySelectorAll(".cardcell").forEach((td) => {
     const t = tricks[+td.dataset.t];
