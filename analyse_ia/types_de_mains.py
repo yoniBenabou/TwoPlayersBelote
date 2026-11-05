@@ -4,8 +4,10 @@ de main parmi toutes les mains où elle fait cette annonce.
 Type de main, lu dans la couleur annoncée (pour une passe : dans la meilleure couleur de la main) :
 - les majeures d'atout : Valet + 9, Valet, 9, ou aucune ;
 - le nombre d'autres atouts (en plus des majeures ; l'As d'atout compte comme un autre atout) ;
-- le nombre d'As hors atout.
-Exemple : « V + 2 atouts + 1 As » = le Valet, deux autres atouts (3 atouts en tout) et un As à côté.
+- le nombre d'As hors atout ;
+- le nombre de couleurs de la main (2, 3 ou 4).
+Exemple : « V + 2 atouts + 1 As · 3 couleurs » = le Valet, deux autres atouts (3 atouts en tout), un As à
+côté, et une couleur absente de la main.
 
 On part des choix de l'IA pour les 10 518 300 mains possibles (donnees/ouvertures.npz, voir
 toutes_ouvertures.py) : comme chaque main est aussi probable qu'une autre, ces parts sont exactes.
@@ -36,21 +38,22 @@ def hand_types(masks, ref_suit):
     major = np.where(v & n9, 0, np.where(v, 1, np.where(n9, 2, 3)))
     others = trumps - v.astype(np.int8) - n9.astype(np.int8)
     aces = sum(bit(masks, 8 * s + ACE) for s in range(4)).astype(np.int8) - has(ACE).astype(np.int8)
-    return major.astype(np.int16) * 100 + others.astype(np.int16) * 10 + aces.astype(np.int16)
+    colours = sum((sum(bit(masks, 8 * s + r) for r in range(8)) > 0).astype(np.int8) for s in range(4))
+    return (major.astype(np.int16) * 1000 + others.astype(np.int16) * 100 + aces.astype(np.int16) * 10
+            + colours.astype(np.int16))
 
 
 def type_name(code):
-    major, others, aces = code // 100, code // 10 % 10, code % 10
+    major, others, aces, colours = code // 1000, code // 100 % 10, code // 10 % 10, code % 10
     parts = [MAJORS[major]]
     if others:
-        parts.append(f"{others} atout{'s' if others > 1 else ''}" if major < 3 else
-                     f"{others} atout{'s' if others > 1 else ''}")
+        parts.append(f"{others} atout{'s' if others > 1 else ''}")
     elif major == 3:
         parts.append("aucun atout")
     if aces:
         parts.append(f"{aces} As")
-    name = " + ".join(parts)
-    return name.replace("ni V ni 9 + ", "ni V ni 9, ")
+    name = " + ".join(parts).replace("ni V ni 9 + ", "ni V ni 9, ")
+    return f"{name} · {colours} couleurs"
 
 
 def best_suit(masks):
@@ -86,8 +89,8 @@ def main():
     out("Pour chaque annonce de l'IA quand elle parle la première : la part de chaque type de main parmi "
         "toutes les mains où elle fait cette annonce (sur les 10 518 300 mains possibles, donc des parts exactes). "
         "Type de main lu dans la couleur annoncée (pour la passe : dans sa meilleure couleur) : majeures d'atout, "
-        "nombre d'**autres** atouts, As hors atout. Exemple : « V + 2 atouts + 1 As » = le Valet, deux autres "
-        "atouts (3 atouts en tout) et un As à côté.\n")
+        "nombre d'**autres** atouts, As hors atout, nombre de couleurs en main. Exemple : « V + 2 atouts + 1 As · "
+        "3 couleurs » = le Valet, deux autres atouts (3 atouts en tout), un As à côté et une couleur absente.\n")
     out(f"Les types sont listés du plus fréquent au moins fréquent, jusqu'à {args.seuil:.0f} % de l'annonce "
         f"(et pas en dessous de {args.min:g} %).\n")
     for lv in [c for c in CONTRACTS if (level == c).any()] + [0]:

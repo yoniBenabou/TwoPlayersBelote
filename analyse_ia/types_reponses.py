@@ -3,7 +3,7 @@ passé ; pour chaque réponse (passe, +10, +20, +30, autre couleur…), la part 
 toutes les mains où elle fait cette réponse.
 
 Type de main (comme types_de_mains.py) : majeures d'atout (Valet + 9, Valet, 9, aucune), nombre
-d'autres atouts, nombre d'As hors atout. Il est lu dans la couleur du partenaire, sauf quand l'IA
+d'autres atouts, nombre d'As hors atout, nombre de couleurs en main (2, 3 ou 4). Il est lu dans la couleur du partenaire, sauf quand l'IA
 annonce une autre couleur : il est alors lu dans la couleur qu'elle annonce.
 
 On part des choix de l'IA pour les 10 518 300 mains possibles et les 20 ouvertures possibles du
@@ -52,9 +52,9 @@ def main():
     out("Son partenaire ouvre (80 à 120), l'adversaire suivant passe, l'IA répond. Pour chaque réponse : la part "
         "de chaque type de main parmi toutes les mains où elle fait cette réponse (10 518 300 mains × 4 couleurs "
         "d'ouverture regroupées, donc des parts exactes, chaque main comptant pareil).\n")
-    out("Type de main : majeures d'atout, nombre d'**autres** atouts, As hors atout, lu **dans la couleur du "
-        "partenaire** (pour « Autre couleur » : dans la couleur qu'elle annonce). Exemple : « V + 2 atouts + 1 As » "
-        "= le Valet, deux autres atouts (3 atouts en tout) et un As à côté.\n")
+    out("Type de main : majeures d'atout, nombre d'**autres** atouts, As hors atout, nombre de couleurs en main, lu **dans la couleur du "
+        "partenaire** (pour « Autre couleur » : dans la couleur qu'elle annonce). Exemple : « V + 2 atouts + 1 As · 3 couleurs » "
+        "= le Valet, deux autres atouts (3 atouts en tout), un As à côté et une couleur absente.\n")
     out(f"Les types sont listés du plus fréquent au moins fréquent, jusqu'à {args.seuil:.0f} % de la réponse "
         f"(et pas en dessous de {args.min:g} %). Une réponse donnée par moins de 0,5 % des mains n'a pas de tableau.\n")
     for i, lv in enumerate(LEVELS):

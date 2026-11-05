@@ -47,7 +47,7 @@ Ces règles sont des **tendances** : chaque case des rapports donne la part exac
 | `toutes_ouvertures.py` | passe les 10 518 300 mains dans le réseau quand l'IA parle la première |
 | `toutes_reponses.py` | la même chose pour ses réponses aux 20 ouvertures possibles du partenaire (80 à 120 × 4 couleurs) |
 | `echantillon.py` | première analyse sur des donnes tirées au hasard, et surtout le test d'une main précise |
-| `types_de_mains.py` | pour chaque ouverture (80, 90…), la part de chaque type de main (ex. « 13 % des 80 sont des V + 2 atouts + 1 As ») |
+| `types_de_mains.py` | pour chaque ouverture (80, 90…), la part de chaque type de main : majeures d'atout, autres atouts, As hors atout et nombre de couleurs (ex. « 10 % des 80 sont des V + 2 atouts + 1 As · 4 couleurs ») |
 | `rapports/types_ouvertures.md` | ces parts, annonce par annonce |
 | `types_reponses.py` | la même chose pour les réponses : sur 80, 90… du partenaire, quelles mains font passe, +10, +20, +30 ou une autre couleur |
 | `rapports/types_reponses.md` | ces parts, réponse par réponse |
