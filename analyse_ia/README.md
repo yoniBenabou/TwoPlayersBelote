@@ -47,6 +47,8 @@ Ces règles sont des **tendances** : chaque case des rapports donne la part exac
 | `toutes_ouvertures.py` | passe les 10 518 300 mains dans le réseau quand l'IA parle la première |
 | `toutes_reponses.py` | la même chose pour ses réponses aux 20 ouvertures possibles du partenaire (80 à 120 × 4 couleurs) |
 | `echantillon.py` | première analyse sur des donnes tirées au hasard, et surtout le test d'une main précise |
+| `types_de_mains.py` | pour chaque ouverture (80, 90…), la part de chaque type de main (ex. « 13 % des 80 sont des V + 2 atouts + 1 As ») |
+| `rapports/types_ouvertures.md` | ces parts, annonce par annonce |
 | `rapports/ouvertures.md` | tous les tableaux des ouvertures (résultats exacts) |
 | `rapports/reponses.md` | tous les tableaux des réponses (résultats exacts) |
 | `rapports/echantillon.md` | le rapport de la première analyse (échantillon) |
@@ -59,6 +61,7 @@ Ces règles sont des **tendances** : chaque case des rapports donne la part exac
 ```bash
 python -m analyse_ia.toutes_ouvertures --calcul      # ≈ 1 minute, puis le rapport
 python -m analyse_ia.toutes_reponses --calcul        # ≈ 10 minutes, puis le rapport
+python -m analyse_ia.types_de_mains                  # quelles mains derrière chaque ouverture
 python -m analyse_ia.echantillon --main "VP 9P AP 7P AC 10C RK 8T"
 python -m analyse_ia.echantillon --main "9P 8P AC AK 10K RT DT 7T" --apres 90P
 ```
