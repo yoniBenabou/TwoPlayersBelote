@@ -203,6 +203,9 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
 .suitrow button.red { color: var(--card-red); }
 .suitrow button:hover:not(:disabled) { box-shadow: 0 0 0 3px var(--gold); }
 .actrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.recent { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; margin: 2px 0 8px; color: var(--muted); }
+.recent i { font-style: normal; }
+.recent b { color: var(--ink); } .recent b.red { color: #ff8a8a; } .recent b.pass { color: var(--dim); font-weight: 600; }
 .actrow .btn { flex: 1; }
 .countdown { font-family: var(--display); font-size: 26px; color: var(--gold); }
 
@@ -300,6 +303,7 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
 .modal, #toast.show, .said.fresh { --x: 0; }
 .modal { animation-name: popm; } #toast.show { animation-name: popt; } .said.fresh { animation-name: pops; }
 @keyframes popm { from { transform: scale(.94); opacity: 0; } }
+@keyframes popb { from { transform: translateX(-50%) translateY(10px); opacity: 0; } }
 @keyframes popt { from { transform: translate(-50%, 10px); opacity: 0; } }
 @keyframes pops { from { transform: translateX(-50%) scale(.6); opacity: 0; } }
 @keyframes dealin { from { transform: translateY(-40px) rotate(-8deg); opacity: 0; } }
@@ -346,7 +350,15 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
   .slot .card { --cw: 46px; --ch: 66px; }
   .slot.south { margin-top: 48px; } .slot.north { margin-top: -48px; } .slot.west { margin-left: -40px; } .slot.east { margin-left: 40px; }
   .banner { font-size: 12px; max-width: 70%; }
-  .bidbox { width: calc(100% - 16px); padding: 12px; }
+  /* annonces : cadre compact collé en bas de la table, pour voir Nord, Ouest et Est au-dessus */
+  .bidbox { width: calc(100% - 16px); padding: 9px 10px 10px; top: auto; bottom: 6px; transform: translateX(-50%); border-radius: 13px; animation-name: popb; }
+  .bidbox h4 { font-size: 15px; margin-bottom: 2px; }
+  .bidbox .help { font-size: 11.5px; margin-bottom: 6px; }
+  .recent { font-size: 12px; margin: 0 0 6px; }
+  .vals { grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 6px; }
+  .suitrow { gap: 6px; margin-bottom: 8px; }
+  .suitrow button { font-size: 20px; padding: 3px 0; border-radius: 9px; }
+  .bidbox .btn { padding-top: 7px; padding-bottom: 7px; }
   /* dernier pli : petit, dans le coin */
   /* dernier pli sur téléphone : 2 × 2 cartes (moi, Ouest / Nord, Est), valeur et couleur en gros au centre */
   .last-trick { position: absolute; top: 8px; right: 8px; margin: 0; padding: 5px; border-radius: 10px; }
@@ -692,15 +704,16 @@ function banner(text) { $("banner").innerHTML = text; }
 // ---------- annonces ----------
 function renderBidding() {
   const s = view, box = $("bidbox");
-  if (busy || !(s.yourBid && s.bidOptions) && !s.coincheWindow && !s.canVolley) { box.classList.remove("show"); return; }
+  const volley = !s.yourBid && s.canVolley && volleyDismissed !== volleyKey();
+  if (busy || !(s.yourBid && s.bidOptions) && !s.coincheWindow && !volley) { box.classList.remove("show"); return; }
   box.classList.add("show");
   if (s.coincheWindow) return renderCoincheWindow(box);
-  if (!s.yourBid && s.canVolley) return renderVolley(box);
+  if (volley) return renderVolley(box);
   const o = s.bidOptions;
   const cur = s.contract ? `Annonce en cours : <b>${esc(s.contract.label)}</b>${s.contract.mult > 1 ? ` ×${s.contract.mult}` : ""} (${esc(name(s.contract.by))})`
     : "Personne n'a encore annoncé.";
   if (selectedValue !== null && !o.values.some((v) => v.value === selectedValue)) selectedValue = null;
-  box.innerHTML = `<h4>À toi d'annoncer</h4><div class="help">${cur}</div>
+  box.innerHTML = `<h4>À toi d'annoncer</h4>${recentBids()}<div class="help">${cur}</div>
     ${o.values.length ? `<div class="vals">${o.values.map((v) => `<button data-v="${v.value}" class="${selectedValue === v.value ? "sel" : ""}">${v.label}</button>`).join("")}</div>
     <div class="suitrow">${o.suits.map((su) => `<button data-s="${su.name}" class="${su.color === "red" ? "red" : ""}" ${selectedValue === null ? "disabled" : ""} title="${su.name}">${su.symbol}</button>`).join("")}</div>` : ""}
     <div class="actrow"><button class="btn" id="b-pass">Passer</button>
@@ -729,7 +742,7 @@ function startCoincheTimer() {
 }
 function renderCoincheWindow(box) {
   const last = view.bids[view.bids.length - 1];
-  box.innerHTML = `<h4>Coincher ${esc(name(last.seat))} ?</h4>
+  box.innerHTML = `<h4>Coincher ${esc(name(last.seat))} ?</h4>${recentBids()}
     <div class="help">${esc(name(last.seat))} vient d'annoncer <b>${esc(last.label)}</b>. Tu peux coincher avant que ${esc(name("north"))} parle.</div>
     <div class="actrow" style="align-items:center"><span class="countdown" id="coinche-count">${Math.max(0, Math.ceil((coincheDeadline - Date.now()) / 1000))}</span>
     <button class="btn red" id="cw-yes">Coinche ! ×2</button><button class="btn" id="cw-no">Laisser parler</button></div>`;
@@ -737,13 +750,24 @@ function renderCoincheWindow(box) {
   $("cw-no").onclick = () => { stopCoincheTimer(); act("/api/continue", {}); };
 }
 
-// à deux : coinche à la volée, hors de mon tour, tant que le contrat adverse n'est pas coinché
+// dernières annonces (un tour de table), pour les voir même quand le cadre cache la table (téléphone)
+function recentBids() {
+  const bids = view.bids.slice(-4);
+  if (!bids.length) return "";
+  return `<div class="recent">${bids.map((b) => `<span><i>${esc(name(b.seat))}</i> <b class="${b.label === "Pass" ? "pass" : bidRed(b.label) ? "red" : ""}">${esc(bidFr(b.label))}</b></span>`).join("")}</div>`;
+}
+
+// à deux : coinche à la volée, hors de mon tour, tant que le contrat adverse n'est pas coinché ;
+// « Laisser passer » range le cadre jusqu'à la prochaine annonce adverse
+let volleyDismissed = null;
+const volleyKey = () => view && view.contract ? `${view.dealNo}:${view.contract.by}:${view.contract.label}` : null;
 function renderVolley(box) {
   const c = view.contract;
-  box.innerHTML = `<h4>Coincher à la volée ?</h4>
-    <div class="help">${esc(name(c.by))} a annoncé <b>${esc(c.label)}</b>. C'est à ${esc(name(view.current))} de parler, mais tu peux coincher tout de suite.</div>
-    <div class="actrow"><button class="btn red" id="v-coinche">Coinche ! ×2</button></div>`;
+  box.innerHTML = `<h4>Coincher ${esc(name(c.by))} ?</h4>${recentBids()}
+    <div class="help">${esc(name(c.by))} a annoncé <b>${esc(c.label)}</b>. Tu peux coincher à la volée avant que ${esc(name(view.current))} parle.</div>
+    <div class="actrow"><button class="btn red" id="v-coinche">Coinche ! ×2</button><button class="btn" id="v-pass">Laisser passer</button></div>`;
   $("v-coinche").onclick = () => act("/api/coinche-now", {});
+  $("v-pass").onclick = () => { volleyDismissed = volleyKey(); renderBidding(); };
 }
 
 // ---------- fenêtres ----------
