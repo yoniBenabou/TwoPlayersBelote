@@ -54,6 +54,8 @@ Ces règles sont des **tendances** : chaque case des rapports donne la part exac
 | `rapports/ouvertures.md` | tous les tableaux des ouvertures (résultats exacts) |
 | `rapports/reponses.md` | tous les tableaux des réponses (résultats exacts) |
 | `rapports/echantillon.md` | le rapport de la première analyse (échantillon) |
+| `jeu_complet.py` | l'IA joue les 4 places sur 150 000 donnes : contrats, enchères disputées (surenchère, coinche, surcoinche), entames, atouts, défausses ; et, coup par coup, ce que la recherche (PIMC) aurait joué à sa place |
+| `rapports/jeu_complet.md` | ces résultats ; section 7 : là où la recherche corrige le réseau (surtout l'entame, et des As gardés trop longtemps) |
 | `donnees/` | les choix de l'IA pour chaque main (≈ 65 Mo, **non versionné** : on le recrée avec `--calcul`) |
 
 ## Commandes
