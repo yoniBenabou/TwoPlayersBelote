@@ -353,7 +353,7 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
      annonces restent visibles ; les valeurs défilent avec les flèches */
   .bidbox { width: calc(100% - 168px); min-width: 206px; padding: 8px; top: 57%; border-radius: 13px; }
   .bidbox h4 { font-size: 14px; margin-bottom: 4px; text-align: center; }
-  .bidbox .help, .bidbox .recent { display: none; }
+  .bidbox .help, .bidbox .recent, .bidbox:not(.volley) h4 { display: none; }
   .bidbox.volley .help { display: block; font-size: 11px; margin-bottom: 6px; }
   .vals.strip { display: flex; gap: 4px; margin-bottom: 6px; }
   .vals.strip button { flex: 1; min-width: 0; padding: 7px 0; font-size: 13px; }
