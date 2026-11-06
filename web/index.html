@@ -303,7 +303,6 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
 .modal, #toast.show, .said.fresh { --x: 0; }
 .modal { animation-name: popm; } #toast.show { animation-name: popt; } .said.fresh { animation-name: pops; }
 @keyframes popm { from { transform: scale(.94); opacity: 0; } }
-@keyframes popb { from { transform: translateX(-50%) translateY(10px); opacity: 0; } }
 @keyframes popt { from { transform: translate(-50%, 10px); opacity: 0; } }
 @keyframes pops { from { transform: translateX(-50%) scale(.6); opacity: 0; } }
 @keyframes dealin { from { transform: translateY(-40px) rotate(-8deg); opacity: 0; } }
@@ -350,15 +349,22 @@ main { display: grid; grid-template-columns: minmax(0, 1100px); justify-content:
   .slot .card { --cw: 46px; --ch: 66px; }
   .slot.south { margin-top: 48px; } .slot.north { margin-top: -48px; } .slot.west { margin-left: -40px; } .slot.east { margin-left: 40px; }
   .banner { font-size: 12px; max-width: 70%; }
-  /* annonces : cadre compact collé en bas de la table, pour voir Nord, Ouest et Est au-dessus */
-  .bidbox { width: calc(100% - 16px); padding: 9px 10px 10px; top: auto; bottom: 6px; transform: translateX(-50%); border-radius: 13px; animation-name: popb; }
-  .bidbox h4 { font-size: 15px; margin-bottom: 2px; }
-  .bidbox .help { font-size: 11.5px; margin-bottom: 6px; }
-  .recent { font-size: 12px; margin: 0 0 6px; }
-  .vals { grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 6px; }
-  .suitrow { gap: 6px; margin-bottom: 8px; }
-  .suitrow button { font-size: 20px; padding: 3px 0; border-radius: 9px; }
-  .bidbox .btn { padding-top: 7px; padding-bottom: 7px; }
+  /* annonces : petit cadre entre Ouest et Est (comme les applis de coinche) : Nord, Ouest, Est et leurs
+     annonces restent visibles ; les valeurs défilent avec les flèches */
+  .bidbox { width: calc(100% - 168px); min-width: 206px; padding: 8px; top: 57%; border-radius: 13px; }
+  .bidbox h4 { font-size: 14px; margin-bottom: 4px; text-align: center; }
+  .bidbox .help, .bidbox .recent { display: none; }
+  .bidbox.volley .help { display: block; font-size: 11px; margin-bottom: 6px; }
+  .vals.strip { display: flex; gap: 4px; margin-bottom: 6px; }
+  .vals.strip button { flex: 1; min-width: 0; padding: 7px 0; font-size: 13px; }
+  .vals.strip .arr { flex: 0 0 24px; background: transparent; border-color: transparent; color: var(--gold); font-size: 12px; }
+  .vals.strip .arr:disabled { color: var(--dim); opacity: .4; }
+  .suitrow { gap: 4px; margin-bottom: 6px; }
+  .suitrow button { font-size: 19px; padding: 2px 0; border-radius: 8px; }
+  .bidbox .actrow { gap: 5px; flex-wrap: nowrap; }
+  .bidbox .btn { flex: 1; padding: 7px 4px; font-size: 13px; white-space: nowrap; }
+  .countdown { font-size: 14px; }
+  .bidbox.volley .actrow { flex-wrap: wrap; }
   /* dernier pli : petit, dans le coin */
   /* dernier pli sur téléphone : 2 × 2 cartes (moi, Ouest / Nord, Est), valeur et couleur en gros au centre */
   .last-trick { position: absolute; top: 8px; right: 8px; margin: 0; padding: 5px; border-radius: 10px; }
@@ -702,25 +708,41 @@ async function gatherTrick(winner) {
 function banner(text) { $("banner").innerHTML = text; }
 
 // ---------- annonces ----------
+const PHONE = window.matchMedia("(max-width: 720px)");
+const VALS_SHOWN = 3;
+let valsStart = 0, valsKey = "";
+PHONE.addEventListener("change", () => view && renderBidding());
 function renderBidding() {
   const s = view, box = $("bidbox");
   const volley = !s.yourBid && s.canVolley && volleyDismissed !== volleyKey();
   if (busy || !(s.yourBid && s.bidOptions) && !s.coincheWindow && !volley) { box.classList.remove("show"); return; }
   box.classList.add("show");
+  box.classList.remove("volley");
   if (s.coincheWindow) return renderCoincheWindow(box);
   if (volley) return renderVolley(box);
   const o = s.bidOptions;
   const cur = s.contract ? `Annonce en cours : <b>${esc(s.contract.label)}</b>${s.contract.mult > 1 ? ` ×${s.contract.mult}` : ""} (${esc(name(s.contract.by))})`
     : "Personne n'a encore annoncé.";
   if (selectedValue !== null && !o.values.some((v) => v.value === selectedValue)) selectedValue = null;
+  // téléphone : les valeurs sur une ligne, VALS_SHOWN à la fois, avec des flèches (cadre étroit, la table reste visible)
+  const narrow = PHONE.matches;
+  const key = o.values.map((v) => v.value).join(",");
+  if (key !== valsKey) { valsKey = key; valsStart = 0; }
+  valsStart = Math.max(0, Math.min(valsStart, o.values.length - VALS_SHOWN));
+  const shown = narrow ? o.values.slice(valsStart, valsStart + VALS_SHOWN) : o.values;
+  const valBtn = (v) => `<button data-v="${v.value}" class="${selectedValue === v.value ? "sel" : ""}">${v.label}</button>`;
+  const vals = narrow
+    ? `<div class="vals strip"><button class="arr" data-shift="-1" ${valsStart === 0 ? "disabled" : ""}>◀</button>${shown.map(valBtn).join("")}<button class="arr" data-shift="1" ${valsStart + VALS_SHOWN >= o.values.length ? "disabled" : ""}>▶</button></div>`
+    : `<div class="vals">${o.values.map(valBtn).join("")}</div>`;
   box.innerHTML = `<h4>À toi d'annoncer</h4>${recentBids()}<div class="help">${cur}</div>
-    ${o.values.length ? `<div class="vals">${o.values.map((v) => `<button data-v="${v.value}" class="${selectedValue === v.value ? "sel" : ""}">${v.label}</button>`).join("")}</div>
+    ${o.values.length ? `${vals}
     <div class="suitrow">${o.suits.map((su) => `<button data-s="${su.name}" class="${su.color === "red" ? "red" : ""}" ${selectedValue === null ? "disabled" : ""} title="${su.name}">${su.symbol}</button>`).join("")}</div>` : ""}
     <div class="actrow"><button class="btn" id="b-pass">Passer</button>
     ${o.coinche ? '<button class="btn red" id="b-coinche">Coinche ! ×2</button>' : ""}
     ${o.surcoinche ? '<button class="btn red" id="b-sur">Surcoinche ! ×3</button>' : ""}</div>
     ${o.values.length ? `<div class="help" style="margin:8px 0 0">${selectedValue === null ? "Choisis une valeur, puis une couleur d'atout." : "Choisis la couleur d'atout."}</div>` : ""}`;
   box.querySelectorAll("[data-v]").forEach((b) => (b.onclick = () => { selectedValue = +b.dataset.v; renderBidding(); }));
+  box.querySelectorAll("[data-shift]").forEach((b) => (b.onclick = () => { valsStart += +b.dataset.shift * VALS_SHOWN; renderBidding(); }));
   box.querySelectorAll("[data-s]").forEach((b) => (b.onclick = () => bid({ kind: "bid", value: selectedValue, suit: b.dataset.s })));
   $("b-pass").onclick = () => bid({ kind: "pass" });
   if (o.coinche) $("b-coinche").onclick = () => bid({ kind: "coinche" });
@@ -741,6 +763,7 @@ function startCoincheTimer() {
   }, 100);
 }
 function renderCoincheWindow(box) {
+  box.classList.add("volley");
   const last = view.bids[view.bids.length - 1];
   box.innerHTML = `<h4>Coincher ${esc(name(last.seat))} ?</h4>${recentBids()}
     <div class="help">${esc(name(last.seat))} vient d'annoncer <b>${esc(last.label)}</b>. Tu peux coincher avant que ${esc(name("north"))} parle.</div>
@@ -762,6 +785,7 @@ function recentBids() {
 let volleyDismissed = null;
 const volleyKey = () => view && view.contract ? `${view.dealNo}:${view.contract.by}:${view.contract.label}` : null;
 function renderVolley(box) {
+  box.classList.add("volley");
   const c = view.contract;
   box.innerHTML = `<h4>Coincher ${esc(name(c.by))} ?</h4>${recentBids()}
     <div class="help">${esc(name(c.by))} a annoncé <b>${esc(c.label)}</b>. Tu peux coincher à la volée avant que ${esc(name(view.current))} parle.</div>
