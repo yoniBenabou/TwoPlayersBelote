@@ -102,14 +102,18 @@ def load(data_dir):
     return data, len(files)
 
 
-def targets(data, tau):
+def targets(data, tau, prior=False):
     """Cible de la politique pour chaque décision : notes adoucies de la recherche quand elle a noté
-    les cartes (au moins 2 jouables), sinon les probabilités du réseau de départ."""
+    les cartes (au moins 2 jouables), sinon les probabilités du réseau de départ. prior : la cible part
+    des probabilités du réseau et les multiplie par exp(note / tau) (on ne s'écarte du réseau que là où
+    la recherche voit un écart net ; sans prior, les notes bruitées de la recherche remplacent tout)."""
     values = data["values"].astype(np.float64)
     searched = ~np.isnan(values).all(axis=1)
     target = data["net_probs"].astype(np.float32)
     v = values[searched]
     z = np.where(np.isnan(v), -np.inf, v / tau)
+    if prior:
+        z = z + np.log(np.maximum(target[searched].astype(np.float64), 1e-8))
     z -= z.max(axis=1, keepdims=True)
     p = np.exp(z)
     target[searched] = (p / p.sum(axis=1, keepdims=True)).astype(np.float32)
@@ -119,7 +123,7 @@ def targets(data, tau):
 def train(args):
     t0 = time.time()
     data, n_files = load(args.data_dir)
-    target, searched = targets(data, args.tau)
+    target, searched = targets(data, args.tau, args.prior)
     n = len(target)
     print(f"{n_files} fichiers, {n} décisions dont {searched.sum()} cartes notées par la recherche", flush=True)
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -206,6 +210,8 @@ def main():
     parser.add_argument("--save-every", type=int, default=200)
     parser.add_argument("--out", help="--train : modèle écrit")
     parser.add_argument("--tau", type=float, default=20.0, help="--train : adoucissement des notes (points)")
+    parser.add_argument("--prior", action="store_true",
+                        help="--train : cible = probabilités du réseau × exp(note / tau) au lieu des notes seules")
     parser.add_argument("--epochs", type=int, default=4)
     parser.add_argument("--batch", type=int, default=4096)
     parser.add_argument("--lr", type=float, default=2e-4)

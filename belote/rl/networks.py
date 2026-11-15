@@ -19,16 +19,16 @@ class ActorCriticNetwork(nn.Module):
     l'activation les rendrait inutilisables au rechargement.
     """
 
-    def __init__(self, obs_size: int = OBS_SIZE, num_actions: int = NUM_CARDS, hidden_size: int = 128):
+    def __init__(self, obs_size: int = OBS_SIZE, num_actions: int = NUM_CARDS, hidden_size: int = 128,
+                 n_layers: int = 2):
         super().__init__()
         self.obs_size = obs_size
         self.num_actions = num_actions
-        self.trunk = nn.Sequential(
-            nn.Linear(obs_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
-        )
+        layers, width = [], obs_size
+        for _ in range(n_layers):
+            layers += [nn.Linear(width, hidden_size), nn.ReLU()]
+            width = hidden_size
+        self.trunk = nn.Sequential(*layers)
         self.policy_head = nn.Linear(hidden_size, num_actions)
         self.value_head = nn.Linear(hidden_size, 1)
 
@@ -58,7 +58,8 @@ class ActorCriticNetwork(nn.Module):
         state = torch.load(path, map_location="cpu")
         hidden_size, obs_size = state["trunk.0.weight"].shape
         num_actions = state["policy_head.weight"].shape[0]
-        network = cls(obs_size=obs_size, num_actions=num_actions, hidden_size=hidden_size)
+        n_layers = sum(1 for k in state if k.startswith("trunk.") and k.endswith(".weight"))
+        network = cls(obs_size=obs_size, num_actions=num_actions, hidden_size=hidden_size, n_layers=n_layers)
         network.load_state_dict(state)
         return network
 
@@ -92,7 +93,11 @@ class ActorCriticNetwork(nn.Module):
             self.value_head.bias.copy_(old["value_head.bias"])
 
     def forward(self, obs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """obs: (..., obs_size) -> logits: (..., num_actions), value: (...)"""
+        """obs: (..., obs_size) -> logits: (..., num_actions), value: (...)
+        Une observation plus longue que prévu (blocs ajoutés à la fin depuis l'entraînement de ce
+        réseau, ex. l'ordre des plis à la Coinche) est coupée : un ancien modèle marche toujours."""
+        if obs.shape[-1] > self.obs_size:
+            obs = obs[..., :self.obs_size]
         features = self.trunk(obs)
         logits = self.policy_head(features)
         value = self.value_head(features).squeeze(-1)

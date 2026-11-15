@@ -81,6 +81,12 @@ OBS_BLOCKS = [
     ("winning", 4),                    # place relative maîtresse du pli en cours
     ("belote", 4),                     # place relative qui a annoncé belote
     ("phase", 1),                      # 1 pendant les annonces
+    # ordre des plis (ajouté à la fin : les anciens réseaux ne lisent que le début de l'observation)
+    ("when", NUM_CARDS),               # carte jouée au pli k (0..7) : (k + 1) / 8 ; 0 si pas encore jouée
+    ("led", NUM_CARDS),                # carte qui a ouvert son pli
+    ("offsuit", NUM_CARDS),            # carte jouée hors de la couleur demandée (coupe ou défausse)
+    ("led_suit", 8 * 4),               # couleur demandée à chaque pli
+    ("trick_winner", 8 * 4),           # place relative qui a gagné chaque pli fini
 ]
 OBS_SIZE = sum(size for _, size in OBS_BLOCKS)
 OFFSET = {}
@@ -259,6 +265,20 @@ class CoincheEnv:
         for trick, _winner in game.tricks:
             for s, c in trick:
                 obs[OFFSET["played"] + rel(s) * NUM_CARDS + CARD_INDEX[c]] = 1
+        # ordre des plis (finis, puis celui en cours)
+        tricks = [t for t, _ in game.tricks] + ([game.trick] if game.phase == "play" and game.trick else [])
+        for k, trick in enumerate(tricks):
+            led = trick[0][1].suit
+            obs[OFFSET["led_suit"] + 4 * k + SUIT_INDEX[led]] = 1
+            for i, (s, c) in enumerate(trick):
+                j = CARD_INDEX[c]
+                obs[OFFSET["when"] + j] = (k + 1) / 8
+                if i == 0:
+                    obs[OFFSET["led"] + j] = 1
+                elif c.suit != led:
+                    obs[OFFSET["offsuit"] + j] = 1
+        for k, (_trick, winner) in enumerate(game.tricks):
+            obs[OFFSET["trick_winner"] + 4 * k + rel(winner)] = 1
         if game.phase == "play":
             for s, c in game.trick:
                 obs[OFFSET["trick"] + (rel(s) - 1) * NUM_CARDS + CARD_INDEX[c]] = 1

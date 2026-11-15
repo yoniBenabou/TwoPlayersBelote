@@ -5,7 +5,10 @@ Self-play : un seul réseau joue les 4 places (chacune vue de sa position).
 le réseau apprend à jouer les cartes. --bidding : le réseau fait aussi les
 annonces. --vs-bots-share : part des donnes jouées contre une équipe de
 robots ; --bots : les conventions de ces robots (tirées au hasard à chaque
-donne), par ex. petitjeu,papirobert,asr. Évaluation régulière contre chaque
+donne), par ex. petitjeu,papirobert,asr. --league-share : part des donnes
+jouées contre une ancienne version du réseau (la « ligue » : le modèle de
+départ, les modèles de --league-pool et chaque checkpoint de l'entraînement),
+pour qu'il ne s'habitue pas qu'à ses propres manies. Évaluation régulière contre chaque
 convention, en donnes dupliquées (chaque donne jouée deux fois, l'IA d'un
 côté puis de l'autre) et en parties complètes en 1 500 points.
 
@@ -13,6 +16,7 @@ côté puis de l'autre) et en parties complètes en 1 500 points.
     python -m scripts.train_coinche --out-dir /chemin/run --resume
 """
 import argparse
+import glob
 import json
 import math
 import os
@@ -41,7 +45,7 @@ RESUME_FILE = os.path.join(CHECKPOINT_DIR, "resume_state.pt")
 FINISHED_MARKER = "=== Entraînement terminé ==="
 N_ENVS = 32  # donnes jouées en parallèle pendant la collecte
 CONFIG_KEYS = ("total_deals", "rollout_deals", "eval_every", "lr", "entropy_coef", "seed", "bidding",
-               "hidden_size", "vs_bots_share", "init_from", "bots")
+               "hidden_size", "n_layers", "vs_bots_share", "init_from", "bots", "league_share", "league_pool")
 BOT_KINDS = {"simple": CoincheBot, "petitjeu": PetitJeuBot, "papirobert": PapiRobertBot, "asr": AsRBot}
 DEFAULT_BOT = CoincheBot()  # annonces des places non jouées par le réseau en self-play (mode sans annonces)
 
@@ -72,7 +76,25 @@ def collect_deal(env, agent, learner_seats):
     return buffer
 
 
-def collect_rollout(envs, agent, n_deals, vs_bots_share, bots=(DEFAULT_BOT,)):
+def league_action(network, env):
+    """Coup d'une ancienne version du réseau (tiré selon ses probabilités, comme en self-play)."""
+    mask = torch.as_tensor(env.legal_mask())
+    with torch.no_grad():
+        logits, _ = network(torch.as_tensor(env._observe()))
+    probs = torch.softmax(logits.masked_fill(~mask, float("-inf")), dim=-1)
+    return int(torch.multinomial(probs, 1))
+
+
+def load_league(paths):
+    league = []
+    for path in paths:
+        net = ActorCriticNetwork.from_checkpoint(path)
+        net.eval()
+        league.append(net)
+    return league
+
+
+def collect_rollout(envs, agent, n_deals, vs_bots_share, bots=(DEFAULT_BOT,), league=(), league_share=0.0):
     """n_deals donnes jouées en parallèle sur les environnements envs : à
     chaque pas, un seul passage du réseau pour toutes les places qui attendent
     une décision (beaucoup plus rapide que donne par donne). Même résultat
@@ -85,21 +107,31 @@ def collect_rollout(envs, agent, n_deals, vs_bots_share, bots=(DEFAULT_BOT,)):
         nonlocal started
         if started >= n_deals:
             return None
-        if vs_bots_share and random.random() < vs_bots_share:
+        r = random.random()
+        opponent = None
+        if vs_bots_share and r < vs_bots_share:
             team = started % 2
             seats = {team, team + 2}
             env.bot = random.choice(bots)
+        elif league and r < vs_bots_share + league_share:
+            team = started % 2
+            seats = {team, team + 2}
+            opponent = random.choice(league)
+            env.bot = DEFAULT_BOT
         else:
             seats = {0, 1, 2, 3}
             env.bot = DEFAULT_BOT
         started += 1
-        obs = env.reset(bid_seats=seats if env.bidding else None)
-        return {"trans": [], "last": {}, "seats": seats, "obs": obs}
+        # contre la ligue, l'ancienne version annonce elle-même : l'environnement ne fait annoncer personne
+        bid_seats = ({0, 1, 2, 3} if opponent is not None else seats) if env.bidding else None
+        obs = env.reset(bid_seats=bid_seats)
+        return {"trans": [], "last": {}, "seats": seats, "obs": obs, "opponent": opponent}
 
     def advance_bots(env, slot):
-        """Joue les robots jusqu'au tour du réseau ; True si la donne est finie."""
+        """Joue les robots (ou l'ancienne version) jusqu'au tour du réseau ; True si la donne est finie."""
         while not env.done and env.current not in slot["seats"]:
-            slot["obs"], slot["rewards"], _ = env.step(env.play_bot())
+            action = env.play_bot() if slot["opponent"] is None else league_action(slot["opponent"], env)
+            slot["obs"], slot["rewards"], _ = env.step(action)
         return env.done
 
     def finish(env, slot):
@@ -222,7 +254,8 @@ def save_resume(network, optimizer, deals, next_eval):
 
 
 def train(total_deals=5_000_000, rollout_deals=128, eval_every=50_000, lr=3e-4, entropy_coef=0.01, seed=None,
-          bidding=False, hidden_size=256, vs_bots_share=0.0, init_from=None, resume=False, bots="simple"):
+          bidding=False, hidden_size=256, n_layers=2, vs_bots_share=0.0, init_from=None, resume=False, bots="simple",
+          league_share=0.0, league_pool=None):
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
@@ -236,7 +269,8 @@ def train(total_deals=5_000_000, rollout_deals=128, eval_every=50_000, lr=3e-4, 
     bot_list = [BOT_KINDS[name]() for name in bot_names]
     envs = [CoincheEnv(bidding=bidding, seed=None if seed is None else seed * 1000 + i) for i in range(N_ENVS)]
     env = envs[0]
-    network = ActorCriticNetwork(obs_size=env.obs_size, num_actions=env.num_actions, hidden_size=hidden_size)
+    network = ActorCriticNetwork(obs_size=env.obs_size, num_actions=env.num_actions, hidden_size=hidden_size,
+                                   n_layers=n_layers)
     if init_from and not resume:
         # démarrage à chaud (ex. étape 2 depuis le réseau de l'étape 1) : mêmes entrées, actions ajoutées à zéro
         old = torch.load(init_from, map_location="cpu")
@@ -263,6 +297,10 @@ def train(total_deals=5_000_000, rollout_deals=128, eval_every=50_000, lr=3e-4, 
         deals, next_eval = state["deals"], state["next_eval"]
         print(f"=== Reprise à {deals} donnes ===")
     print(f"=== Coinche à 4 : {total_deals} donnes, éval toutes les {eval_every} ===\nConfig : {config}", flush=True)
+    league_fixed = ([init_from] if init_from else []) + sorted(glob.glob(league_pool)) if league_pool else \
+        ([init_from] if init_from else [])
+    league = load_league(league_fixed + sorted(glob.glob(os.path.join(CHECKPOINT_DIR, "ppo_*.pt")))) \
+        if league_share else []
     t0 = time.time()
     while True:
         if deals >= next_eval:
@@ -277,11 +315,16 @@ def train(total_deals=5_000_000, rollout_deals=128, eval_every=50_000, lr=3e-4, 
                     if i == 0 and name != "simple":
                         writer.add_scalar(f"eval_{name}/{k}", v, deals)
             torch.save(network.state_dict(), os.path.join(CHECKPOINT_DIR, f"ppo_{deals:08d}.pt"))
+            if league_share:
+                # la ligue : modèles fixes + tous les checkpoints de cet entraînement (sauf celui du moment)
+                own = sorted(glob.glob(os.path.join(CHECKPOINT_DIR, "ppo_*.pt")))[:-1]
+                league = load_league(league_fixed + own)
+                print(f"  Ligue : {len(league)} anciennes versions", flush=True)
             next_eval += eval_every
             save_resume(network, optimizer, deals, next_eval)
         if deals >= total_deals:
             break
-        buffer = collect_rollout(envs, agent, rollout_deals, vs_bots_share, bot_list)
+        buffer = collect_rollout(envs, agent, rollout_deals, vs_bots_share, bot_list, league, league_share)
         if not buffer:
             continue
         metrics = ppo_update(agent, optimizer, buffer, entropy_coef=entropy_coef)
@@ -305,17 +348,22 @@ def main():
     parser.add_argument("--seed", type=int)
     parser.add_argument("--bidding", action="store_true", help="le réseau fait aussi les annonces")
     parser.add_argument("--hidden-size", type=int, default=256)
+    parser.add_argument("--n-layers", type=int, default=2, help="couches cachées du réseau")
     parser.add_argument("--vs-bots-share", type=float, default=0.0,
                         help="part des donnes jouées contre une équipe de robots (le reste en self-play)")
     parser.add_argument("--bots", default="simple",
                         help="conventions des robots adverses, séparées par des virgules : simple, petitjeu, papirobert, asr")
     parser.add_argument("--init-from", help="modèle .pt de départ (ex. étape 1 pour l'étape 2)")
+    parser.add_argument("--league-share", type=float, default=0.0,
+                        help="part des donnes jouées contre une ancienne version du réseau (la ligue)")
+    parser.add_argument("--league-pool", help="motif de fichiers .pt ajoutés à la ligue (ex. anciens checkpoints)")
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
     unknown = [b for b in args.bots.split(",") if b not in BOT_KINDS]
     if unknown:
         parser.error(f"robots inconnus : {unknown} (choix : {sorted(BOT_KINDS)})")
     init_from = os.path.abspath(args.init_from) if args.init_from else None
+    league_pool = os.path.abspath(args.league_pool) if args.league_pool else None
     os.makedirs(args.out_dir, exist_ok=True)
     os.chdir(args.out_dir)
     if args.resume:
@@ -324,8 +372,9 @@ def main():
         train(**{k: saved[k] for k in CONFIG_KEYS if k in saved}, resume=True)
         return
     train(total_deals=args.total_deals, rollout_deals=args.rollout_deals, eval_every=args.eval_every, lr=args.lr,
-          entropy_coef=args.entropy_coef, seed=args.seed, bidding=args.bidding, hidden_size=args.hidden_size,
-          vs_bots_share=args.vs_bots_share, init_from=init_from, bots=args.bots)
+          entropy_coef=args.entropy_coef, seed=args.seed, bidding=args.bidding, hidden_size=args.hidden_size, n_layers=args.n_layers,
+          vs_bots_share=args.vs_bots_share, init_from=init_from, bots=args.bots,
+          league_share=args.league_share, league_pool=league_pool)
 
 
 if __name__ == "__main__":
