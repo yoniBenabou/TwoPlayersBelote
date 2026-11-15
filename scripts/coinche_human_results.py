@@ -82,12 +82,17 @@ def main():
     parser.add_argument("--exclude", nargs="*", default=[], help="joueurs à exclure (ex. les auteurs du projet)")
     parser.add_argument("--opponents", default="ai_search",
                         help="adversaire étudié en détail : ai_search, ai, asr, papirobert, petitjeu, simple (+ _duo à deux)")
-    parser.add_argument("--model", help="ne garder que les parties contre ce modèle (chemin du .pt, ou un bout du chemin)")
+    parser.add_argument("--model", help="ne garder que les parties contre ce modèle : petit, grand (nom court noté "
+                                        "depuis le 15/11/2026 ; avant, c'était toujours le petit), ou un bout du chemin du .pt")
     args = parser.parse_args()
     records = load(args.log)
+    for r in records:  # avant le 15/11/2026, rien n'était noté : c'était le petit réseau
+        if (r.get("opponents") or "").startswith("ai") and not r.get("model_name"):
+            r["model_name"] = "petit"
     excluded = {name.lower() for name in args.exclude}
     keep = lambda r: ((r.get("player") or "").lower() not in excluded
-                      and (not args.model or args.model in (r.get("model") or "") or not r["opponents"].startswith("ai")))
+                      and (not args.model or args.model == r.get("model_name") or args.model in (r.get("model") or "")
+                           or not r["opponents"].startswith("ai")))
     records = [r for r in records if keep(r)]
     for r in records:  # parties à deux humains : un adversaire à part
         if r.get("humans") == 2:
@@ -103,9 +108,9 @@ def main():
     interrupted = {r["game_id"] for r in records if r["type"] == "deal" and r["game_id"] not in closed}
     if interrupted:
         print(f"Parties interrompues (serveur arrêté ou page fermée, non comptées) : {len(interrupted)}")
-    models = sorted({g["model"] for g in finished if g.get("model")})
+    models = sorted({g["model_name"] for g in finished if g.get("model_name")})
     if len(models) > 1:
-        print("Attention, plusieurs modèles d'IA mélangés (--model pour en garder un) : " + ", ".join(models))
+        print("Attention, plusieurs IA mélangées (--model petit ou --model grand pour en garder une) : " + ", ".join(models))
     if not finished:
         print("Aucune partie terminée sans regarder les autres mains.")
         return

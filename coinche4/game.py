@@ -21,6 +21,7 @@ Avec un GameLog (log=...), chaque donne (mains, annonces, plis, résultat) et
 chaque partie (terminée ou abandonnée) est ajoutée au fichier JSONL ;
 scripts.coinche_human_results en tire les résultats et les graphiques.
 """
+import hashlib
 import random
 import time
 import uuid
@@ -159,6 +160,26 @@ class AIPlayer:
         return move, float(probs[action])
 
 
+# empreinte du fichier du modèle (12 premiers caractères du sha256) -> nom court noté dans les
+# enregistrements : le fichier garde le même nom (models/coinche_4p.pt) d'une IA à l'autre
+MODEL_NAMES = {
+    "b79f44028bcd": "petit",  # 2 x 256, jusqu'au 15/11/2026 (gardé dans models/coinche_4p_petit.pt)
+    "e8f09f96cbf0": "grand",  # 3 x 512 qui voit l'ordre des plis, depuis le 15/11/2026
+}
+
+
+def model_fingerprint(path):
+    """(empreinte, nom court) du fichier du modèle ; nom = empreinte si le modèle n'est pas connu."""
+    if not path:
+        return None, None
+    try:
+        with open(path, "rb") as f:
+            digest = hashlib.sha256(f.read()).hexdigest()[:12]
+    except OSError:
+        return None, None
+    return digest, MODEL_NAMES.get(digest, digest)
+
+
 class Table:
     def __init__(self, target=DEFAULT_TARGET, seed=None, bots="simple", partner=None, opponents=None,
                  name=None, network=None, log=None, study=False, model=None):
@@ -172,6 +193,7 @@ class Table:
         self.log = log
         self.study = study
         self.model = model
+        self.model_id, self.model_name = model_fingerprint(model)
         self.reveal = False
         self.game_id = None
         self.humans = {HUMAN: "You"}  # place -> nom ; deux humains en mode duo
@@ -378,6 +400,8 @@ class Table:
                                 opponents=self.opponents,
                                 search=SEARCH_SAMPLES if self.opponents == "ai_search" else 0,
                                 model=self.model if self.opponents.startswith("ai") else None,
+                                model_id=self.model_id if self.opponents.startswith("ai") else None,
+                                model_name=self.model_name if self.opponents.startswith("ai") else None,
                                 study=self.study, time=time.time()))
 
     def _record_deal(self):
