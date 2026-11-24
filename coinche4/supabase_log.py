@@ -7,8 +7,9 @@ from demo.game import GameLog
 
 
 class SupabaseGameLog(GameLog):
-    def __init__(self, path):
+    def __init__(self, path, table="game_logs"):
         super().__init__(path)
+        self.table = table
         self.url = os.environ["SUPABASE_URL"].rstrip("/")
         self.key = os.environ["SUPABASE_SECRET_KEY"]
 
@@ -16,7 +17,7 @@ class SupabaseGameLog(GameLog):
         super().write(record)
 
         request = urllib.request.Request(
-            f"{self.url}/rest/v1/game_logs",
+            f"{self.url}/rest/v1/{self.table}",
             data=json.dumps(
                 {"payload": record},
                 ensure_ascii=False

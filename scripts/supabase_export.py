@@ -3,6 +3,7 @@ le même format que web/logs/games.jsonl, pour scripts.coinche_human_results.
 
     SUPABASE_URL=... SUPABASE_SECRET_KEY=... python -m scripts.supabase_export --out web/logs/site.jsonl
     python -m scripts.coinche_human_results --log web/logs/site.jsonl --model grand
+    ... python -m scripts.supabase_export --table game_logs_petit --out web/logs/petit.jsonl   # table du petit réseau
 
 Les clés sont celles du site sur Render (Environment). Chaque enregistrement porte model_name
 (« petit » ou « grand ») depuis le 15/11/2026 ; avant, c'était toujours le petit réseau.
@@ -19,6 +20,7 @@ PAGE = 1000
 def main():
     parser = argparse.ArgumentParser(description="Parties du site (Supabase) vers un fichier .jsonl.")
     parser.add_argument("--out", required=True)
+    parser.add_argument("--table", default="game_logs", help="table Supabase (game_logs_petit pour le petit réseau)")
     args = parser.parse_args()
     url = os.environ.get("SUPABASE_URL", "").rstrip("/")
     key = os.environ.get("SUPABASE_SECRET_KEY")
@@ -26,7 +28,7 @@ def main():
         sys.exit("Il faut SUPABASE_URL et SUPABASE_SECRET_KEY (les mêmes que sur Render).")
     seen, rows, start = set(), [], 0
     while True:
-        request = urllib.request.Request(f"{url}/rest/v1/game_logs?select=payload",
+        request = urllib.request.Request(f"{url}/rest/v1/{args.table}?select=payload",
                                          headers={"apikey": key, "Authorization": f"Bearer {key}",
                                                   "Range-Unit": "items", "Range": f"{start}-{start + PAGE - 1}"})
         with urllib.request.urlopen(request, timeout=60) as response:

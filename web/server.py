@@ -4,12 +4,13 @@ convention ou un ami invité par lien) contre l'IA entraînée en Est et Ouest.
     python -m web.server                         # puis ouvrir http://localhost:8200
     python -m web.server --model chemin/ppo.pt   # autre modèle de l'IA
     python -m web.server --study                 # mains des autres jamais montrées
+    python -m web.server --model models/coinche_4p_petit.pt --table game_logs_petit   # petit réseau, sa table Supabase
 
 Même API que coinche4 (/api/state, /api/setup, /api/step, /api/duo/create, ...), servie
 par le gestionnaire de coinche4 ; seule la page (web/index.html) et la table (WebTable, qui
 accepte l'IA comme partenaire) changent. Donnes et parties sont ajoutées à --log
 (web/logs/games.jsonl par défaut), et envoyées à Supabase si SUPABASE_URL et
-SUPABASE_SECRET_KEY sont définies. Uniquement la bibliothèque standard (plus torch pour l'IA).
+SUPABASE_SECRET_KEY sont définies (dans la table --table, game_logs par défaut). Uniquement la bibliothèque standard (plus torch pour l'IA).
 """
 import argparse
 import os
@@ -57,14 +58,16 @@ def main():
     parser.add_argument("--target", type=int, default=DEFAULT_TARGET)
     parser.add_argument("--model", default=DEFAULT_MODEL, help="modèle .pt de l'IA (Coinche à 4, avec annonces)")
     parser.add_argument("--log", default=DEFAULT_LOG, help="fichier JSONL des donnes et parties ('' : rien)")
+    parser.add_argument("--table", default="game_logs",
+                        help="table Supabase où écrire les parties (ex. game_logs_petit pour le petit réseau)")
     parser.add_argument("--study", action="store_true", help="mains des autres toujours cachées")
     args = parser.parse_args()
     log = None
     if args.log:
         os.makedirs(os.path.dirname(os.path.abspath(args.log)), exist_ok=True)
         if os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SECRET_KEY"):
-            log = SupabaseGameLog(args.log)
-            print("Supabase logging enabled", flush=True)
+            log = SupabaseGameLog(args.log, args.table)
+            print(f"Supabase logging enabled (table {args.table})", flush=True)
         else:
             log = GameLog(args.log)
     torch.set_num_threads(1)  # un cœur par coup de l'IA : plusieurs tables en même temps ne se gênent pas
