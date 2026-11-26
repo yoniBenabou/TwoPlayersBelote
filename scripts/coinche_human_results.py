@@ -82,7 +82,7 @@ def main():
     parser.add_argument("--exclude", nargs="*", default=[], help="joueurs à exclure (ex. les auteurs du projet)")
     parser.add_argument("--opponents", default="ai_search",
                         help="adversaire étudié en détail : ai_search, ai, asr, papirobert, petitjeu, simple (+ _duo à deux)")
-    parser.add_argument("--model", help="ne garder que les parties contre ce modèle : petit, grand (nom court noté "
+    parser.add_argument("--model", help="ne garder que les parties contre ce modèle : petit, grand, voyant (nom court noté "
                                         "depuis le 15/11/2026 ; avant, c'était toujours le petit), ou un bout du chemin du .pt")
     args = parser.parse_args()
     records = load(args.log)
@@ -110,7 +110,7 @@ def main():
         print(f"Parties interrompues (serveur arrêté ou page fermée, non comptées) : {len(interrupted)}")
     models = sorted({g["model_name"] for g in finished if g.get("model_name")})
     if len(models) > 1:
-        print("Attention, plusieurs IA mélangées (--model petit ou --model grand pour en garder une) : " + ", ".join(models))
+        print("Attention, plusieurs IA mélangées (--model petit, grand ou voyant pour en garder une) : " + ", ".join(models))
     if not finished:
         print("Aucune partie terminée sans regarder les autres mains.")
         return

@@ -165,6 +165,7 @@ class AIPlayer:
 MODEL_NAMES = {
     "b79f44028bcd": "petit",  # 2 x 256, jusqu'au 15/11/2026 (gardé dans models/coinche_4p_petit.pt)
     "e8f09f96cbf0": "grand",  # 3 x 512 qui voit l'ordre des plis, depuis le 15/11/2026
+    "f3662a95c41c": "voyant",  # le grand après 1 million de donnes de plus contre Voyant, Prudent et les robots (models/coinche_4p_voyant.pt)
 }
 
 
